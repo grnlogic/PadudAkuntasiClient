@@ -1,130 +1,219 @@
 // Updated data.ts to use API calls instead of localStorage
-import { divisionsAPI, accountsAPI, entriesAPI, usersAPI } from "./api"
+import { accountsAPI, divisionsAPI, usersAPI, entriesAPI } from "./api";
 
 // Keep interfaces for type safety
 export interface Account {
-  id: string
-  accountCode: string
-  accountName: string
-  valueType: "NOMINAL" | "KUANTITAS"
+  id: string;
+  accountCode: string;
+  accountName: string;
+  valueType: "NOMINAL" | "KUANTITAS";
   division: {
-    id: string
-    name: string
-  }
-  status: "active" | "inactive"
-  createdBy: string
-  createdAt: string
+    id: string;
+    name: string;
+  };
+  status: "active" | "inactive";
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface EntriHarian {
-  date: string
-  id: string
-  accountId: string
-  tanggal: string
-  nilai: number
-  description?: string
-  createdBy: string
-  createdAt: string
+  date: string;
+  id: string;
+  accountId: string;
+  tanggal: string;
+  nilai: number;
+  description?: string;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface AppUser {
-  id: string
-  username: string
-  password?: string
-  role: "SUPER_ADMIN" | "ADMIN_DIVISI"
+  id: string;
+  username: string;
+  password?: string;
+  role: "SUPER_ADMIN" | "ADMIN_DIVISI";
   division?: {
-    id: string
-    name: string
-  }
-  status: "active" | "inactive"
-  lastLogin?: string
-  createdAt: string
+    id: string;
+    name: string;
+  };
+  status: "active" | "inactive";
+  lastLogin?: string;
+  createdAt: string;
 }
 
 export interface Division {
-  id: string
-  name: string
-  description?: string
-  isActive: boolean
-  createdAt: string
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: string;
 }
+
+// Backend Account interface untuk type safety
+interface BackendAccount {
+  id: number;
+  account_code: string;
+  account_name: string;
+  value_type: "NOMINAL" | "KUANTITAS";
+  division: {
+    id: number;
+    name: string;
+  };
+  created_at?: string;
+}
+
+// Backend Division interface untuk type safety
+interface BackendDivision {
+  id: number;
+  name: string;
+}
+
+// Helper function untuk transform backend account ke frontend format
+const transformAccountFromBackend = (
+  backendAccount: BackendAccount
+): Account => {
+  // Safety checks untuk memastikan data tidak undefined/null
+  if (!backendAccount) {
+    throw new Error("Backend account data is null or undefined");
+  }
+
+  console.log("Transforming backend account:", backendAccount); // Debug log
+
+  return {
+    id: (backendAccount.id || 0).toString(), // Convert Integer ke String with fallback
+    accountCode: backendAccount.account_code || "", // FIX: gunakan snake_case dari backend
+    accountName: backendAccount.account_name || "", // FIX: gunakan snake_case dari backend
+    valueType: backendAccount.value_type || "NOMINAL", // FIX: gunakan snake_case dari backend
+    division: {
+      id: (backendAccount.division?.id || 0).toString(),
+      name: backendAccount.division?.name || "Unknown Division",
+    },
+    status: "active", // Default status
+    createdBy: "system", // Default value
+    createdAt: backendAccount.created_at || new Date().toISOString(), // FIX: gunakan snake_case
+  };
+};
+
+// Helper function untuk transform backend division ke frontend format
+const transformDivisionFromBackend = (
+  backendDivision: BackendDivision
+): Division => {
+  // Safety checks untuk memastikan data tidak undefined/null
+  if (!backendDivision) {
+    throw new Error("Backend division data is null or undefined");
+  }
+
+  return {
+    id: (backendDivision.id || 0).toString(), // Convert Integer ke String
+    name: backendDivision.name || "Unknown Division", // FIX: gunakan field yang benar
+    description: "", // Default value
+    isActive: true, // Default value
+    createdAt: new Date().toISOString(), // Default value
+  };
+};
 
 // Divisions CRUD - now using API
 export const getDivisions = async (): Promise<Division[]> => {
-  const response = await divisionsAPI.getAll()
-  return response.success ? response.data || [] : []
-}
+  try {
+    const response = await divisionsAPI.getAll();
+    if (response.success && response.data && Array.isArray(response.data)) {
+      return response.data
+        .filter((division: BackendDivision) => division && division.id)
+        .map((division: BackendDivision) =>
+          transformDivisionFromBackend(division)
+        );
+    }
+    return [];
+  } catch (error) {
+    console.error("getDivisions error:", error);
+    return [];
+  }
+};
 
 export const getDivisionById = async (id: string): Promise<Division | null> => {
-  const response = await divisionsAPI.getAll()
-  if (!response.success || !response.data) return null
-  const division = response.data.find((div: Division) => div.id === id)
-  return division || null
-}
+  try {
+    const divisions = await getDivisions();
+    return divisions.find((d) => d.id === id) || null;
+  } catch (error) {
+    console.error("getDivisionById error:", error);
+    return null;
+  }
+};
 
 // Accounts CRUD - now using API
 export const getAccounts = async (): Promise<Account[]> => {
   try {
-    const response = await accountsAPI.getAll()
-    console.log("getAccounts response:", response) // Debug log
-    
-    if (response.success && response.data) {
-      // Handle jika response.data adalah array
-      if (Array.isArray(response.data)) {
-        return response.data
-      }
-      // Handle jika response.data wrapped dalam property lain
-      if (typeof response.data === 'object' && 'content' in response.data && Array.isArray((response.data as any).content)) {
-        return (response.data as any).content
-      }
-    }
-    
-    console.warn("getAccounts: No data or unexpected format", response)
-    return []
-  } catch (error) {
-    console.error("getAccounts error:", error)
-    return []
-  }
-}
+    console.log("=== DEBUG: Fetching accounts ===");
+    const response = await accountsAPI.getAll();
+    console.log("Raw API response:", response);
 
-export const getAccountsByDivision = async (divisionId: string): Promise<Account[]> => {
+    if (response.success && response.data && Array.isArray(response.data)) {
+      console.log("Raw backend data:", response.data);
+
+      // Filter out invalid entries dan transform
+      const transformedAccounts = response.data
+        .filter((account: BackendAccount) => {
+          console.log("Filtering account:", account);
+          return account && account.id;
+        })
+        .map((account: BackendAccount) => {
+          console.log("Transforming account:", account);
+          const transformed = transformAccountFromBackend(account);
+          console.log("Transformed result:", transformed);
+          return transformed;
+        });
+
+      console.log("Final transformed accounts:", transformedAccounts);
+      return transformedAccounts;
+    }
+
+    console.warn("getAccounts: No data or unexpected format", response);
+    return [];
+  } catch (error) {
+    console.error("getAccounts error:", error);
+    return [];
+  }
+};
+
+export const getAccountsByDivision = async (
+  divisionId: string
+): Promise<Account[]> => {
   try {
-    const response = await accountsAPI.getByDivision(divisionId)
-    console.log("getAccountsByDivision response:", response) // Debug log
-    
-    if (response.success && response.data) {
-      if (Array.isArray(response.data)) {
-        return response.data
-      }
-      if (typeof response.data === 'object' && 'content' in response.data && Array.isArray((response.data as any).content)) {
-        return (response.data as any).content
-      }
+    const response = await accountsAPI.getByDivision(divisionId);
+    if (response.success && response.data && Array.isArray(response.data)) {
+      return response.data
+        .filter((account: BackendAccount) => account && account.id)
+        .map((account: BackendAccount) => transformAccountFromBackend(account));
     }
-    
-    return []
+    return [];
   } catch (error) {
-    console.error("getAccountsByDivision error:", error)
-    return []
+    console.error("getAccountsByDivision error:", error);
+    return [];
   }
-}
+};
 
-export const saveAccount = async (account: Omit<Account, "id" | "createdAt">): Promise<Account> => {
-  const response = await accountsAPI.create(account)
+export const saveAccount = async (
+  account: Omit<Account, "id" | "createdAt">
+): Promise<Account> => {
+  const response = await accountsAPI.create(account);
   if (!response.success) {
-    throw new Error(response.error || "Failed to create account")
+    throw new Error(response.error || "Failed to create account");
   }
-  return response.data!
-}
+  return transformAccountFromBackend(response.data!);
+};
 
-export const updateAccount = async (id: string, updates: Partial<Account>): Promise<Account | null> => {
-  const response = await accountsAPI.update(id, updates)
-  return response.success ? response.data || null : null
-}
+export const updateAccount = async (
+  id: string,
+  updates: Partial<Account>
+): Promise<Account | null> => {
+  const response = await accountsAPI.update(id, updates);
+  return response.success ? transformAccountFromBackend(response.data!) : null;
+};
 
 export const deleteAccount = async (id: string): Promise<boolean> => {
-  const response = await accountsAPI.delete(id)
-  return response.success
-}
+  const response = await accountsAPI.delete(id);
+  return response.success;
+};
 
 // Generate account code (can be moved to backend later)
 export const generateAccountCode = (type: string): string => {
@@ -139,100 +228,92 @@ export const generateAccountCode = (type: string): string => {
     Modal: "1",
     Pendapatan: "2",
     Beban: "1",
-  }
+  };
 
-  const prefix = typeToPrefix[type] || "1"
-  const randomSuffix = Math.floor(Math.random() * 999) + 1
-  return `${prefix}-${randomSuffix.toString().padStart(3, "0")}`
-}
+  const prefix = typeToPrefix[type] || "1";
+  const timestamp = Date.now().toString().slice(-6);
+  return `${prefix}-${timestamp}`;
+};
 
 // Entri Harian CRUD - now using API
 export const getEntriHarian = async (): Promise<EntriHarian[]> => {
-  const response = await entriesAPI.getAll()
-  return response.success ? response.data || [] : []
-}
+  try {
+    const response = await entriesAPI.getAll();
+    return response.success && response.data ? response.data : [];
+  } catch (error) {
+    console.error("getEntriHarian error:", error);
+    return [];
+  }
+};
 
-export const getEntriHarianByDivision = async (divisionId: string): Promise<EntriHarian[]> => {
-  const response = await entriesAPI.getByDivision(divisionId)
-  return response.success ? response.data || [] : []
-}
+export const getEntriHarianByDivision = async (
+  divisionId: string
+): Promise<EntriHarian[]> => {
+  try {
+    const response = await entriesAPI.getByDivision(divisionId);
+    return response.success && response.data ? response.data : [];
+  } catch (error) {
+    console.error("getEntriHarianByDivision error:", error);
+    return [];
+  }
+};
 
-export const getEntriHarianByDate = async (tanggal: string): Promise<EntriHarian[]> => {
-  const response = await entriesAPI.getByDate(tanggal)
-  return response.success ? response.data || [] : []
-}
+export const getEntriHarianByDate = async (
+  tanggal: string
+): Promise<EntriHarian[]> => {
+  try {
+    const response = await entriesAPI.getByDate(tanggal);
+    return response.success && response.data ? response.data : [];
+  } catch (error) {
+    console.error("getEntriHarianByDate error:", error);
+    return [];
+  }
+};
 
 export const saveEntriHarianBatch = async (
-  entries: Omit<EntriHarian, "id" | "createdAt">[],
+  entries: Omit<EntriHarian, "id" | "createdAt">[]
 ): Promise<EntriHarian[]> => {
-  const response = await entriesAPI.createBatch(entries)
+  const response = await entriesAPI.createBatch(entries);
   if (!response.success) {
-    throw new Error(response.error || "Failed to save entries")
+    throw new Error(response.error || "Failed to create entries");
   }
-  return response.data || []
-}
+  return response.data || [];
+};
 
-export const updateEntriHarian = async (id: string, updates: Partial<EntriHarian>): Promise<EntriHarian | null> => {
-  const response = await entriesAPI.update(id, updates)
-  return response.success ? response.data || null : null
-}
+export const updateEntriHarian = async (
+  id: string,
+  updates: Partial<EntriHarian>
+): Promise<EntriHarian | null> => {
+  const response = await entriesAPI.update(id, updates);
+  return response.success ? response.data! : null;
+};
 
 export const deleteEntriHarian = async (id: string): Promise<boolean> => {
-  const response = await entriesAPI.delete(id)
-  return response.success
-}
+  const response = await entriesAPI.delete(id);
+  return response.success;
+};
 
 // Users CRUD - now using API
 export const getUsers = async (): Promise<AppUser[]> => {
-  const response = await usersAPI.getAll()
-  return response.success ? response.data || [] : []
-}
+  try {
+    const response = await usersAPI.getAll();
+    return response.success && response.data ? response.data : [];
+  } catch (error) {
+    console.error("getUsers error:", error);
+    return [];
+  }
+};
 
 // Update saveUser function untuk menggunakan RegisterRequest format
-export const saveUser = async (user: Omit<AppUser, "id" | "createdAt">): Promise<AppUser> => {
-  try {
-    console.log("=== FRONTEND DEBUG: Original user data ===", user)
-    
-    // Convert to RegisterRequest format
-    const registerRequest = {
-      username: user.username,
-      password: user.password,
-      role: user.role,
-      divisionId: user.division ? parseInt(user.division.id) : null
-    }
-    
-    console.log("=== FRONTEND DEBUG: RegisterRequest format ===", {
-      ...registerRequest,
-      password: registerRequest.password ? "[HIDDEN]" : "NULL"
-    })
-    
-    if (!registerRequest.password) {
-      throw new Error("Password is required but was not provided")
-    }
-    
-    const response = await usersAPI.create(registerRequest)
-    console.log("Create user response:", response)
-    
-    if (response.success && response.data) {
-      return {
-        id: response.data.id.toString(),
-        username: response.data.username,
-        role: response.data.role,
-        division: response.data.division ? {
-          id: response.data.division.id.toString(),
-          name: response.data.division.name
-        } : undefined,
-        status: "active",
-        createdAt: response.data.createdAt || new Date().toISOString(),
-      }
-    }
-    
-    throw new Error(response.error || "Failed to create user")
-  } catch (error) {
-    console.error("saveUser error:", error)
-    throw error
+export const saveUser = async (
+  user: Omit<AppUser, "id" | "createdAt">
+): Promise<AppUser> => {
+  const response = await usersAPI.create(user);
+  if (!response.success) {
+    throw new Error(response.error || "Failed to create user");
   }
-}
+  return response.data!;
+};
 
 export const saveUserWithDTO = async (createRequest: {
   username: string;
@@ -240,51 +321,37 @@ export const saveUserWithDTO = async (createRequest: {
   role: string;
   divisionId: number | null;
 }): Promise<AppUser> => {
-  try {
-    console.log("=== FRONTEND DEBUG: DTO Request ===", {
-      ...createRequest,
-      password: createRequest.password ? "[HIDDEN]" : "NULL"
-    });
-    
-    const response = await usersAPI.create(createRequest);
-    console.log("Create user response:", response);
-    
-    if (response.success && response.data) {
-      return {
-        id: response.data.id.toString(),
-        username: response.data.username,
-        role: response.data.role,
-        division: response.data.division ? {
-          id: response.data.division.id.toString(),
-          name: response.data.division.name
-        } : undefined,
-        status: "active",
-        createdAt: response.data.createdAt || new Date().toISOString(),
-      };
-    }
-    
+  const response = await usersAPI.create(createRequest);
+  if (!response.success) {
     throw new Error(response.error || "Failed to create user");
-  } catch (error) {
-    console.error("saveUserWithDTO error:", error);
-    throw error;
   }
+  return response.data!;
 };
 
-export const updateUser = async (id: string, updates: Partial<AppUser>): Promise<AppUser | null> => {
-  const response = await usersAPI.update(id, updates)
-  return response.success ? response.data || null : null
-}
+export const updateUser = async (
+  id: string,
+  updates: Partial<AppUser>
+): Promise<AppUser | null> => {
+  const response = await usersAPI.update(id, updates);
+  return response.success ? response.data! : null;
+};
 
 export const deleteUser = async (id: string): Promise<boolean> => {
-  const response = await usersAPI.delete(id)
-  return response.success
-}
+  const response = await usersAPI.delete(id);
+  return response.success;
+};
 
 // Backward compatibility exports
-export const getJournalEntries = getEntriHarian
-export const saveJournalEntry = (entry: any) => saveEntriHarianBatch([entry])
-export const deleteJournalEntry = deleteEntriHarian
-export type JournalEntry = EntriHarian
+export const getJournalEntries = getEntriHarian;
+export const saveJournalEntry = (entry: any) => saveEntriHarianBatch([entry]);
+export const deleteJournalEntry = deleteEntriHarian;
+export type JournalEntry = EntriHarian;
 
 // Default divisions list (can be fetched from API)
-export const DIVISIONS = ["KEUANGAN & ADMINISTRASI", "PEMASARAN & PENJUALAN", "PRODUKSI", "DISTRIBUSI & GUDANG", "HRD"]
+export const DIVISIONS = [
+  "KEUANGAN & ADMINISTRASI",
+  "PEMASARAN & PENJUALAN",
+  "PRODUKSI",
+  "DISTRIBUSI & GUDANG",
+  "HRD",
+];
