@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api"
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080/api/v1"
 
 // API Response Types
 interface ApiResponse<T> {
@@ -66,14 +66,68 @@ export const authAPI = {
   },
 }
 
-// Divisions API
+// Accounts (COA) API - sesuaikan dengan backend endpoint
+export const accountsAPI = {
+  getAll: async () => {
+    return apiRequest<any[]>("/accounts")
+  },
+
+  getByDivision: async (divisionId: string) => {
+    return apiRequest<any[]>(`/accounts/by-division/${divisionId}`)
+  },
+
+  create: async (account: any) => {
+    return apiRequest<any>("/accounts", {
+      method: "POST",
+      body: JSON.stringify(account),
+    })
+  },
+
+  update: async (id: string, updates: any) => {
+    return apiRequest<any>(`/accounts/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(updates),
+    })
+  },
+
+  delete: async (id: string) => {
+    return apiRequest(`/accounts/${id}`, {
+      method: "DELETE",
+    })
+  },
+}
+
+// Users API (untuk yang belum ada endpoint)
+export const usersAPI = {
+  getAll: async () => {
+    return apiRequest<any[]>("/users")
+  },
+
+  create: async (user: any) => {
+    return apiRequest<any>("/users", {
+      method: "POST",
+      body: JSON.stringify(user),
+    })
+  },
+
+  update: async (id: string, updates: any) => {
+    return apiRequest<any>(`/users/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(updates),
+    })
+  },
+
+  delete: async (id: string) => {
+    return apiRequest(`/users/${id}`, {
+      method: "DELETE",
+    })
+  },
+}
+
+// Divisions API (untuk yang belum ada endpoint)
 export const divisionsAPI = {
   getAll: async () => {
     return apiRequest<any[]>("/divisions")
-  },
-
-  getById: async (id: string) => {
-    return apiRequest<any>(`/divisions/${id}`)
   },
 
   create: async (division: any) => {
@@ -97,46 +151,7 @@ export const divisionsAPI = {
   },
 }
 
-// Accounts (COA) API
-export const accountsAPI = {
-  getAll: async () => {
-    return apiRequest<any[]>("/accounts")
-  },
-
-  getByDivision: async (divisionId: string) => {
-    return apiRequest<any[]>(`/accounts/division/${divisionId}`)
-  },
-
-  getById: async (id: string) => {
-    return apiRequest<any>(`/accounts/${id}`)
-  },
-
-  create: async (account: any) => {
-    return apiRequest<any>("/accounts", {
-      method: "POST",
-      body: JSON.stringify(account),
-    })
-  },
-
-  update: async (id: string, updates: any) => {
-    return apiRequest<any>(`/accounts/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(updates),
-    })
-  },
-
-  delete: async (id: string) => {
-    return apiRequest(`/accounts/${id}`, {
-      method: "DELETE",
-    })
-  },
-
-  checkCodeExists: async (accountCode: string) => {
-    return apiRequest<{ exists: boolean }>(`/accounts/check-code/${accountCode}`)
-  },
-}
-
-// Daily Entries API
+// Entri Harian API (untuk yang belum ada endpoint)
 export const entriesAPI = {
   getAll: async () => {
     return apiRequest<any[]>("/entries")
@@ -148,10 +163,6 @@ export const entriesAPI = {
 
   getByDivision: async (divisionId: string) => {
     return apiRequest<any[]>(`/entries/division/${divisionId}`)
-  },
-
-  getByDivisionAndDate: async (divisionId: string, date: string) => {
-    return apiRequest<any[]>(`/entries/division/${divisionId}/date/${date}`)
   },
 
   create: async (entry: any) => {
@@ -179,86 +190,5 @@ export const entriesAPI = {
     return apiRequest(`/entries/${id}`, {
       method: "DELETE",
     })
-  },
-}
-
-// Users API
-export const usersAPI = {
-  getAll: async () => {
-    return apiRequest<any[]>("/users")
-  },
-
-  getById: async (id: string) => {
-    return apiRequest<any>(`/users/${id}`)
-  },
-
-  create: async (user: any) => {
-    return apiRequest<any>("/users", {
-      method: "POST",
-      body: JSON.stringify(user),
-    })
-  },
-
-  update: async (id: string, updates: any) => {
-    return apiRequest<any>(`/users/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(updates),
-    })
-  },
-
-  delete: async (id: string) => {
-    return apiRequest(`/users/${id}`, {
-      method: "DELETE",
-    })
-  },
-
-  checkUsernameExists: async (username: string) => {
-    return apiRequest<{ exists: boolean }>(`/users/check-username/${username}`)
-  },
-}
-
-// Reports API
-export const reportsAPI = {
-  getDivisionSummary: async (divisionId: string, startDate?: string, endDate?: string) => {
-    const params = new URLSearchParams()
-    if (startDate) params.append("start_date", startDate)
-    if (endDate) params.append("end_date", endDate)
-
-    return apiRequest<any>(`/reports/division/${divisionId}?${params.toString()}`)
-  },
-
-  getSystemSummary: async (startDate?: string, endDate?: string) => {
-    const params = new URLSearchParams()
-    if (startDate) params.append("start_date", startDate)
-    if (endDate) params.append("end_date", endDate)
-
-    return apiRequest<any>(`/reports/system?${params.toString()}`)
-  },
-
-  exportDivisionData: async (divisionId: string, format: "csv" | "excel" = "csv") => {
-    return apiRequest<{ download_url: string }>(`/reports/export/division/${divisionId}?format=${format}`)
-  },
-
-  exportSystemData: async (format: "csv" | "excel" = "csv") => {
-    return apiRequest<{ download_url: string }>(`/reports/export/system?format=${format}`)
-  },
-}
-
-// Monitoring API (for Super Admin)
-export const monitoringAPI = {
-  getSystemStats: async () => {
-    return apiRequest<any>("/monitoring/stats")
-  },
-
-  getRecentActivities: async (limit = 50) => {
-    return apiRequest<any[]>(`/monitoring/activities?limit=${limit}`)
-  },
-
-  getDivisionActivities: async (divisionId: string, limit = 50) => {
-    return apiRequest<any[]>(`/monitoring/division/${divisionId}/activities?limit=${limit}`)
-  },
-
-  getSystemHealth: async () => {
-    return apiRequest<any>("/monitoring/health")
   },
 }

@@ -56,8 +56,10 @@ export const getDivisions = async (): Promise<Division[]> => {
 }
 
 export const getDivisionById = async (id: string): Promise<Division | null> => {
-  const response = await divisionsAPI.getById(id)
-  return response.success ? response.data || null : null
+  const response = await divisionsAPI.getAll()
+  if (!response.success || !response.data) return null
+  const division = response.data.find((div: Division) => div.id === id)
+  return division || null
 }
 
 // Accounts CRUD - now using API

@@ -157,7 +157,7 @@ export default function SettingsPage() {
               </div>
               <Switch
                 checked={settings.autoBackup}
-                onCheckedChange={(checked) => setSettings({ ...settings, autoBackup: checked })}
+                onCheckedChange={(checked: any) => setSettings({ ...settings, autoBackup: checked })}
               />
             </div>
 
@@ -170,7 +170,7 @@ export default function SettingsPage() {
               </div>
               <Switch
                 checked={settings.emailNotifications}
-                onCheckedChange={(checked) => setSettings({ ...settings, emailNotifications: checked })}
+                onCheckedChange={(checked: any) => setSettings({ ...settings, emailNotifications: checked })}
               />
             </div>
 
@@ -183,7 +183,7 @@ export default function SettingsPage() {
               </div>
               <Switch
                 checked={settings.systemMaintenance}
-                onCheckedChange={(checked) => setSettings({ ...settings, systemMaintenance: checked })}
+                onCheckedChange={(checked: any) => setSettings({ ...settings, systemMaintenance: checked })}
               />
             </div>
 

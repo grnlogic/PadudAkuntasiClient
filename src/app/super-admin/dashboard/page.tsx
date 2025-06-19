@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { BookOpen, Users, TrendingUp, Eye, Filter, Calendar } from "lucide-react"
-import { getAccounts, getUsers, getEntriHarian } from "@/lib/data" // Changed from getJournalEntries
+import { getAccounts, getUsers, getEntriHarian } from "@/lib/data"
 
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState({
