@@ -37,13 +37,6 @@ const navigation = [
     badge: null,
   },
   {
-    name: "Mengelola Divisi",
-    href: "/super-admin/divisions",
-    icon: Building,
-    description: "Kelola struktur divisi",
-    badge: null,
-  },
-  {
     name: "Mengelola Admin",
     href: "/super-admin/users",
     icon: Users,
@@ -55,20 +48,6 @@ const navigation = [
     href: "/super-admin/chart-of-account",
     icon: BookOpen,
     description: "Master akun perusahaan",
-    badge: null,
-  },
-  {
-    name: "Laporan Konsolidasi",
-    href: "/super-admin/reports",
-    icon: FileText,
-    description: "Laporan gabungan",
-    badge: null,
-  },
-  {
-    name: "Backup & Restore",
-    href: "/super-admin/backup",
-    icon: Database,
-    description: "Kelola data sistem",
     badge: null,
   },
   {
@@ -187,7 +166,7 @@ export default function SuperAdminLayout({
           </div>
 
           {/* Navigation - dengan scroll jika konten panjang */}
-          <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto max-h-[calc(100vh-400px)]">
+          <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
             {navigation.map((item) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
@@ -217,40 +196,38 @@ export default function SuperAdminLayout({
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold truncate">
-                          {item.name}
-                        </span>
-                        {item.badge && (
-                          <Badge
-                            className={`ml-2 text-xs ${
-                              isActive
-                                ? "bg-white bg-opacity-20 text-white"
-                                : "bg-blue-100 text-blue-800"
-                            }`}
-                          >
-                            {item.badge}
-                          </Badge>
-                        )}
-                      </div>
+                      <p className={`font-medium ${isActive ? "text-white" : ""}`}>
+                        {item.name}
+                      </p>
                       <p
-                        className={`text-xs mt-1 truncate ${
-                          isActive ? "text-blue-100" : "text-gray-500"
+                        className={`text-xs ${
+                          isActive
+                            ? "text-blue-100"
+                            : "text-gray-500 group-hover:text-gray-600"
                         }`}
                       >
                         {item.description}
                       </p>
                     </div>
+                    {item.badge && (
+                      <Badge
+                        className={`${
+                          isActive
+                            ? "bg-white text-blue-600"
+                            : "bg-blue-100 text-blue-800"
+                        }`}
+                      >
+                        {item.badge}
+                      </Badge>
+                    )}
                   </div>
                 </Link>
               );
             })}
           </nav>
 
-          <Separator />
-
-          {/* System Status & Logout */}
-          <div className="p-4 border-t bg-gray-50">
+          {/* System Status & Logout - Fixed di bottom */}
+          <div className="mt-auto p-4 border-t bg-gray-50">
             <Card className="mb-3">
               <CardContent className="p-3">
                 <div className="flex items-center justify-between mb-2">
@@ -265,10 +242,33 @@ export default function SuperAdminLayout({
                 <div className="text-xs text-gray-500 mb-2">
                   Semua layanan berjalan dengan baik
                 </div>
-                <div className="flex items-center justify-between text-xs text-gray-400">
+                <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
                   <span>CPU: 45%</span>
                   <span>Memory: 62%</span>
                   <span>Disk: 78%</span>
+                </div>
+                
+                <div className="space-y-2 border-t pt-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">Backend API:</span>
+                    <Badge className="bg-green-100 text-green-800 text-xs">
+                      Online
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">Database:</span>
+                    <Badge className="bg-green-100 text-green-800 text-xs">
+                      Connected
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">Server:</span>
+                    <Badge className="bg-green-100 text-green-800 text-xs">
+                      Active
+                    </Badge>
+                  </div>
                 </div>
               </CardContent>
             </Card>
