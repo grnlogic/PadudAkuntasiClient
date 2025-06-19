@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,17 +33,19 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   getUsers,
   saveUser,
+  saveUserWithDTO, // Import function yang benar
   updateUser,
   deleteUser,
   type AppUser,
 } from "@/lib/data";
 
+// Updated DIVISIONS dengan mapping ID yang benar
 const DIVISIONS = [
-  "DIVISI KEUANGAN & ADMINISTRASI",
-  "DIVISI PEMASARAN & PENJUALAN",
-  "DIVISI PRODUKSI",
-  "DIVISI DISTRIBUSI & GUDANG",
-  "DIVISI HRD",
+  { id: "1", name: "DIVISI KEUANGAN & ADMINISTRASI" },
+  { id: "2", name: "DIVISI PEMASARAN & PENJUALAN" },
+  { id: "3", name: "DIVISI PRODUKSI" },
+  { id: "4", name: "DIVISI DISTRIBUSI & GUDANG" },
+  { id: "5", name: "DIVISI HRD" },
 ];
 
 export default function UsersPage() {
@@ -55,7 +56,7 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
   const [formData, setFormData] = useState({
     name: "",
-    email: "",
+    username: "",
     role: "" as "super-admin" | "division-admin" | "",
     division: "",
     password: "",
@@ -69,9 +70,9 @@ export default function UsersPage() {
 
   const loadUsers = async () => {
     try {
-      console.log("Loading users..."); // Debug log
+      console.log("Loading users...");
       const data = await getUsers();
-      console.log("Users loaded:", data); // Debug log
+      console.log("Users loaded:", data);
       setUsers(data);
     } catch (error) {
       console.error("Error loading users:", error);
@@ -83,8 +84,13 @@ export default function UsersPage() {
     const matchesSearch = user.username
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
+
+    const userDivisionId =
+      user.division?.id ||
+      (typeof user.division === "string" ? user.division : null);
     const matchesDivision =
-      filterDivision === "all" || user.division?.id === filterDivision;
+      filterDivision === "all" || userDivisionId === filterDivision;
+
     return matchesSearch && matchesDivision;
   });
 
@@ -96,25 +102,46 @@ export default function UsersPage() {
 
   const getDivisionColor = (division: string) => {
     const colors: { [key: string]: string } = {
-      "KEUANGAN & ADMINISTRASI": "bg-blue-100 text-blue-800",
-      PRODUKSI: "bg-yellow-100 text-yellow-800",
-      "PEMASARAN & PENJUALAN": "bg-green-100 text-green-800",
-      "DISTRIBUSI & GUDANG": "bg-purple-100 text-purple-800",
-      HRD: "bg-orange-100 text-orange-800",
+      "DIVISI KEUANGAN & ADMINISTRASI": "bg-blue-100 text-blue-800",
+      "DIVISI PRODUKSI": "bg-yellow-100 text-yellow-800",
+      "DIVISI PEMASARAN & PENJUALAN": "bg-green-100 text-green-800",
+      "DIVISI DISTRIBUSI & GUDANG": "bg-purple-100 text-purple-800",
+      "DIVISI HRD": "bg-orange-100 text-orange-800",
     };
     return colors[division] || "bg-gray-100 text-gray-800";
   };
 
-  // Helper function to get division ID by name
-  const getDivisionIdByName = (divisionName: string): number => {
-    const divisionMap: { [key: string]: number } = {
-      "DIVISI KEUANGAN & ADMINISTRASI": 1,
-      "DIVISI PEMASARAN & PENJUALAN": 2,
-      "DIVISI PRODUKSI": 3,
-      "DIVISI DISTRIBUSI & GUDANG": 4,
-      HRD: 5,
-    };
-    return divisionMap[divisionName] || 1;
+  const getDivisionById = (id: string) => {
+    return DIVISIONS.find((div) => div.id === id);
+  };
+
+  const getUserDivisionDisplay = (user: AppUser) => {
+    if (
+      user.division &&
+      typeof user.division === "object" &&
+      user.division.name
+    ) {
+      return {
+        id: user.division.id,
+        name: user.division.name,
+      };
+    }
+
+    if (user.division && typeof user.division === "string") {
+      const divisionObj = getDivisionById(user.division);
+      if (divisionObj) {
+        return divisionObj;
+      }
+    }
+
+    if (user.role === "ADMIN_DIVISI") {
+      return {
+        id: "unknown",
+        name: "Divisi Tidak Ditemukan",
+      };
+    }
+
+    return null;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -128,7 +155,7 @@ export default function UsersPage() {
     });
 
     // Validation
-    if (!formData.name || !formData.email || !formData.role) {
+    if (!formData.name || !formData.username || !formData.role) {
       setError("Semua field wajib diisi");
       return;
     }
@@ -138,45 +165,45 @@ export default function UsersPage() {
       return;
     }
 
+    // Validate division for division-admin
+    if (formData.role === "division-admin" && !formData.division) {
+      setError("Divisi wajib dipilih untuk Admin Divisi");
+      return;
+    }
+
     // Fix role mapping
     const backendRole =
       formData.role === "division-admin" ? "ADMIN_DIVISI" : "SUPER_ADMIN";
 
-    // Simple DTO format untuk backend
+    // Get division ID as number for backend
+    const divisionId =
+      formData.role === "division-admin" && formData.division
+        ? parseInt(formData.division)
+        : null;
+
+    console.log("=== DEBUG: Division ID ===", divisionId);
+
+    // Use the correct DTO format untuk backend
     const createRequest = {
-      username: formData.email,
+      username: formData.username,
       password: formData.password,
       role: backendRole,
-      division: formData.division
-        ? {
-            id: getDivisionIdByName(formData.division).toString(),
-            name: formData.division
-          }
-        : undefined,
-      status: "active" as const,
+      divisionId: divisionId, // Backend expects divisionId as number or null
     };
 
-    console.log("=== FORM DEBUG: Sending create request ===", {
+    console.log("=== DEBUG: Sending create request ===", {
       ...createRequest,
       password: createRequest.password ? "[HIDDEN]" : "EMPTY",
     });
 
     if (editingUser) {
       // Update logic later
+      console.log("Update functionality not implemented yet");
     } else {
-      // Create new user - validate role before saving
-      const validRoles = ["SUPER_ADMIN", "ADMIN_DIVISI"] as const;
-      const role = validRoles.includes(createRequest.role as any) 
-        ? createRequest.role as "SUPER_ADMIN" | "ADMIN_DIVISI"
-        : "ADMIN_DIVISI"; // default fallback
-
-      const userToSave = {
-        ...createRequest,
-        role
-      };
-
-      saveUser(userToSave)
-        .then(() => {
+      // Create new user using the correct function
+      saveUserWithDTO(createRequest)
+        .then((savedUser) => {
+          console.log("=== DEBUG: User saved successfully ===", savedUser);
           setSuccess("User berhasil ditambahkan");
           resetForm();
           loadUsers();
@@ -194,11 +221,14 @@ export default function UsersPage() {
       SUPER_ADMIN: "super-admin" as const,
       ADMIN_DIVISI: "division-admin" as const,
     };
+
+    const userDivision = getUserDivisionDisplay(user);
+
     setFormData({
       name: user.username,
-      email: user.username,
+      username: user.username,
       role: roleMapping[user.role],
-      division: user.division ? getDivisionId(user.division) : "",
+      division: userDivision ? userDivision.id : "",
       password: "",
     });
     setShowAddForm(true);
@@ -206,10 +236,16 @@ export default function UsersPage() {
 
   const handleDelete = async (id: string) => {
     if (confirm("Apakah Anda yakin ingin menghapus user ini?")) {
-      if (await deleteUser(id)) {
-        loadUsers();
-        setSuccess("User berhasil dihapus");
-      } else {
+      try {
+        const deleted = await deleteUser(id);
+        if (deleted) {
+          setSuccess("User berhasil dihapus");
+          loadUsers();
+        } else {
+          setError("Gagal menghapus user");
+        }
+      } catch (error) {
+        console.error("Error deleting user:", error);
         setError("Gagal menghapus user");
       }
     }
@@ -218,7 +254,7 @@ export default function UsersPage() {
   const resetForm = () => {
     setFormData({
       name: "",
-      email: "",
+      username: "",
       role: "" as "super-admin" | "division-admin" | "",
       division: "",
       password: "",
@@ -226,28 +262,7 @@ export default function UsersPage() {
     setEditingUser(null);
     setShowAddForm(false);
     setError("");
-  };
-
-  // Helper function to check if division is an object with id and name
-  const isDivisionObject = (
-    division: any
-  ): division is { id: string; name: string } => {
-    return (
-      division &&
-      typeof division === "object" &&
-      "id" in division &&
-      "name" in division
-    );
-  };
-
-  // Helper function to get division id
-  const getDivisionId = (division: any): string => {
-    return isDivisionObject(division) ? division.id : division;
-  };
-
-  // Helper function to get division name
-  const getDivisionName = (division: any): string => {
-    return isDivisionObject(division) ? division.name : division;
+    setSuccess("");
   };
 
   return (
@@ -278,6 +293,14 @@ export default function UsersPage() {
         </Alert>
       )}
 
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      
+
       {/* Filters and Search */}
       <Card>
         <CardContent className="pt-6">
@@ -286,7 +309,7 @@ export default function UsersPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Cari berdasarkan nama atau email..."
+                  placeholder="Cari berdasarkan username..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -300,15 +323,11 @@ export default function UsersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Semua Divisi</SelectItem>
-                  {Array.isArray(DIVISIONS) &&
-                    DIVISIONS.map((division) => (
-                      <SelectItem
-                        key={getDivisionId(division)}
-                        value={getDivisionId(division)}
-                      >
-                        {getDivisionName(division)}
-                      </SelectItem>
-                    ))}
+                  {DIVISIONS.map((division) => (
+                    <SelectItem key={division.id} value={division.id}>
+                      {division.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -330,7 +349,7 @@ export default function UsersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nama</TableHead>
-                  <TableHead>Email</TableHead>
+                  <TableHead>Username</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Divisi</TableHead>
                   <TableHead>Status</TableHead>
@@ -339,57 +358,71 @@ export default function UsersPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUsers.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">
-                      {user.username}
-                    </TableCell>
-                    <TableCell>{user.username}</TableCell>
-                    <TableCell>
-                      {user.role === "SUPER_ADMIN"
-                        ? "Super Admin"
-                        : "Admin Divisi"}
-                    </TableCell>
-                    <TableCell>
-                      {user.division ? (
-                        <Badge className={getDivisionColor(user.division.name)}>
-                          {user.division.name}
+                {filteredUsers.map((user) => {
+                  const userDivision = getUserDivisionDisplay(user);
+
+                  return (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">
+                        {user.username}
+                      </TableCell>
+                      <TableCell>{user.username}</TableCell>
+                      <TableCell>
+                        {user.role === "SUPER_ADMIN"
+                          ? "Super Admin"
+                          : "Admin Divisi"}
+                      </TableCell>
+                      <TableCell>
+                        {userDivision ? (
+                          <Badge
+                            className={
+                              userDivision.id === "unknown"
+                                ? "bg-red-100 text-red-800"
+                                : getDivisionColor(userDivision.name)
+                            }
+                          >
+                            {userDivision.name}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          className={getStatusColor(user.status || "inactive")}
+                        >
+                          {user.status === "active" ? "Aktif" : "Tidak Aktif"}
                         </Badge>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(user.status)}>
-                        {user.status === "active" ? "Aktif" : "Tidak Aktif"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {user.lastLogin
-                        ? new Date(user.lastLogin).toLocaleDateString("id-ID")
-                        : "-"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(user)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700"
-                          onClick={() => handleDelete(user.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell>
+                        {user.lastLogin
+                          ? new Date(user.lastLogin).toLocaleDateString("id-ID")
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(user)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {user.role !== "SUPER_ADMIN" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => handleDelete(user.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -433,14 +466,14 @@ export default function UsersPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="username">Username</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    placeholder="nama@company.com"
-                    value={formData.email}
+                    id="username"
+                    type="text"
+                    placeholder="Masukkan username"
+                    value={formData.username}
                     onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
+                      setFormData({ ...formData, username: e.target.value })
                     }
                     className="mt-1"
                     required
@@ -470,21 +503,23 @@ export default function UsersPage() {
                 {formData.role === "division-admin" && (
                   <div>
                     <Label htmlFor="division">Divisi</Label>
-                    <select
+                    <Select
                       value={formData.division}
-                      onChange={(e) =>
-                        setFormData({ ...formData, division: e.target.value })
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, division: value })
                       }
-                      className="w-full p-2 border rounded"
-                      required={formData.role === "division-admin"}
                     >
-                      <option value="">Pilih Divisi</option>
-                      {DIVISIONS.map((division) => (
-                        <option key={division} value={division}>
-                          {division}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Pilih Divisi" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DIVISIONS.map((division) => (
+                          <SelectItem key={division.id} value={division.id}>
+                            {division.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
 
