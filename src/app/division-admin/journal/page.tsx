@@ -296,27 +296,22 @@ export default function JournalPage() {
         },
       ]);
 
-      // ✅ IMPROVED: Better success message untuk keuangan
+      // ✅ IMPROVED: Different success messages based on division behavior
       let successMessage;
       if (divisionType === "KEUANGAN") {
-        successMessage = `✅ ${
-          saved.length
-        } transaksi keuangan berhasil ditambahkan untuk tanggal ${new Date(
+        successMessage = `✅ ${saved.length} transaksi keuangan BARU berhasil ditambahkan untuk tanggal ${new Date(
           selectedDate
-        ).toLocaleDateString("id-ID")}!`;
+        ).toLocaleDateString("id-ID")}! 
+        (Setiap transaksi tersimpan sebagai record terpisah)`;
       } else {
-        successMessage =
-          saved.length === entriesToSave.length
-            ? `✅ ${
-                saved.length
-              } entri ${divisionType} berhasil disimpan untuk tanggal ${new Date(
-                selectedDate
-              ).toLocaleDateString("id-ID")}!`
-            : `✅ ${saved.length} dari ${entriesToSave.length} entri berhasil disimpan (beberapa mungkin di-update)`;
+        successMessage = saved.length === entriesToSave.length 
+          ? `✅ ${saved.length} entri ${divisionType} berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}! 
+          (Data existing akan di-update, data baru akan ditambahkan)`
+          : `✅ ${saved.length} dari ${entriesToSave.length} entri berhasil disimpan`;
       }
-
+      
       setSuccess(successMessage);
-      setTimeout(() => setSuccess(""), 5000);
+      setTimeout(() => setSuccess(""), 7000); // Longer display time for detailed message
     } catch (err) {
       let errorMessage = "Gagal menyimpan entri jurnal";
       if (err instanceof Error) {
