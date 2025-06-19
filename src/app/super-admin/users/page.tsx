@@ -36,9 +36,16 @@ import {
   saveUser,
   updateUser,
   deleteUser,
-  DIVISIONS,
   type AppUser,
 } from "@/lib/data";
+
+const DIVISIONS = [
+  "DIVISI KEUANGAN & ADMINISTRASI",
+  "DIVISI PEMASARAN & PENJUALAN",
+  "DIVISI PRODUKSI",
+  "DIVISI DISTRIBUSI & GUDANG",
+  "DIVISI HRD",
+];
 
 export default function UsersPage() {
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -61,8 +68,15 @@ export default function UsersPage() {
   }, []);
 
   const loadUsers = async () => {
-    const data = await getUsers();
-    setUsers(data);
+    try {
+      console.log("Loading users..."); // Debug log
+      const data = await getUsers();
+      console.log("Users loaded:", data); // Debug log
+      setUsers(data);
+    } catch (error) {
+      console.error("Error loading users:", error);
+      setError("Gagal memuat data pengguna");
+    }
   };
 
   const filteredUsers = users.filter((user) => {
@@ -91,58 +105,86 @@ export default function UsersPage() {
     return colors[division] || "bg-gray-100 text-gray-800";
   };
 
+  // Helper function to get division ID by name
+  const getDivisionIdByName = (divisionName: string): number => {
+    const divisionMap: { [key: string]: number } = {
+      "DIVISI KEUANGAN & ADMINISTRASI": 1,
+      "DIVISI PEMASARAN & PENJUALAN": 2,
+      "DIVISI PRODUKSI": 3,
+      "DIVISI DISTRIBUSI & GUDANG": 4,
+      HRD: 5,
+    };
+    return divisionMap[divisionName] || 1;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
+    console.log("=== FORM DEBUG: Form data ===", {
+      ...formData,
+      password: formData.password ? "[HIDDEN]" : "EMPTY",
+    });
+
+    // Validation
     if (!formData.name || !formData.email || !formData.role) {
-      setError("Nama, email, dan role harus diisi");
+      setError("Semua field wajib diisi");
       return;
     }
 
-    if (formData.role === "division-admin" && !formData.division) {
-      setError("Pilih divisi untuk Admin Divisi");
+    if (!formData.password && !editingUser) {
+      setError("Password wajib diisi untuk user baru");
       return;
     }
 
-    const roleMapping = {
-      "super-admin": "SUPER_ADMIN" as const,
-      "division-admin": "ADMIN_DIVISI" as const,
+    // Fix role mapping
+    const backendRole =
+      formData.role === "division-admin" ? "ADMIN_DIVISI" : "SUPER_ADMIN";
+
+    // Simple DTO format untuk backend
+    const createRequest = {
+      username: formData.email,
+      password: formData.password,
+      role: backendRole,
+      division: formData.division
+        ? {
+            id: getDivisionIdByName(formData.division).toString(),
+            name: formData.division
+          }
+        : undefined,
+      status: "active" as const,
     };
 
-    const selectedDivision =
-      formData.role === "division-admin"
-        ? DIVISIONS.find((d) => getDivisionId(d) === formData.division)
-        : undefined;
+    console.log("=== FORM DEBUG: Sending create request ===", {
+      ...createRequest,
+      password: createRequest.password ? "[HIDDEN]" : "EMPTY",
+    });
 
-    try {
-      if (editingUser) {
-        // Update existing user
-        updateUser(editingUser.id, {
-          username: formData.email,
-          role: roleMapping[formData.role],
-          division:
-            typeof selectedDivision === "object" ? selectedDivision : undefined,
-        });
-        setSuccess("User berhasil diperbarui");
-      } else {
-        // Create new user
-        saveUser({
-          username: formData.email,
-          password: formData.password,
-          role: roleMapping[formData.role],
-          division:
-            typeof selectedDivision === "object" ? selectedDivision : undefined,
-          status: "active",
-        });
-        setSuccess("User berhasil ditambahkan");
-      }
+    if (editingUser) {
+      // Update logic later
+    } else {
+      // Create new user - validate role before saving
+      const validRoles = ["SUPER_ADMIN", "ADMIN_DIVISI"] as const;
+      const role = validRoles.includes(createRequest.role as any) 
+        ? createRequest.role as "SUPER_ADMIN" | "ADMIN_DIVISI"
+        : "ADMIN_DIVISI"; // default fallback
 
-      loadUsers();
-      resetForm();
-    } catch (err) {
-      setError("Terjadi kesalahan saat menyimpan user");
+      const userToSave = {
+        ...createRequest,
+        role
+      };
+
+      saveUser(userToSave)
+        .then(() => {
+          setSuccess("User berhasil ditambahkan");
+          resetForm();
+          loadUsers();
+        })
+        .catch((err) => {
+          console.error("Error saving user:", err);
+          setError("Gagal menambahkan user: " + err.message);
+        });
     }
   };
 
@@ -428,27 +470,21 @@ export default function UsersPage() {
                 {formData.role === "division-admin" && (
                   <div>
                     <Label htmlFor="division">Divisi</Label>
-                    <Select
+                    <select
                       value={formData.division}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, division: value })
+                      onChange={(e) =>
+                        setFormData({ ...formData, division: e.target.value })
                       }
+                      className="w-full p-2 border rounded"
+                      required={formData.role === "division-admin"}
                     >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Pilih divisi" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.isArray(DIVISIONS) &&
-                          DIVISIONS.map((division) => (
-                            <SelectItem
-                              key={getDivisionId(division)}
-                              value={getDivisionId(division)}
-                            >
-                              {getDivisionName(division)}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                      <option value="">Pilih Divisi</option>
+                      {DIVISIONS.map((division) => (
+                        <option key={division} value={division}>
+                          {division}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
 

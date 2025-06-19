@@ -23,15 +23,23 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
       ...options,
     })
 
-    const data = await response.json()
-
-    if (!response.ok) {
-      throw new Error(data.message || "API request failed")
+    // Handle different response types
+    let data
+    try {
+      data = await response.json()
+    } catch {
+      // If response is not JSON, handle as text or empty
+      data = response.ok ? {} : { message: "Network error" }
     }
 
+    if (!response.ok) {
+      throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    // Backend langsung return array/object, bukan wrapped dalam { data: ... }
     return {
       success: true,
-      data: data.data || data,
+      data: data, // Langsung gunakan data dari backend
       message: data.message,
     }
   } catch (error) {

@@ -64,13 +64,48 @@ export const getDivisionById = async (id: string): Promise<Division | null> => {
 
 // Accounts CRUD - now using API
 export const getAccounts = async (): Promise<Account[]> => {
-  const response = await accountsAPI.getAll()
-  return response.success ? response.data || [] : []
+  try {
+    const response = await accountsAPI.getAll()
+    console.log("getAccounts response:", response) // Debug log
+    
+    if (response.success && response.data) {
+      // Handle jika response.data adalah array
+      if (Array.isArray(response.data)) {
+        return response.data
+      }
+      // Handle jika response.data wrapped dalam property lain
+      if (typeof response.data === 'object' && 'content' in response.data && Array.isArray((response.data as any).content)) {
+        return (response.data as any).content
+      }
+    }
+    
+    console.warn("getAccounts: No data or unexpected format", response)
+    return []
+  } catch (error) {
+    console.error("getAccounts error:", error)
+    return []
+  }
 }
 
 export const getAccountsByDivision = async (divisionId: string): Promise<Account[]> => {
-  const response = await accountsAPI.getByDivision(divisionId)
-  return response.success ? response.data || [] : []
+  try {
+    const response = await accountsAPI.getByDivision(divisionId)
+    console.log("getAccountsByDivision response:", response) // Debug log
+    
+    if (response.success && response.data) {
+      if (Array.isArray(response.data)) {
+        return response.data
+      }
+      if (typeof response.data === 'object' && 'content' in response.data && Array.isArray((response.data as any).content)) {
+        return (response.data as any).content
+      }
+    }
+    
+    return []
+  } catch (error) {
+    console.error("getAccountsByDivision error:", error)
+    return []
+  }
 }
 
 export const saveAccount = async (account: Omit<Account, "id" | "createdAt">): Promise<Account> => {
@@ -153,13 +188,87 @@ export const getUsers = async (): Promise<AppUser[]> => {
   return response.success ? response.data || [] : []
 }
 
+// Update saveUser function untuk menggunakan RegisterRequest format
 export const saveUser = async (user: Omit<AppUser, "id" | "createdAt">): Promise<AppUser> => {
-  const response = await usersAPI.create(user)
-  if (!response.success) {
+  try {
+    console.log("=== FRONTEND DEBUG: Original user data ===", user)
+    
+    // Convert to RegisterRequest format
+    const registerRequest = {
+      username: user.username,
+      password: user.password,
+      role: user.role,
+      divisionId: user.division ? parseInt(user.division.id) : null
+    }
+    
+    console.log("=== FRONTEND DEBUG: RegisterRequest format ===", {
+      ...registerRequest,
+      password: registerRequest.password ? "[HIDDEN]" : "NULL"
+    })
+    
+    if (!registerRequest.password) {
+      throw new Error("Password is required but was not provided")
+    }
+    
+    const response = await usersAPI.create(registerRequest)
+    console.log("Create user response:", response)
+    
+    if (response.success && response.data) {
+      return {
+        id: response.data.id.toString(),
+        username: response.data.username,
+        role: response.data.role,
+        division: response.data.division ? {
+          id: response.data.division.id.toString(),
+          name: response.data.division.name
+        } : undefined,
+        status: "active",
+        createdAt: response.data.createdAt || new Date().toISOString(),
+      }
+    }
+    
     throw new Error(response.error || "Failed to create user")
+  } catch (error) {
+    console.error("saveUser error:", error)
+    throw error
   }
-  return response.data!
 }
+
+export const saveUserWithDTO = async (createRequest: {
+  username: string;
+  password: string;
+  role: string;
+  divisionId: number | null;
+}): Promise<AppUser> => {
+  try {
+    console.log("=== FRONTEND DEBUG: DTO Request ===", {
+      ...createRequest,
+      password: createRequest.password ? "[HIDDEN]" : "NULL"
+    });
+    
+    const response = await usersAPI.create(createRequest);
+    console.log("Create user response:", response);
+    
+    if (response.success && response.data) {
+      return {
+        id: response.data.id.toString(),
+        username: response.data.username,
+        role: response.data.role,
+        division: response.data.division ? {
+          id: response.data.division.id.toString(),
+          name: response.data.division.name
+        } : undefined,
+        status: "active",
+        createdAt: response.data.createdAt || new Date().toISOString(),
+      };
+    }
+    
+    throw new Error(response.error || "Failed to create user");
+  } catch (error) {
+    console.error("saveUserWithDTO error:", error);
+    throw error;
+  }
+};
 
 export const updateUser = async (id: string, updates: Partial<AppUser>): Promise<AppUser | null> => {
   const response = await usersAPI.update(id, updates)
