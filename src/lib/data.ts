@@ -72,25 +72,22 @@ interface BackendDivision {
 const transformAccountFromBackend = (
   backendAccount: BackendAccount
 ): Account => {
-  // Safety checks untuk memastikan data tidak undefined/null
   if (!backendAccount) {
     throw new Error("Backend account data is null or undefined");
   }
 
-  console.log("Transforming backend account:", backendAccount); // Debug log
-
   return {
-    id: (backendAccount.id || 0).toString(), // Convert Integer ke String with fallback
-    accountCode: backendAccount.account_code || "", // FIX: gunakan snake_case dari backend
-    accountName: backendAccount.account_name || "", // FIX: gunakan snake_case dari backend
-    valueType: backendAccount.value_type || "NOMINAL", // FIX: gunakan snake_case dari backend
+    id: (backendAccount.id || 0).toString(),
+    accountCode: backendAccount.account_code || "",
+    accountName: backendAccount.account_name || "",
+    valueType: backendAccount.value_type || "NOMINAL",
     division: {
       id: (backendAccount.division?.id || 0).toString(),
       name: backendAccount.division?.name || "Unknown Division",
     },
-    status: "active", // Default status
-    createdBy: "system", // Default value
-    createdAt: backendAccount.created_at || new Date().toISOString(), // FIX: gunakan snake_case
+    status: "active",
+    createdBy: "system",
+    createdAt: backendAccount.created_at || new Date().toISOString(),
   };
 };
 
@@ -125,7 +122,6 @@ export const getDivisions = async (): Promise<Division[]> => {
     }
     return [];
   } catch (error) {
-    console.error("getDivisions error:", error);
     return [];
   }
 };
@@ -135,7 +131,6 @@ export const getDivisionById = async (id: string): Promise<Division | null> => {
     const divisions = await getDivisions();
     return divisions.find((d) => d.id === id) || null;
   } catch (error) {
-    console.error("getDivisionById error:", error);
     return null;
   }
 };
@@ -143,25 +138,16 @@ export const getDivisionById = async (id: string): Promise<Division | null> => {
 // Accounts CRUD - now using API
 export const getAccounts = async (): Promise<Account[]> => {
   try {
-    console.log("=== DEBUG: Fetching accounts ===");
     const response = await accountsAPI.getAll();
-    console.log("=== DEBUG: Raw API response ===", response);
 
     if (response.success && response.data && Array.isArray(response.data)) {
-      console.log("=== DEBUG: Raw backend data ===", response.data);
-
-      // Periksa apakah data sudah dalam format yang benar
       const firstItem = response.data[0];
       if (
         firstItem &&
         "accountCode" in firstItem &&
         "accountName" in firstItem
       ) {
-        console.log(
-          "=== DEBUG: Data already in correct format, skipping transform ==="
-        );
-
-        // Langsung gunakan data tanpa transformasi, hanya adjust type
+        // Data already in correct format
         const accounts = response.data.map((account: any) => ({
           id: account.id?.toString() || "",
           accountCode: account.accountCode || "",
@@ -176,28 +162,19 @@ export const getAccounts = async (): Promise<Account[]> => {
           createdAt: account.createdAt || new Date().toISOString(),
         }));
 
-        console.log(
-          "=== DEBUG: Final accounts without transform ===",
-          accounts
-        );
         return accounts;
       }
 
-      // Jika masih perlu transformasi
-      console.log("=== DEBUG: Data needs transformation ===");
+      // Transform if needed
       const accounts = response.data.map((account: any) => {
-        console.log("=== DEBUG: Transforming individual account ===", account);
         return transformAccountFromBackend(account);
       });
 
-      console.log("=== DEBUG: Final transformed accounts ===", accounts);
       return accounts;
     }
 
-    console.warn("getAccounts: No data or unexpected format", response);
     return [];
   } catch (error) {
-    console.error("getAccounts error:", error);
     return [];
   }
 };
@@ -214,7 +191,6 @@ export const getAccountsByDivision = async (
     }
     return [];
   } catch (error) {
-    console.error("getAccountsByDivision error:", error);
     return [];
   }
 };
@@ -268,7 +244,6 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
     const response = await entriesAPI.getAll();
     return response.success && response.data ? response.data : [];
   } catch (error) {
-    console.error("getEntriHarian error:", error);
     return [];
   }
 };
@@ -280,7 +255,6 @@ export const getEntriHarianByDivision = async (
     const response = await entriesAPI.getByDivision(divisionId);
     return response.success && response.data ? response.data : [];
   } catch (error) {
-    console.error("getEntriHarianByDivision error:", error);
     return [];
   }
 };
@@ -292,7 +266,6 @@ export const getEntriHarianByDate = async (
     const response = await entriesAPI.getByDate(tanggal);
     return response.success && response.data ? response.data : [];
   } catch (error) {
-    console.error("getEntriHarianByDate error:", error);
     return [];
   }
 };
@@ -326,7 +299,6 @@ export const getUsers = async (): Promise<AppUser[]> => {
     const response = await usersAPI.getAll();
     return response.success && response.data ? response.data : [];
   } catch (error) {
-    console.error("getUsers error:", error);
     return [];
   }
 };

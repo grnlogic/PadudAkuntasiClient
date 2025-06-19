@@ -1,39 +1,38 @@
+import { divisionsAPI } from "./api";
 import type { Division } from "./data";
-
-const DIVISIONS_KEY = "divisions";
 
 // Default divisions sesuai spesifikasi
 const defaultDivisions: Division[] = [
   {
-    id: "div-1",
+    id: "1",
     name: "KEUANGAN & ADMINISTRASI",
     description: "Divisi pengelolaan keuangan dan administrasi",
     isActive: true,
     createdAt: new Date().toISOString(),
   },
   {
-    id: "div-2",
+    id: "2",
     name: "PEMASARAN & PENJUALAN",
     description: "Divisi pemasaran dan penjualan produk",
     isActive: true,
     createdAt: new Date().toISOString(),
   },
   {
-    id: "div-3",
+    id: "3",
     name: "PRODUKSI",
     description: "Divisi produksi dan manufaktur",
     isActive: true,
     createdAt: new Date().toISOString(),
   },
   {
-    id: "div-4",
+    id: "4",
     name: "DISTRIBUSI & GUDANG",
     description: "Divisi distribusi dan pengelolaan gudang",
     isActive: true,
     createdAt: new Date().toISOString(),
   },
   {
-    id: "div-5",
+    id: "5",
     name: "HRD",
     description: "Divisi sumber daya manusia",
     isActive: true,
@@ -41,45 +40,66 @@ const defaultDivisions: Division[] = [
   },
 ];
 
-// CRUD Operations untuk Divisions
-export const getDivisions = (): Division[] => {
-  if (typeof window === "undefined") return defaultDivisions;
-  const stored = localStorage.getItem(DIVISIONS_KEY);
-  if (!stored) {
-    localStorage.setItem(DIVISIONS_KEY, JSON.stringify(defaultDivisions));
+// CRUD Operations untuk Divisions - now using API
+export const getDivisions = async (): Promise<Division[]> => {
+  try {
+    const response = await divisionsAPI.getAll();
+    if (response.success && response.data && Array.isArray(response.data)) {
+      return response.data.map((division: any) => ({
+        id: division.id?.toString() || "",
+        name: division.name || "",
+        description: division.description || "",
+        isActive: division.isActive !== false,
+        createdAt: division.createdAt || new Date().toISOString(),
+      }));
+    }
+    // Fallback to default divisions if API fails
+    return defaultDivisions;
+  } catch (error) {
     return defaultDivisions;
   }
-  return JSON.parse(stored);
 };
 
-export const getDivisionById = (id: string): Division | null => {
-  const divisions = getDivisions();
-  return divisions.find((d) => d.id === id) || null;
+export const getDivisionById = async (id: string): Promise<Division | null> => {
+  try {
+    const divisions = await getDivisions();
+    return divisions.find((d) => d.id === id) || null;
+  } catch (error) {
+    return null;
+  }
 };
 
-export const saveDivision = (
+export const saveDivision = async (
   division: Omit<Division, "id" | "createdAt">
-): Division => {
-  const divisions = getDivisions();
-  const newDivision: Division = {
-    ...division,
-    id: `div-${Date.now()}`,
-    createdAt: new Date().toISOString(),
-  };
-  divisions.push(newDivision);
-  localStorage.setItem(DIVISIONS_KEY, JSON.stringify(divisions));
-  return newDivision;
+): Promise<Division> => {
+  try {
+    const response = await divisionsAPI.create(division);
+    if (!response.success) {
+      throw new Error(response.error || "Failed to create division");
+    }
+    return response.data!;
+  } catch (error) {
+    throw error;
+  }
 };
 
-export const updateDivision = (
+export const updateDivision = async (
   id: string,
   updates: Partial<Division>
-): Division | null => {
-  const divisions = getDivisions();
-  const index = divisions.findIndex((d) => d.id === id);
-  if (index === -1) return null;
+): Promise<Division | null> => {
+  try {
+    const response = await divisionsAPI.update(id, updates);
+    return response.success ? response.data! : null;
+  } catch (error) {
+    return null;
+  }
+};
 
-  divisions[index] = { ...divisions[index], ...updates };
-  localStorage.setItem(DIVISIONS_KEY, JSON.stringify(divisions));
-  return divisions[index];
+// Backward compatibility for sync version
+export const getDivisionsSync = (): Division[] => {
+  return defaultDivisions;
+};
+
+export const getDivisionByIdSync = (id: string): Division | null => {
+  return defaultDivisions.find((d) => d.id === id) || null;
 };

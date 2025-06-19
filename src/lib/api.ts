@@ -43,7 +43,6 @@ async function apiRequest<T>(
       ...options,
     });
 
-    // Handle different response types
     let data;
     try {
       data = await response.json();
@@ -52,17 +51,22 @@ async function apiRequest<T>(
     }
 
     if (!response.ok) {
-      throw new Error(data?.message || `HTTP error! status: ${response.status}`);
+      // Handle specific error cases
+      if (response.status === 409 && data?.error === "CONSTRAINT_VIOLATION") {
+        throw new Error(data.message || "Constraint violation error");
+      }
+
+      throw new Error(
+        data?.message || `HTTP error! status: ${response.status}`
+      );
     }
 
-    // Backend langsung return array/object, bukan wrapped dalam { data: ... }
     return {
       success: true,
       data: data,
       message: data?.message,
     };
   } catch (error) {
-    console.error(`API Error for ${endpoint}:`, error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -96,61 +100,44 @@ export const authAPI = {
 // Accounts (COA) API - sesuaikan dengan backend endpoint
 export const accountsAPI = {
   getAll: async () => {
-    console.log("=== API DEBUG: Calling /accounts endpoint ===");
-    const result = await apiRequest<any[]>("/accounts");
-    console.log("=== API DEBUG: Raw response ===", result);
-    console.log("=== API DEBUG: Response data type ===", typeof result.data);
-    console.log("=== API DEBUG: Response data is array ===", Array.isArray(result.data));
-    if (result.data && Array.isArray(result.data)) {
-      console.log("=== API DEBUG: First item structure ===", result.data[0]);
-      console.log("=== API DEBUG: All field names ===", result.data[0] ? Object.keys(result.data[0]) : "No data");
-    }
-    return result;
+    return apiRequest<any[]>("/accounts");
   },
 
   getByDivision: async (divisionId: string | number) => {
-    const numericId = typeof divisionId === "string" ? parseInt(divisionId) : divisionId;
+    const numericId =
+      typeof divisionId === "string" ? parseInt(divisionId) : divisionId;
     return apiRequest<any[]>(`/accounts/by-division/${numericId}`);
   },
 
   create: async (account: any) => {
-    console.log("=== API DEBUG: Creating account with original data ===", account);
-    
-    // Transform frontend format ke backend format dengan validasi yang lebih ketat
     const backendAccount = {
       accountCode: account.accountCode?.trim() || null,
       accountName: account.accountName?.trim() || null,
       valueType: account.valueType || null,
       division: {
         id: account.division?.id ? parseInt(account.division.id) : null,
-        name: account.division?.name || null
-      }
+        name: account.division?.name || null,
+      },
     };
 
-    console.log("=== API DEBUG: Transformed backend account ===", backendAccount);
-    console.log("=== API DEBUG: JSON stringify ===", JSON.stringify(backendAccount));
-
-    // Validasi sebelum mengirim
+    // Validation
     if (!backendAccount.accountCode) {
-      throw new Error("Account code is missing or empty");
+      throw new Error("Account code is required");
     }
     if (!backendAccount.accountName) {
-      throw new Error("Account name is missing or empty");
+      throw new Error("Account name is required");
     }
     if (!backendAccount.valueType) {
-      throw new Error("Value type is missing");
+      throw new Error("Value type is required");
     }
     if (!backendAccount.division.id) {
-      throw new Error("Division ID is missing");
+      throw new Error("Division is required");
     }
 
-    const result = await apiRequest<any>("/accounts", {
+    return apiRequest<any>("/accounts", {
       method: "POST",
       body: JSON.stringify(backendAccount),
     });
-
-    console.log("=== API DEBUG: Create account result ===", result);
-    return result;
   },
 
   update: async (id: string, updates: any) => {
@@ -162,7 +149,7 @@ export const accountsAPI = {
       ...(updates.division && {
         division: {
           id: parseInt(updates.division.id),
-          name: updates.division.name
+          name: updates.division.name,
         },
       }),
     };
