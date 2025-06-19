@@ -49,41 +49,24 @@ export default function TransactionPage() {
   }, [entries, searchTerm, filterType, filterDate]);
 
   const loadEntries = async () => {
-    console.log("=== TRANSACTION PAGE: Loading entries ===");
-    console.log("User division:", user?.division);
-
     if (!user?.division?.id) {
-      console.log("No user division found");
       return;
     }
 
     try {
-      // ✅ Load accounts dari divisi user dulu
       const accountsData = await getAccountsByDivision(user.division.id);
-      console.log("Loaded accounts for division:", accountsData);
       setAccounts(accountsData);
 
-      // ✅ Load ALL entries, kemudian filter by division
       const allEntries = await getEntriHarian();
-      console.log("All entries from API:", allEntries);
-
-      // ✅ Filter entries yang belong to current division
       const accountIds = accountsData.map((acc: Account) => acc.id);
-      console.log("Account IDs for current division:", accountIds);
 
       const divisionEntries = allEntries.filter((entry) => {
-        const belongs = accountIds.includes(entry.accountId);
-        console.log(
-          `Entry ${entry.id} (accountId: ${entry.accountId}) belongs to division:`,
-          belongs
-        );
-        return belongs;
+        return accountIds.includes(entry.accountId);
       });
 
-      console.log("Filtered division entries:", divisionEntries);
       setEntries(divisionEntries);
     } catch (error) {
-      console.error("Error loading entries:", error);
+      // Handle error silently
     }
   };
 
@@ -105,7 +88,9 @@ export default function TransactionPage() {
               .toLowerCase()
               .includes(searchTerm.toLowerCase()) ||
             (entry.description &&
-              entry.description.toLowerCase().includes(searchTerm.toLowerCase())))
+              entry.description
+                .toLowerCase()
+                .includes(searchTerm.toLowerCase())))
         );
       });
     }
@@ -291,8 +276,6 @@ export default function TransactionPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          
-
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -316,9 +299,9 @@ export default function TransactionPage() {
                     <TableRow key={entry.id}>
                       <TableCell>
                         {/* ✅ FIXED: Use correct date field */}
-                        {new Date(entry.tanggal || entry.date).toLocaleDateString(
-                          "id-ID"
-                        )}
+                        {new Date(
+                          entry.tanggal || entry.date
+                        ).toLocaleDateString("id-ID")}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
                         <div>

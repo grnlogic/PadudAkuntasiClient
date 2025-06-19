@@ -95,16 +95,11 @@ export const fetchCurrentUser = async (): Promise<User | null> => {
 // ✅ Add debug function untuk check division mapping
 export const debugUserDivision = (user: User | null) => {
   if (!user) {
-    console.log("No user logged in");
     return;
   }
 
-  console.log("Current User Division Info:", {
-    userId: user.id,
-    username: user.username,
-    role: user.role,
-    divisionId: user.division?.id,
-    divisionName: user.division?.name,
-    divisionIdType: typeof user.division?.id,
-  });
+  // Debug information can be logged in development only
+  if (process.env.NODE_ENV === "development") {
+    // Optional: Keep debug logging only in development
+  }
 };

@@ -103,19 +103,14 @@ export default function AccountRackPage() {
     // ✅ Mapping division name ke ID yang benar
     const divisionCodeMap: { [key: string]: string } = {
       "KEUANGAN & ADMINISTRASI": "1",
-      "PEMASARAN & PENJUALAN": "2", 
-      "PRODUKSI": "3",
+      "PEMASARAN & PENJUALAN": "2",
+      PRODUKSI: "3",
       "DISTRIBUSI & GUDANG": "4",
-      "HRD": "5",
+      HRD: "5",
     };
 
-    const divisionCode = divisionCodeMap[user?.division?.name || ""] || user?.division?.id || "1";
-    
-    console.log("Division mapping:", {
-      divisionName: user?.division?.name,
-      frontendId: user?.division?.id,
-      mappedCode: divisionCode,
-    });
+    const divisionCode =
+      divisionCodeMap[user?.division?.name || ""] || user?.division?.id || "1";
 
     const existingCodes = accounts
       .map((acc) => acc.accountCode)
@@ -150,15 +145,6 @@ export default function AccountRackPage() {
     }
 
     try {
-      // ✅ Debug log untuk melihat data yang dikirim
-      console.log("Creating account with data:", {
-        accountCode: newAccount.accountCode,
-        accountName: newAccount.accountName,
-        valueType: newAccount.valueType,
-        division: user.division,
-        userDivisionId: user.division.id,
-      });
-
       await saveAccount({
         accountCode: newAccount.accountCode,
         accountName: newAccount.accountName,
@@ -180,7 +166,6 @@ export default function AccountRackPage() {
       );
       setTimeout(() => setSuccess(""), 5000);
     } catch (err: any) {
-      console.error("Create account error:", err);
       setError(err.message || "Gagal membuat akun baru");
       setTimeout(() => setError(""), 5000);
     }

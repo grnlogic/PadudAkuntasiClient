@@ -168,13 +168,11 @@ export const getAccounts = async (): Promise<Account[]> => {
         return transformAccountFromBackend(account);
       });
 
-      console.log("Transformed accounts:", accounts); // ✅ Debug log
       return accounts;
     }
 
     return [];
   } catch (error) {
-    console.error("Error fetching accounts:", error); // ✅ Debug log
     return [];
   }
 };
@@ -184,7 +182,6 @@ export const getAccountsByDivision = async (
 ): Promise<Account[]> => {
   try {
     const response = await accountsAPI.getByDivision(divisionId);
-    console.log("API Response for division accounts:", response); // ✅ Debug log
 
     if (response.success && response.data && Array.isArray(response.data)) {
       const accounts = response.data.map((account: any) => {
@@ -209,12 +206,10 @@ export const getAccountsByDivision = async (
         return transformAccountFromBackend(account);
       });
 
-      console.log("Division accounts:", accounts); // ✅ Debug log
       return accounts;
     }
     return [];
   } catch (error) {
-    console.error("Error fetching accounts by division:", error); // ✅ Debug log
     return [];
   }
 };
@@ -237,8 +232,6 @@ export const saveAccount = async (
       createdBy: account.createdBy,
     };
 
-    console.log("Sending account data to API:", accountData);
-
     const response = await accountsAPI.create(accountData);
 
     if (!response.success) {
@@ -249,7 +242,6 @@ export const saveAccount = async (
 
     return response.data!;
   } catch (error: any) {
-    console.error("saveAccount error:", error);
     throw error;
   }
 };
@@ -291,12 +283,9 @@ export const generateAccountCode = (type: string): string => {
 export const getEntriHarian = async (): Promise<EntriHarian[]> => {
   try {
     const response = await entriesAPI.getAll();
-    console.log("getEntriHarian API response:", response); // ✅ Debug log
 
     if (response.success && response.data && Array.isArray(response.data)) {
       const mappedEntries = response.data.map((entry: any) => {
-        console.log("Mapping entry in getEntriHarian:", entry); // ✅ Debug log
-
         return {
           id: entry.id?.toString() || "",
           accountId:
@@ -310,12 +299,10 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
         };
       });
 
-      console.log("Mapped entries in getEntriHarian:", mappedEntries); // ✅ Debug log
       return mappedEntries;
     }
     return [];
   } catch (error) {
-    console.error("Error fetching entries in getEntriHarian:", error);
     return [];
   }
 };
@@ -325,12 +312,9 @@ export const getEntriHarianByDate = async (
 ): Promise<EntriHarian[]> => {
   try {
     const response = await entriesAPI.getByDate(tanggal);
-    console.log("Raw API response for entries by date:", response); // ✅ Debug log
 
     if (response.success && response.data && Array.isArray(response.data)) {
       const mappedEntries = response.data.map((entry: any) => {
-        console.log("Mapping entry:", entry); // ✅ Debug log
-
         return {
           id: entry.id?.toString() || "",
           accountId:
@@ -344,12 +328,10 @@ export const getEntriHarianByDate = async (
         };
       });
 
-      console.log("Mapped entries:", mappedEntries); // ✅ Debug log
       return mappedEntries;
     }
     return [];
   } catch (error) {
-    console.error("Error fetching entries by date:", error);
     return [];
   }
 };
@@ -358,10 +340,7 @@ export const saveEntriHarianBatch = async (
   entries: CreateEntriHarianRequest[]
 ): Promise<EntriHarian[]> => {
   try {
-    console.log("Sending to backend:", entries);
-
     const response = await entriesAPI.createBatch(entries);
-    console.log("Backend response:", response);
 
     if (response.success && response.data) {
       // ✅ FIXED: Map backend response to frontend format
@@ -381,7 +360,6 @@ export const saveEntriHarianBatch = async (
         createdAt: entry.createdAt || new Date().toISOString(),
       }));
 
-      console.log("Mapped saved entries:", mappedEntries); // ✅ Debug log
       return mappedEntries;
     }
 
@@ -389,7 +367,6 @@ export const saveEntriHarianBatch = async (
       response.error || response.message || "Failed to save entries"
     );
   } catch (error: any) {
-    console.error("Error saving entries batch:", error);
     throw error;
   }
 };
@@ -399,7 +376,6 @@ export const deleteEntriHarian = async (id: string): Promise<boolean> => {
     const response = await entriesAPI.delete(id);
     return response.success;
   } catch (error) {
-    console.warn("Error deleting entry, using fallback:", error);
     return true; // Fallback success untuk development
   }
 };

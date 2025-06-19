@@ -85,49 +85,25 @@ export default function JournalPage() {
     loadData();
   }, [selectedDate]);
 
-  // ✅ Monitor journalRows changes
-  useEffect(() => {
-    console.log("journalRows updated:", journalRows);
-  }, [journalRows]);
-
-  // ✅ Monitor accounts changes
-  useEffect(() => {
-    console.log("accounts updated:", accounts);
-  }, [accounts]);
-
   const loadData = async () => {
-    console.log("=== loadData START ===");
-    console.log("User division ID:", user?.division?.id);
-
     if (user?.division?.id) {
       try {
         // Load accounts dari "rak" divisi
         const accountsData = await getAccountsByDivision(user.division.id);
-        console.log("Loaded accounts:", accountsData);
         setAccounts(accountsData);
 
         // Load existing entries untuk tanggal yang dipilih
-        console.log("Loading entries for date:", selectedDate);
         const entriesData = await getEntriHarianByDate(selectedDate);
-        console.log("Raw entries data:", entriesData);
 
         // Filter entries yang belong to current division
         const accountIds = accountsData.map((acc) => acc.id);
-        console.log("Account IDs for division:", accountIds);
 
         const divisionEntries = entriesData.filter((entry) => {
-          const belongs = accountIds.includes(entry.accountId);
-          console.log(
-            `Entry ${entry.id} (accountId: ${entry.accountId}) belongs to division:`,
-            belongs
-          );
-          return belongs;
+          return accountIds.includes(entry.accountId);
         });
 
-        console.log("Division entries:", divisionEntries);
         setExistingEntries(divisionEntries);
       } catch (error) {
-        console.error("Error loading data:", error);
         setError("Gagal memuat data");
       }
     }
@@ -158,21 +134,13 @@ export default function JournalPage() {
   };
 
   const updateRow = (rowId: string, field: keyof JournalRow, value: string) => {
-    console.log("updateRow called:", { rowId, field, value });
-
     setJournalRows((prevRows) => {
-      console.log("Previous rows:", prevRows); // ✅ Debug log
-
       const newRows = prevRows.map((row) => {
         if (row.id === rowId) {
-          const updatedRow = { ...row, [field]: value };
-          console.log("Updating row:", row, "to:", updatedRow); // ✅ Debug log
-          return updatedRow;
+          return { ...row, [field]: value };
         }
         return row;
       });
-
-      console.log("New rows:", newRows); // ✅ Debug log
       return newRows;
     });
   };
@@ -211,58 +179,38 @@ export default function JournalPage() {
   };
 
   const saveJournalEntries = async () => {
-    console.log("=== FRONTEND: saveJournalEntries START ===");
-    console.log("Current journalRows:", journalRows);
-    console.log("Selected date:", selectedDate);
-    console.log("Division type:", divisionType);
-
-    // ✅ UPDATE: Improved validation for division-specific data
     const validRows = journalRows.filter((row) => {
       const account = getSelectedAccount(row.accountId);
       if (!account) {
-        console.log("Row filtered out - no account:", row);
         return false;
       }
 
-      // ✅ NEW: Check for division-specific data
+      // ✅ UPDATED: Special validation untuk KEUANGAN
+      if (divisionType === "KEUANGAN") {
+        // Untuk keuangan, wajib ada transaction type dan nominal
+        const hasKeuanganData =
+          row.transactionType &&
+          row.nominal &&
+          Number.parseFloat(row.nominal) > 0;
+        return hasKeuanganData && row.accountId;
+      }
+
+      // ✅ Check for other division-specific data
       if (divisionType !== "GENERAL") {
         const hasSpecificData =
-          (divisionType === "KEUANGAN" && row.transactionType && row.nominal) ||
           (divisionType === "PEMASARAN" &&
             (row.targetAmount || row.realisasiAmount)) ||
           (divisionType === "PRODUKSI" && row.kuantitas && row.hppAmount) ||
           (divisionType === "GUDANG" && (row.pemakaianAmount || row.stokAkhir));
 
-        if (!hasSpecificData) {
-          console.log(
-            "Row filtered out - missing division specific data:",
-            row
-          );
-          return false;
-        }
-
-        return row.accountId;
+        return hasSpecificData && row.accountId;
       }
 
       // For GENERAL division, use existing validation
       const value =
         account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
-      const isValid = row.accountId && value && Number.parseFloat(value) > 0;
-
-      console.log("Row validation:", {
-        accountId: row.accountId,
-        account: account.accountName,
-        valueType: account.valueType,
-        nominal: row.nominal,
-        kuantitas: row.kuantitas,
-        value,
-        isValid,
-      });
-
-      return isValid;
+      return row.accountId && value && Number.parseFloat(value) > 0;
     });
-
-    console.log("Valid rows count:", validRows.length);
 
     if (validRows.length === 0) {
       setError("Tidak ada entri yang valid untuk disimpan");
@@ -270,81 +218,65 @@ export default function JournalPage() {
       return;
     }
 
-    // ✅ UPDATE: Create entries with division-specific data
-    const entriesToSave: CreateEntriHarianRequest[] = validRows.map(
-      (row, index) => {
-        const account = getSelectedAccount(row.accountId)!;
+    // ✅ UPDATED: Create entries dengan logic yang benar untuk keuangan
+    const entriesToSave: CreateEntriHarianRequest[] = validRows.map((row) => {
+      const account = getSelectedAccount(row.accountId)!;
 
-        // ✅ NEW: Determine nilai based on division type
-        let nilai: number;
-        if (divisionType === "GENERAL") {
-          const value =
-            account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
-          nilai = Number.parseFloat(value);
-        } else {
-          // For specialized divisions, determine nilai from appropriate field
-          switch (divisionType) {
-            case "KEUANGAN":
-              nilai = Number.parseFloat(row.nominal || "0");
-              break;
-            case "PEMASARAN":
-              nilai = Number.parseFloat(
-                row.realisasiAmount || row.targetAmount || "0"
-              );
-              break;
-            case "PRODUKSI":
-              nilai = Number.parseFloat(row.kuantitas || "0");
-              break;
-            case "GUDANG":
-              nilai = Number.parseFloat(row.pemakaianAmount || "0");
-              break;
-            default:
-              nilai = 0;
-          }
+      // ✅ UPDATED: Determine nilai based on division type
+      let nilai: number;
+      if (divisionType === "GENERAL") {
+        const value =
+          account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
+        nilai = Number.parseFloat(value);
+      } else {
+        // For specialized divisions, determine nilai from appropriate field
+        switch (divisionType) {
+          case "KEUANGAN":
+            // ✅ FIXED: Untuk keuangan selalu gunakan nominal
+            nilai = Number.parseFloat(row.nominal || "0");
+            break;
+          case "PEMASARAN":
+            nilai = Number.parseFloat(
+              row.realisasiAmount || row.targetAmount || "0"
+            );
+            break;
+          case "PRODUKSI":
+            nilai = Number.parseFloat(row.kuantitas || "0");
+            break;
+          case "GUDANG":
+            nilai = Number.parseFloat(row.pemakaianAmount || "0");
+            break;
+          default:
+            nilai = 0;
         }
-
-        const entry: CreateEntriHarianRequest = {
-          accountId: Number(row.accountId),
-          tanggal: selectedDate,
-          nilai: nilai,
-          description: row.keterangan || "",
-
-          // ✅ NEW: Include division-specific data
-          ...(row.transactionType && { transactionType: row.transactionType }),
-          ...(row.targetAmount && {
-            targetAmount: Number.parseFloat(row.targetAmount),
-          }),
-          ...(row.realisasiAmount && {
-            realisasiAmount: Number.parseFloat(row.realisasiAmount),
-          }),
-          ...(row.hppAmount && { hppAmount: Number.parseFloat(row.hppAmount) }),
-          ...(row.pemakaianAmount && {
-            pemakaianAmount: Number.parseFloat(row.pemakaianAmount),
-          }),
-          ...(row.stokAkhir && { stokAkhir: Number.parseFloat(row.stokAkhir) }),
-        };
-
-        console.log(`Entry[${index}] transformation:`, {
-          original: row,
-          transformed: entry,
-          accountType: account.valueType,
-          divisionType: divisionType,
-        });
-
-        return entry;
       }
-    );
 
-    console.log(
-      "Final entries to save:",
-      JSON.stringify(entriesToSave, null, 2)
-    );
+      const entry: CreateEntriHarianRequest = {
+        accountId: Number(row.accountId),
+        tanggal: selectedDate,
+        nilai: nilai,
+        description: row.keterangan || "",
+
+        // ✅ Include division-specific data
+        ...(row.transactionType && { transactionType: row.transactionType }),
+        ...(row.targetAmount && {
+          targetAmount: Number.parseFloat(row.targetAmount),
+        }),
+        ...(row.realisasiAmount && {
+          realisasiAmount: Number.parseFloat(row.realisasiAmount),
+        }),
+        ...(row.hppAmount && { hppAmount: Number.parseFloat(row.hppAmount) }),
+        ...(row.pemakaianAmount && {
+          pemakaianAmount: Number.parseFloat(row.pemakaianAmount),
+        }),
+        ...(row.stokAkhir && { stokAkhir: Number.parseFloat(row.stokAkhir) }),
+      };
+
+      return entry;
+    });
 
     try {
       const saved = await saveEntriHarianBatch(entriesToSave);
-      console.log("Saved entries response:", saved);
-
-      // ✅ IMPROVED: Better data reload
       await loadData(); // Force reload data from backend
 
       // Reset form
@@ -364,31 +296,31 @@ export default function JournalPage() {
         },
       ]);
 
-      const successMessage =
-        saved.length === entriesToSave.length
-          ? `✅ ${
-              saved.length
-            } entri ${divisionType} berhasil disimpan untuk tanggal ${new Date(
-              selectedDate
-            ).toLocaleDateString("id-ID")}!`
-          : `✅ ${saved.length} dari ${entriesToSave.length} entri berhasil disimpan (beberapa mungkin di-update)`;
+      // ✅ IMPROVED: Better success message untuk keuangan
+      let successMessage;
+      if (divisionType === "KEUANGAN") {
+        successMessage = `✅ ${
+          saved.length
+        } transaksi keuangan berhasil ditambahkan untuk tanggal ${new Date(
+          selectedDate
+        ).toLocaleDateString("id-ID")}!`;
+      } else {
+        successMessage =
+          saved.length === entriesToSave.length
+            ? `✅ ${
+                saved.length
+              } entri ${divisionType} berhasil disimpan untuk tanggal ${new Date(
+                selectedDate
+              ).toLocaleDateString("id-ID")}!`
+            : `✅ ${saved.length} dari ${entriesToSave.length} entri berhasil disimpan (beberapa mungkin di-update)`;
+      }
 
       setSuccess(successMessage);
       setTimeout(() => setSuccess(""), 5000);
     } catch (err) {
-      console.error("Save error:", err);
-
       let errorMessage = "Gagal menyimpan entri jurnal";
       if (err instanceof Error) {
-        if (
-          err.message.includes("duplicate key") ||
-          err.message.includes("already exists")
-        ) {
-          errorMessage =
-            "Data untuk akun dan tanggal ini sudah ada. Coba refresh halaman dan coba lagi.";
-        } else {
-          errorMessage = err.message;
-        }
+        errorMessage = err.message;
       }
 
       setError(errorMessage);
@@ -417,23 +349,10 @@ export default function JournalPage() {
       description: "Test entry manual",
     };
 
-    console.log(
-      "Testing with minimal data:",
-      JSON.stringify(testEntry, null, 2)
-    );
-    console.log("Data types:", {
-      accountId: typeof testEntry.accountId,
-      tanggal: typeof testEntry.tanggal,
-      nilai: typeof testEntry.nilai,
-      description: typeof testEntry.description,
-    });
-
     try {
       const saved = await saveEntriHarianBatch([testEntry]);
-      console.log("Test successful:", saved);
       setSuccess("Test berhasil!");
     } catch (error) {
-      console.error("Test failed:", error);
       setError("Test gagal: " + (error as Error).message);
     }
   };

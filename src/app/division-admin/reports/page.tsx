@@ -45,121 +45,60 @@ export default function ReportsPage() {
     loadData();
   }, []);
 
-  // ✅ FIXED: Generate report whenever data changes
   useEffect(() => {
-    console.log("=== REPORTS: useEffect triggered ===");
-    console.log("Entries length:", entries.length);
-    console.log("Accounts length:", accounts.length);
-    console.log("Report type:", reportType);
-    console.log("Selected month:", selectedMonth);
-
-    // ✅ ALWAYS generate report when accounts and entries are loaded, regardless of length
     if (accounts.length > 0) {
-      console.log("Calling generateReport...");
       generateReport();
-    } else {
-      console.log("Not generating report - no accounts loaded");
     }
   }, [entries, accounts, reportType, selectedMonth]);
 
   const loadData = async () => {
-    console.log("=== REPORTS: Loading data ===");
-    console.log("User division:", user?.division);
-
     if (!user?.division?.id) {
-      console.log("No user division found");
       return;
     }
 
     try {
-      // ✅ Load accounts first
       const accountsData = await getAccountsByDivision(user.division.id);
-      console.log("Loaded accounts for reports:", accountsData);
       setAccounts(accountsData);
 
-      // ✅ Load all entries
       const allEntries = await getEntriHarian();
-      console.log("All entries for reports:", allEntries);
-
-      // ✅ Filter entries by division
       const accountIds = accountsData.map((acc) => acc.id);
-      console.log("Account IDs for division:", accountIds);
 
       const divisionEntries = allEntries.filter((entry) => {
         const belongs = accountIds.includes(entry.accountId);
-        console.log(
-          `Entry ${entry.id} (accountId: ${entry.accountId}) belongs to division:`,
-          belongs
-        );
         return belongs;
       });
 
-      console.log("Division entries for reports:", divisionEntries);
       setEntries(divisionEntries);
     } catch (error) {
-      console.error("Error loading reports data:", error);
+      // Handle error silently or with user notification
     }
   };
 
-  // ✅ COMPLETELY REWRITTEN: generateReport function
   const generateReport = () => {
-    console.log("=== REPORTS: Generating report START ===");
-    console.log("Raw entries:", entries);
-    console.log("Raw accounts:", accounts);
-    console.log("Report type:", reportType);
-    console.log("Selected month:", selectedMonth);
-
-    // ✅ Start with ALL entries (don't filter first)
     let filtered = [...entries];
-    console.log("Starting with entries:", filtered);
 
-    // ✅ Apply date filter based on report type
     if (reportType === "monthly") {
-      console.log("Applying monthly filter for:", selectedMonth);
       filtered = entries.filter((entry) => {
         const entryDate = entry.tanggal || entry.date;
-        console.log(
-          "Checking entry date:",
-          entryDate,
-          "against month:",
-          selectedMonth
-        );
 
         if (!entryDate) {
-          console.log("Entry has no date, excluding");
           return false;
         }
 
         const belongs = entryDate.startsWith(selectedMonth);
-        console.log(
-          `Entry ${entry.id} (date: ${entryDate}) belongs to ${selectedMonth}:`,
-          belongs
-        );
         return belongs;
       });
     } else if (reportType === "yearly") {
       const year = selectedMonth.split("-")[0];
-      console.log("Applying yearly filter for:", year);
       filtered = entries.filter((entry) => {
         const entryDate = entry.tanggal || entry.date;
         if (!entryDate) return false;
         const belongs = entryDate.startsWith(year);
-        console.log(
-          `Entry ${entry.id} (date: ${entryDate}) belongs to year ${year}:`,
-          belongs
-        );
         return belongs;
       });
     }
-    // For "all", use all entries
 
-    console.log("Filtered entries after date filter:", filtered);
-
-    // ✅ If no entries after filter, still create empty report structure
     if (filtered.length === 0) {
-      console.log(
-        "No entries after filtering, creating empty report for all accounts"
-      );
       const emptyReport = accounts.map((account) => ({
         accountCode: account.accountCode,
         accountName: account.accountName,
@@ -167,15 +106,12 @@ export default function ReportsPage() {
         kredit: 0,
         transactions: 0,
       }));
-      console.log("Empty report structure:", emptyReport);
       setReportData(emptyReport);
       return;
     }
 
-    // ✅ Group entries by account
     const grouped: { [key: string]: any } = {};
 
-    // ✅ Initialize all accounts with zero values
     accounts.forEach((account) => {
       const key = `${account.accountCode}-${account.accountName}`;
       grouped[key] = {
@@ -187,48 +123,24 @@ export default function ReportsPage() {
       };
     });
 
-    console.log("Initialized grouped structure:", grouped);
-
-    // ✅ Process filtered entries
-    filtered.forEach((entry, index) => {
-      console.log(`Processing entry ${index + 1}:`, entry);
-
-      // Find account from loaded accounts
+    filtered.forEach((entry) => {
       const account = accounts.find((a) => a.id === entry.accountId);
 
       if (!account) {
-        console.log(
-          `❌ Account not found for entry ${entry.id} with accountId ${entry.accountId}`
-        );
         return;
       }
 
-      console.log(`✅ Found account for entry ${entry.id}:`, account);
-
       const key = `${account.accountCode}-${account.accountName}`;
 
-      // ✅ Add to existing group (should already exist from initialization)
       if (grouped[key]) {
         const nilai = Number(entry.nilai) || 0;
         grouped[key].debet += nilai;
         grouped[key].transactions += 1;
-
-        console.log(`Updated group ${key}:`, {
-          previousDebet: grouped[key].debet - nilai,
-          addedNilai: nilai,
-          newDebet: grouped[key].debet,
-          newTransactions: grouped[key].transactions,
-        });
-      } else {
-        console.log(`❌ Group ${key} not found in initialized structure`);
       }
     });
 
     const reportArray = Object.values(grouped);
-    console.log("=== REPORTS: Final grouped data ===", reportArray);
-
     setReportData(reportArray);
-    console.log("=== REPORTS: Report data set ===");
   };
 
   const formatCurrency = (amount: number) => {
@@ -251,15 +163,7 @@ export default function ReportsPage() {
     return reportData.reduce((sum, item) => sum + item.transactions, 0);
   };
 
-  // ✅ FIXED: Force regenerate report manually
   const handleGenerateReport = () => {
-    console.log("=== MANUAL: Generate Report clicked ===");
-    console.log("Current state:", {
-      entries: entries.length,
-      accounts: accounts.length,
-      reportType,
-      selectedMonth,
-    });
     generateReport();
   };
 
@@ -357,7 +261,6 @@ export default function ReportsPage() {
           </div>
         </CardContent>
       </Card>
-
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
