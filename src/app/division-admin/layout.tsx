@@ -124,7 +124,7 @@ export default function DivisionAdminLayout({
             <div className="flex items-center gap-2">
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-medium">{user?.username}</p>
-                <p className="text-xs text-gray-500">Divisi {user?.division?.name}</p>
+                <p className="text-xs text-gray-500"> {user?.division?.name}</p>
               </div>
             </div>
           </header>

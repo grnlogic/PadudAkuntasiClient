@@ -67,6 +67,16 @@ export default function JournalPage() {
     loadData();
   }, [selectedDate]);
 
+  // ✅ Monitor journalRows changes
+  useEffect(() => {
+    console.log("journalRows updated:", journalRows);
+  }, [journalRows]);
+
+  // ✅ Monitor accounts changes
+  useEffect(() => {
+    console.log("accounts updated:", accounts);
+  }, [accounts]);
+
   const loadData = async () => {
     if (user?.division?.id) {
       // Load accounts dari "rak" divisi
@@ -101,17 +111,29 @@ export default function JournalPage() {
   };
 
   const updateRow = (rowId: string, field: keyof JournalRow, value: string) => {
-    setJournalRows(
-      journalRows.map((row) =>
-        row.id === rowId ? { ...row, [field]: value } : row
-      )
-    );
+    console.log("updateRow called:", { rowId, field, value });
+
+    setJournalRows((prevRows) => {
+      console.log("Previous rows:", prevRows); // ✅ Debug log
+
+      const newRows = prevRows.map((row) => {
+        if (row.id === rowId) {
+          const updatedRow = { ...row, [field]: value };
+          console.log("Updating row:", row, "to:", updatedRow); // ✅ Debug log
+          return updatedRow;
+        }
+        return row;
+      });
+
+      console.log("New rows:", newRows); // ✅ Debug log
+      return newRows;
+    });
   };
 
   const getAccountDisplay = (accountId: string) => {
     const account = accounts.find((acc) => acc.id === accountId);
-    if (!account) return "";
-    return `${account.accountCode} || ${account.accountName}`;
+    if (!account) return "Akun tidak ditemukan";
+    return `${account.accountCode} - ${account.accountName}`;
   };
 
   const getSelectedAccount = (accountId: string) => {
@@ -147,7 +169,8 @@ export default function JournalPage() {
       const account = getSelectedAccount(row.accountId);
       if (!account) return false;
 
-      const value = account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
+      const value =
+        account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
       return row.accountId && value && Number.parseFloat(value) > 0;
     });
 
@@ -160,7 +183,8 @@ export default function JournalPage() {
     // Convert ke format EntriHarian
     const entriesToSave = validRows.map((row) => {
       const account = getSelectedAccount(row.accountId)!;
-      const value = account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
+      const value =
+        account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
 
       return {
         accountId: row.accountId,
@@ -308,23 +332,60 @@ export default function JournalPage() {
                   <div className="col-span-4">
                     <Select
                       value={row.accountId}
-                      onValueChange={(value: string) => {
-                        // Reset nilai saat ganti akun
-                        updateRow(row.id, "accountId", value);
-                        updateRow(row.id, "nominal", "");
-                        updateRow(row.id, "kuantitas", "");
+                      onValueChange={(value) => {
+                        console.log("onValueChange triggered with:", value);
+                        if (value && value !== "no-accounts") {
+                          updateRow(row.id, "accountId", value);
+                          updateRow(row.id, "nominal", "");
+                          updateRow(row.id, "kuantitas", "");
+                        }
                       }}
                     >
                       <SelectTrigger className="text-sm">
-                        <SelectValue placeholder="Pilih akun dari rak..." />
+                        <SelectValue placeholder="Pilih akun dari rak...">
+                          {/* ✅ Custom display untuk selected value */}
+                          {row.accountId
+                            ? (() => {
+                                const selectedAccount = getSelectedAccount(
+                                  row.accountId
+                                );
+                                return selectedAccount ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-xs text-blue-600">
+                                      {selectedAccount.accountCode}
+                                    </span>
+                                    <span className="text-sm">
+                                      {selectedAccount.accountName}
+                                    </span>
+                                    <Badge
+                                      className={`text-xs ${
+                                        selectedAccount.valueType === "NOMINAL"
+                                          ? "bg-blue-100 text-blue-800"
+                                          : "bg-green-100 text-green-800"
+                                      }`}
+                                    >
+                                      {selectedAccount.valueType === "NOMINAL"
+                                        ? "Rp"
+                                        : "Unit"}
+                                    </Badge>
+                                  </div>
+                                ) : (
+                                  "Akun tidak ditemukan"
+                                );
+                              })()
+                            : "Pilih akun dari rak..."}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {accounts.map((account) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            <div className="flex flex-col">
+                        {accounts.length > 0 ? (
+                          accounts.map((account) => (
+                            <SelectItem key={account.id} value={account.id}>
                               <div className="flex items-center gap-2">
                                 <span className="font-mono text-xs text-blue-600">
                                   {account.accountCode}
+                                </span>
+                                <span className="text-sm">
+                                  {account.accountName}
                                 </span>
                                 <Badge
                                   className={`text-xs ${
@@ -333,15 +394,18 @@ export default function JournalPage() {
                                       : "bg-green-100 text-green-800"
                                   }`}
                                 >
-                                  {account.valueType === "NOMINAL" ? "Rp" : "Unit"}
+                                  {account.valueType === "NOMINAL"
+                                    ? "Rp"
+                                    : "Unit"}
                                 </Badge>
                               </div>
-                              <span className="text-sm">
-                                {account.accountName}
-                              </span>
-                            </div>
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no-accounts" disabled>
+                            Tidak ada akun tersedia
                           </SelectItem>
-                        ))}
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -495,7 +559,9 @@ export default function JournalPage() {
                                 : "bg-green-100 text-green-800"
                             }
                           >
-                            {account?.valueType === "NOMINAL" ? "💰 Rp" : "📦 Unit"}
+                            {account?.valueType === "NOMINAL"
+                              ? "💰 Rp"
+                              : "📦 Unit"}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm">
@@ -550,7 +616,9 @@ export default function JournalPage() {
 
               <div className="p-4 bg-green-50 rounded-lg">
                 <div className="text-center">
-                  <p className="text-sm text-green-600">Total Kuantitas (Unit)</p>
+                  <p className="text-sm text-green-600">
+                    Total Kuantitas (Unit)
+                  </p>
                   <p className="text-xl font-bold text-green-800">
                     {formatDisplayValue(
                       existingEntries
