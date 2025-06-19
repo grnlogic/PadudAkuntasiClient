@@ -100,18 +100,34 @@ export default function AccountRackPage() {
   };
 
   const generateSuggestedCode = () => {
-    const divisionId = user?.division?.id || "1";
+    // ✅ Mapping division name ke ID yang benar
+    const divisionCodeMap: { [key: string]: string } = {
+      "KEUANGAN & ADMINISTRASI": "1",
+      "PEMASARAN & PENJUALAN": "2", 
+      "PRODUKSI": "3",
+      "DISTRIBUSI & GUDANG": "4",
+      "HRD": "5",
+    };
+
+    const divisionCode = divisionCodeMap[user?.division?.name || ""] || user?.division?.id || "1";
+    
+    console.log("Division mapping:", {
+      divisionName: user?.division?.name,
+      frontendId: user?.division?.id,
+      mappedCode: divisionCode,
+    });
+
     const existingCodes = accounts
       .map((acc) => acc.accountCode)
-      .filter((code) => code.startsWith(`${divisionId}-`))
+      .filter((code) => code.startsWith(`${divisionCode}-`))
       .map((code) => Number.parseInt(code.split("-")[1]) || 0);
 
     const nextNumber =
       existingCodes.length > 0 ? Math.max(...existingCodes) + 1 : 1;
-    return `${divisionId}-${nextNumber.toString().padStart(3, "0")}`;
+    return `${divisionCode}-${nextNumber.toString().padStart(3, "0")}`;
   };
 
-  const handleCreateAccount = () => {
+  const handleCreateAccount = async () => {
     if (
       !newAccount.accountCode ||
       !newAccount.accountName ||
@@ -134,7 +150,16 @@ export default function AccountRackPage() {
     }
 
     try {
-      saveAccount({
+      // ✅ Debug log untuk melihat data yang dikirim
+      console.log("Creating account with data:", {
+        accountCode: newAccount.accountCode,
+        accountName: newAccount.accountName,
+        valueType: newAccount.valueType,
+        division: user.division,
+        userDivisionId: user.division.id,
+      });
+
+      await saveAccount({
         accountCode: newAccount.accountCode,
         accountName: newAccount.accountName,
         valueType: newAccount.valueType,
@@ -143,7 +168,7 @@ export default function AccountRackPage() {
         createdBy: user.username,
       });
 
-      loadAccounts();
+      await loadAccounts();
       setNewAccount({
         accountCode: "",
         accountName: "",
@@ -155,6 +180,7 @@ export default function AccountRackPage() {
       );
       setTimeout(() => setSuccess(""), 5000);
     } catch (err: any) {
+      console.error("Create account error:", err);
       setError(err.message || "Gagal membuat akun baru");
       setTimeout(() => setError(""), 5000);
     }
@@ -170,7 +196,7 @@ export default function AccountRackPage() {
     setShowCreateForm(true);
   };
 
-  const handleUpdate = () => {
+  const handleUpdate = async () => {
     if (
       !editingAccount ||
       !newAccount.accountCode ||
@@ -189,13 +215,13 @@ export default function AccountRackPage() {
     }
 
     try {
-      updateAccount(editingAccount.id, {
+      await updateAccount(editingAccount.id, {
         accountCode: newAccount.accountCode,
         accountName: newAccount.accountName,
         valueType: newAccount.valueType,
       });
 
-      loadAccounts();
+      await loadAccounts();
       setNewAccount({
         accountCode: "",
         accountName: "",

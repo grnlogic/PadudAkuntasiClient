@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Calendar, BookOpen, Plus, Save, Trash2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -10,6 +11,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -18,16 +27,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Save, Plus, Trash2, Calendar, BookOpen } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge"; // ✅ Add this import
+import { getCurrentUser } from "@/lib/auth";
 import {
   getAccountsByDivision,
   getEntriHarianByDate,
@@ -36,13 +37,14 @@ import {
   type Account,
   type EntriHarian,
 } from "@/lib/data";
-import { getCurrentUser } from "@/lib/auth";
+import { Label } from "@/components/ui/label";
 
 interface JournalRow {
   id: string;
   accountId: string;
   keterangan: string;
-  nominal: string;
+  nominal: string; // For NOMINAL accounts (Rupiah)
+  kuantitas: string; // For KUANTITAS accounts (Unit/Jumlah)
 }
 
 export default function JournalPage() {
@@ -58,7 +60,7 @@ export default function JournalPage() {
 
   // Form rows untuk input multiple entries
   const [journalRows, setJournalRows] = useState<JournalRow[]>([
-    { id: "1", accountId: "", keterangan: "", nominal: "" },
+    { id: "1", accountId: "", keterangan: "", nominal: "", kuantitas: "" },
   ]);
 
   useEffect(() => {
@@ -87,6 +89,7 @@ export default function JournalPage() {
       accountId: "",
       keterangan: "",
       nominal: "",
+      kuantitas: "",
     };
     setJournalRows([...journalRows, newRow]);
   };
@@ -111,12 +114,42 @@ export default function JournalPage() {
     return `${account.accountCode} || ${account.accountName}`;
   };
 
+  const getSelectedAccount = (accountId: string) => {
+    return accounts.find((acc) => acc.id === accountId);
+  };
+
+  const getInputValue = (row: JournalRow) => {
+    const account = getSelectedAccount(row.accountId);
+    if (!account) return "";
+
+    return account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
+  };
+
+  const formatDisplayValue = (value: string, valueType: string) => {
+    if (!value || Number.parseFloat(value) === 0) return "-";
+
+    const numValue = Number.parseFloat(value);
+
+    if (valueType === "NOMINAL") {
+      return new Intl.NumberFormat("id-ID", {
+        style: "currency",
+        currency: "IDR",
+        minimumFractionDigits: 0,
+      }).format(numValue);
+    } else {
+      return `${numValue.toLocaleString("id-ID")} unit`;
+    }
+  };
+
   const saveJournalEntries = async () => {
     // Filter rows yang sudah diisi
-    const validRows = journalRows.filter(
-      (row) =>
-        row.accountId && row.nominal && Number.parseFloat(row.nominal) > 0
-    );
+    const validRows = journalRows.filter((row) => {
+      const account = getSelectedAccount(row.accountId);
+      if (!account) return false;
+
+      const value = account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
+      return row.accountId && value && Number.parseFloat(value) > 0;
+    });
 
     if (validRows.length === 0) {
       setError("Tidak ada entri yang valid untuk disimpan");
@@ -125,21 +158,34 @@ export default function JournalPage() {
     }
 
     // Convert ke format EntriHarian
-    const entriesToSave = validRows.map((row) => ({
-      accountId: row.accountId,
-      date: selectedDate,
-      tanggal: selectedDate,
-      nilai: Number.parseFloat(row.nominal),
-      description: row.keterangan || "",
-      createdBy: user?.username || "",
-    }));
+    const entriesToSave = validRows.map((row) => {
+      const account = getSelectedAccount(row.accountId)!;
+      const value = account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
+
+      return {
+        accountId: row.accountId,
+        date: selectedDate,
+        tanggal: selectedDate,
+        nilai: Number.parseFloat(value),
+        description: row.keterangan || "",
+        createdBy: user?.username || "",
+      };
+    });
 
     try {
       const saved = await saveEntriHarianBatch(entriesToSave);
       loadData();
 
       // Reset form
-      setJournalRows([{ id: "1", accountId: "", keterangan: "", nominal: "" }]);
+      setJournalRows([
+        {
+          id: "1",
+          accountId: "",
+          keterangan: "",
+          nominal: "",
+          kuantitas: "",
+        },
+      ]);
 
       setSuccess(
         `✅ ${saved.length} entri berhasil disimpan untuk tanggal ${new Date(
@@ -164,18 +210,6 @@ export default function JournalPage() {
         setTimeout(() => setError(""), 3000);
       }
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const getTotalNominal = () => {
-    return existingEntries.reduce((sum, entry) => sum + entry.nilai, 0);
   };
 
   return (
@@ -236,8 +270,8 @@ export default function JournalPage() {
             Form Input Jurnal Harian
           </CardTitle>
           <CardDescription>
-            Pilih akun dari rak divisi, tambahkan keterangan, dan masukkan
-            nominal
+            Pilih akun dari rak divisi, tambahkan keterangan, dan masukkan nilai
+            sesuai tipe akun (Rupiah atau Unit)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -247,93 +281,139 @@ export default function JournalPage() {
               <div className="col-span-2">Tgl Jurnal</div>
               <div className="col-span-4">Akun</div>
               <div className="col-span-3">Keterangan</div>
-              <div className="col-span-2">Nominal</div>
+              <div className="col-span-2">Nilai</div>
               <div className="col-span-1">Aksi</div>
             </div>
 
             {/* Journal Rows */}
-            {journalRows.map((row) => (
-              <div
-                key={row.id}
-                className="grid grid-cols-12 gap-4 items-center"
-              >
-                {/* Tanggal */}
-                <div className="col-span-2">
-                  <Input
-                    type="date"
-                    value={selectedDate}
-                    disabled
-                    className="bg-gray-50 text-sm"
-                  />
-                </div>
+            {journalRows.map((row) => {
+              const selectedAccount = getSelectedAccount(row.accountId);
 
-                {/* Akun Dropdown */}
-                <div className="col-span-4">
-                  <Select
-                    value={row.accountId}
-                    onValueChange={(value: string) =>
-                      updateRow(row.id, "accountId", value)
-                    }
-                  >
-                    <SelectTrigger className="text-sm">
-                      <SelectValue placeholder="Pilih akun dari rak..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accounts.map((account) => (
-                        <SelectItem key={account.id} value={account.id}>
-                          <div className="flex flex-col">
-                            <span className="font-mono text-xs text-blue-600">
-                              {account.accountCode}
-                            </span>
-                            <span className="text-sm">
-                              {account.accountName}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              return (
+                <div
+                  key={row.id}
+                  className="grid grid-cols-12 gap-4 items-center"
+                >
+                  {/* Tanggal */}
+                  <div className="col-span-2">
+                    <Input
+                      type="date"
+                      value={selectedDate}
+                      disabled
+                      className="bg-gray-50 text-sm"
+                    />
+                  </div>
 
-                {/* Keterangan */}
-                <div className="col-span-3">
-                  <Input
-                    placeholder="Keterangan..."
-                    value={row.keterangan}
-                    onChange={(e) =>
-                      updateRow(row.id, "keterangan", e.target.value)
-                    }
-                    className="text-sm"
-                  />
-                </div>
+                  {/* Akun Dropdown */}
+                  <div className="col-span-4">
+                    <Select
+                      value={row.accountId}
+                      onValueChange={(value: string) => {
+                        // Reset nilai saat ganti akun
+                        updateRow(row.id, "accountId", value);
+                        updateRow(row.id, "nominal", "");
+                        updateRow(row.id, "kuantitas", "");
+                      }}
+                    >
+                      <SelectTrigger className="text-sm">
+                        <SelectValue placeholder="Pilih akun dari rak..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs text-blue-600">
+                                  {account.accountCode}
+                                </span>
+                                <Badge
+                                  className={`text-xs ${
+                                    account.valueType === "NOMINAL"
+                                      ? "bg-blue-100 text-blue-800"
+                                      : "bg-green-100 text-green-800"
+                                  }`}
+                                >
+                                  {account.valueType === "NOMINAL" ? "Rp" : "Unit"}
+                                </Badge>
+                              </div>
+                              <span className="text-sm">
+                                {account.accountName}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                {/* Nominal */}
-                <div className="col-span-2">
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={row.nominal}
-                    onChange={(e) =>
-                      updateRow(row.id, "nominal", e.target.value)
-                    }
-                    className="text-right text-sm"
-                  />
-                </div>
+                  {/* Keterangan */}
+                  <div className="col-span-3">
+                    <Input
+                      placeholder="Keterangan..."
+                      value={row.keterangan}
+                      onChange={(e) =>
+                        updateRow(row.id, "keterangan", e.target.value)
+                      }
+                      className="text-sm"
+                    />
+                  </div>
 
-                {/* Action */}
-                <div className="col-span-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => removeRow(row.id)}
-                    className="text-red-600 hover:text-red-700"
-                    disabled={journalRows.length === 1}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {/* Nilai Input - Dinamis berdasarkan tipe akun */}
+                  <div className="col-span-2">
+                    {selectedAccount ? (
+                      <div className="space-y-1">
+                        <Input
+                          type="number"
+                          placeholder={
+                            selectedAccount.valueType === "NOMINAL"
+                              ? "0"
+                              : "0 unit"
+                          }
+                          value={
+                            selectedAccount.valueType === "NOMINAL"
+                              ? row.nominal
+                              : row.kuantitas
+                          }
+                          onChange={(e) => {
+                            const field =
+                              selectedAccount.valueType === "NOMINAL"
+                                ? "nominal"
+                                : "kuantitas";
+                            updateRow(row.id, field, e.target.value);
+                          }}
+                          className="text-right text-sm"
+                        />
+                        <div className="text-xs text-gray-500 text-center">
+                          {selectedAccount.valueType === "NOMINAL"
+                            ? "💰 Rupiah"
+                            : "📦 Unit/Jumlah"}
+                        </div>
+                      </div>
+                    ) : (
+                      <Input
+                        type="number"
+                        placeholder="Pilih akun dulu"
+                        disabled
+                        className="text-right text-sm bg-gray-50"
+                      />
+                    )}
+                  </div>
+
+                  {/* Action */}
+                  <div className="col-span-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeRow(row.id)}
+                      className="text-red-600 hover:text-red-700"
+                      disabled={journalRows.length === 1}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Action Buttons */}
             <div className="flex gap-2 pt-4 border-t">
@@ -358,7 +438,7 @@ export default function JournalPage() {
         </CardContent>
       </Card>
 
-      {/* Existing Entries */}
+      {/* Existing Entries - Updated Display */}
       {existingEntries.length > 0 && (
         <Card>
           <CardHeader>
@@ -379,8 +459,9 @@ export default function JournalPage() {
                     <TableHead>Waktu</TableHead>
                     <TableHead>Kode Akun</TableHead>
                     <TableHead>Nama Akun</TableHead>
+                    <TableHead>Tipe</TableHead>
                     <TableHead>Keterangan</TableHead>
-                    <TableHead>Nominal</TableHead>
+                    <TableHead>Nilai</TableHead>
                     <TableHead className="text-right">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -406,11 +487,25 @@ export default function JournalPage() {
                         <TableCell className="font-medium">
                           {account?.accountName}
                         </TableCell>
+                        <TableCell>
+                          <Badge
+                            className={
+                              account?.valueType === "NOMINAL"
+                                ? "bg-blue-100 text-blue-800"
+                                : "bg-green-100 text-green-800"
+                            }
+                          >
+                            {account?.valueType === "NOMINAL" ? "💰 Rp" : "📦 Unit"}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-sm">
                           {entry.description || "-"}
                         </TableCell>
                         <TableCell className="font-medium">
-                          {formatCurrency(entry.nilai)}
+                          {formatDisplayValue(
+                            entry.nilai.toString(),
+                            account?.valueType || "NOMINAL"
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <Button
@@ -429,13 +524,48 @@ export default function JournalPage() {
               </Table>
             </div>
 
-            {/* Summary */}
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-              <div className="text-center">
-                <p className="text-sm text-blue-600">Total Nominal Hari Ini</p>
-                <p className="text-2xl font-bold text-blue-800">
-                  {formatCurrency(getTotalNominal())}
-                </p>
+            {/* Summary - Updated */}
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-blue-50 rounded-lg">
+                <div className="text-center">
+                  <p className="text-sm text-blue-600">
+                    Total Nominal (Rupiah)
+                  </p>
+                  <p className="text-xl font-bold text-blue-800">
+                    {formatDisplayValue(
+                      existingEntries
+                        .filter((entry) => {
+                          const acc = accounts.find(
+                            (a) => a.id === entry.accountId
+                          );
+                          return acc?.valueType === "NOMINAL";
+                        })
+                        .reduce((sum, entry) => sum + entry.nilai, 0)
+                        .toString(),
+                      "NOMINAL"
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-green-50 rounded-lg">
+                <div className="text-center">
+                  <p className="text-sm text-green-600">Total Kuantitas (Unit)</p>
+                  <p className="text-xl font-bold text-green-800">
+                    {formatDisplayValue(
+                      existingEntries
+                        .filter((entry) => {
+                          const acc = accounts.find(
+                            (a) => a.id === entry.accountId
+                          );
+                          return acc?.valueType === "KUANTITAS";
+                        })
+                        .reduce((sum, entry) => sum + entry.nilai, 0)
+                        .toString(),
+                      "KUANTITAS"
+                    )}
+                  </p>
+                </div>
               </div>
             </div>
           </CardContent>
