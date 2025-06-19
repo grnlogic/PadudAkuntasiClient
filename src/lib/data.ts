@@ -145,26 +145,53 @@ export const getAccounts = async (): Promise<Account[]> => {
   try {
     console.log("=== DEBUG: Fetching accounts ===");
     const response = await accountsAPI.getAll();
-    console.log("Raw API response:", response);
+    console.log("=== DEBUG: Raw API response ===", response);
 
     if (response.success && response.data && Array.isArray(response.data)) {
-      console.log("Raw backend data:", response.data);
+      console.log("=== DEBUG: Raw backend data ===", response.data);
 
-      // Filter out invalid entries dan transform
-      const transformedAccounts = response.data
-        .filter((account: BackendAccount) => {
-          console.log("Filtering account:", account);
-          return account && account.id;
-        })
-        .map((account: BackendAccount) => {
-          console.log("Transforming account:", account);
-          const transformed = transformAccountFromBackend(account);
-          console.log("Transformed result:", transformed);
-          return transformed;
-        });
+      // Periksa apakah data sudah dalam format yang benar
+      const firstItem = response.data[0];
+      if (
+        firstItem &&
+        "accountCode" in firstItem &&
+        "accountName" in firstItem
+      ) {
+        console.log(
+          "=== DEBUG: Data already in correct format, skipping transform ==="
+        );
 
-      console.log("Final transformed accounts:", transformedAccounts);
-      return transformedAccounts;
+        // Langsung gunakan data tanpa transformasi, hanya adjust type
+        const accounts = response.data.map((account: any) => ({
+          id: account.id?.toString() || "",
+          accountCode: account.accountCode || "",
+          accountName: account.accountName || "",
+          valueType: account.valueType as "NOMINAL" | "KUANTITAS",
+          division: {
+            id: account.division?.id?.toString() || "",
+            name: account.division?.name || "Unknown Division",
+          },
+          status: "active" as const,
+          createdBy: "system",
+          createdAt: account.createdAt || new Date().toISOString(),
+        }));
+
+        console.log(
+          "=== DEBUG: Final accounts without transform ===",
+          accounts
+        );
+        return accounts;
+      }
+
+      // Jika masih perlu transformasi
+      console.log("=== DEBUG: Data needs transformation ===");
+      const accounts = response.data.map((account: any) => {
+        console.log("=== DEBUG: Transforming individual account ===", account);
+        return transformAccountFromBackend(account);
+      });
+
+      console.log("=== DEBUG: Final transformed accounts ===", accounts);
+      return accounts;
     }
 
     console.warn("getAccounts: No data or unexpected format", response);

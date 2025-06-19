@@ -78,52 +78,102 @@ export default function ChartOfAccountsPage() {
     }).format(amount);
   };
 
+  // Fungsi untuk generate kode akun dengan format angka
+  const generateAccountCode = (valueType: string, divisionId: string): string => {
+    const divisionPrefixes: { [key: string]: string } = {
+      "1": "1", // KEUANGAN & ADMINISTRASI
+      "2": "2", // PEMASARAN & PENJUALAN  
+      "3": "3", // PRODUKSI
+      "4": "4", // DISTRIBUSI & GUDANG
+      "5": "5", // HRD
+    };
+
+    const typePrefixes: { [key: string]: string } = {
+      "NOMINAL": "0",
+      "KUANTITAS": "1",
+    };
+
+    const divisionPrefix = divisionPrefixes[divisionId] || "9";
+    const typePrefix = typePrefixes[valueType] || "0";
+    
+    // Generate 3 digit angka berdasarkan timestamp
+    const timestamp = Date.now().toString();
+    const uniqueNumber = timestamp.slice(-3);
+    
+    return `${divisionPrefix}${typePrefix}${uniqueNumber}`;
+  };
+
+  // Fungsi untuk auto-generate kode saat tipe atau divisi berubah
+  const handleTypeOrDivisionChange = (field: string, value: string) => {
+    const newFormData = { ...formData, [field]: value };
+    
+    // Auto-generate kode jika belum ada dan kedua field sudah diisi
+    if (newFormData.valueType && newFormData.divisionId && !formData.accountCode) {
+      newFormData.accountCode = generateAccountCode(newFormData.valueType, newFormData.divisionId);
+    }
+    
+    setFormData(newFormData);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
-    // Validasi input
-    if (
-      !formData.accountCode ||
-      !formData.name ||
-      !formData.valueType ||
-      !formData.divisionId
-    ) {
-      setError("Semua field wajib diisi");
+    console.log("=== FORM DEBUG: Form data ===", formData);
+
+    // Validasi input yang lebih ketat
+    if (!formData.accountCode?.trim()) {
+      setError("Kode akun wajib diisi");
+      return;
+    }
+    if (!formData.name?.trim()) {
+      setError("Nama akun wajib diisi");
+      return;
+    }
+    if (!formData.valueType) {
+      setError("Tipe nilai wajib dipilih");
+      return;
+    }
+    if (!formData.divisionId) {
+      setError("Divisi wajib dipilih");
       return;
     }
 
-    // Validasi format kode akun (opsional - bisa disesuaikan dengan kebutuhan)
-    if (formData.accountCode.length < 3) {
+    // Validasi format kode akun - harus diawali dengan angka
+    const codePattern = /^\d/; // Harus diawali dengan angka
+    if (!codePattern.test(formData.accountCode.trim())) {
+      setError("Kode akun harus diawali dengan angka (contoh: 1-001, 2-KAS, 3001, dll)");
+      return;
+    }
+
+    // Validasi minimal 3 karakter
+    if (formData.accountCode.trim().length < 3) {
       setError("Kode akun minimal 3 karakter");
       return;
     }
 
     // Cek duplikasi kode akun (kecuali saat edit)
-    const existingAccount = accounts.find(
-      (acc) =>
-        acc.accountCode === formData.accountCode &&
-        (!editingAccount || acc.id !== editingAccount.id)
+    const existingAccount = accounts.find(acc => 
+      acc.accountCode === formData.accountCode.trim() && 
+      (!editingAccount || acc.id !== editingAccount.id)
     );
-
+    
     if (existingAccount) {
-      setError("Kode akun sudah digunakan. Silakan gunakan kode lain.");
+      setError(`Kode akun ${formData.accountCode} sudah digunakan. Silakan gunakan kode lain.`);
       return;
     }
 
     try {
-      const selectedDivision = divisions.find(
-        (d) => d.id === formData.divisionId
-      );
+      const selectedDivision = divisions.find(d => d.id === formData.divisionId);
       if (!selectedDivision) {
         setError("Divisi tidak valid");
         return;
       }
 
       const accountData = {
-        accountCode: formData.accountCode,
-        accountName: formData.name,
+        accountCode: formData.accountCode.trim(),
+        accountName: formData.name.trim(),
         valueType: formData.valueType,
         division: {
           id: formData.divisionId,
@@ -133,17 +183,16 @@ export default function ChartOfAccountsPage() {
         createdBy: "current-user",
       };
 
+      console.log("=== FORM DEBUG: Account data to save ===", accountData);
+
       if (editingAccount) {
-        // Update existing account
         await updateAccount(editingAccount.id, accountData);
         setSuccess("Akun berhasil diperbarui");
       } else {
-        // Create new account
         await saveAccount(accountData);
         setSuccess("Akun berhasil ditambahkan");
       }
 
-      // Reset form dan reload data
       resetForm();
       loadAccounts();
     } catch (err: any) {
@@ -232,7 +281,7 @@ export default function ChartOfAccountsPage() {
                 {editingAccount ? "Edit Akun" : "Tambah Akun Baru"}
               </h2>
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Kode Akun - Input Manual */}
+                {/* Kode Akun - Input Manual dengan validasi */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Kode Akun *
@@ -240,19 +289,34 @@ export default function ChartOfAccountsPage() {
                   <input
                     type="text"
                     value={formData.accountCode}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        accountCode: e.target.value.toUpperCase(),
-                      })
-                    }
+                    onChange={(e) => setFormData({ ...formData, accountCode: e.target.value.toUpperCase() })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Contoh: KAS-001, PROD-100, dll"
+                    placeholder="Contoh: 1-001, 2-KAS, 3-PROD-001, 8-001"
                     required
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Masukkan kode unik untuk akun (minimal 3 karakter)
-                  </p>
+                  <div className="mt-1 space-y-1">
+                    <p className="text-xs text-gray-500">
+                      ✓ Harus diawali dengan angka (minimal 3 karakter)
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Contoh format: 1-001, 2-KAS-001, 3-PROD-100, 8-001
+                    </p>
+                  </div>
+                  
+                  {/* Real-time validation feedback */}
+                  {formData.accountCode && (
+                    <div className="mt-1">
+                      {!/^\d/.test(formData.accountCode) ? (
+                        <p className="text-xs text-red-500">❌ Harus diawali dengan angka</p>
+                      ) : formData.accountCode.length < 3 ? (
+                        <p className="text-xs text-yellow-500">⚠️ Minimal 3 karakter</p>
+                      ) : accounts.some(acc => acc.accountCode === formData.accountCode && (!editingAccount || acc.id !== editingAccount.id)) ? (
+                        <p className="text-xs text-red-500">❌ Kode sudah digunakan</p>
+                      ) : (
+                        <p className="text-xs text-green-500">✅ Format kode valid</p>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Nama Akun */}
@@ -263,9 +327,7 @@ export default function ChartOfAccountsPage() {
                   <input
                     type="text"
                     value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Masukkan nama akun"
                     required
@@ -279,12 +341,7 @@ export default function ChartOfAccountsPage() {
                   </label>
                   <select
                     value={formData.valueType}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        valueType: e.target.value as "NOMINAL" | "KUANTITAS",
-                      })
-                    }
+                    onChange={(e) => setFormData({ ...formData, valueType: e.target.value as "NOMINAL" | "KUANTITAS" })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   >
@@ -301,9 +358,7 @@ export default function ChartOfAccountsPage() {
                   </label>
                   <select
                     value={formData.divisionId}
-                    onChange={(e) =>
-                      setFormData({ ...formData, divisionId: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, divisionId: e.target.value })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   >
@@ -314,6 +369,18 @@ export default function ChartOfAccountsPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Contoh Format Kode Akun */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <h4 className="text-sm font-medium text-blue-800 mb-2">💡 Contoh Format Kode Akun:</h4>
+                  <div className="text-xs text-blue-700 space-y-1">
+                    <div>• <span className="font-mono">1-001</span> - Kas</div>
+                    <div>• <span className="font-mono">2-KAS-001</span> - Kas Divisi</div>
+                    <div>• <span className="font-mono">3-PROD-100</span> - Produksi</div>
+                    <div>• <span className="font-mono">8-001</span> - Tunjangan</div>
+                    <div>• <span className="font-mono">5301</span> - Biaya Operasional</div>
+                  </div>
                 </div>
 
                 {/* Action Buttons */}
@@ -327,7 +394,13 @@ export default function ChartOfAccountsPage() {
                   </button>
                   <button
                     type="submit"
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    disabled={
+                      !formData.accountCode || 
+                      !/^\d/.test(formData.accountCode) || 
+                      formData.accountCode.length < 3 ||
+                      accounts.some(acc => acc.accountCode === formData.accountCode && (!editingAccount || acc.id !== editingAccount.id))
+                    }
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     {editingAccount ? "Perbarui" : "Simpan"}
                   </button>
@@ -364,7 +437,7 @@ export default function ChartOfAccountsPage() {
           <div className="px-6 py-4 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">Daftar Akun</h2>
             <p className="text-sm text-gray-600">
-              Total {filteredAccounts.length} akun ditemukan
+              Total {accounts.length} akun dari database | {filteredAccounts.length} akun setelah filter
             </p>
           </div>
 
@@ -385,6 +458,9 @@ export default function ChartOfAccountsPage() {
                     Tipe
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Divisi
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Saldo Nominal
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -393,16 +469,17 @@ export default function ChartOfAccountsPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredAccounts.map((account, index) => (
+                {/* Tampilkan semua accounts tanpa filter sementara untuk debug */}
+                {accounts.map((account, index) => (
                   <tr key={account.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {index + 1}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {account.accountCode}
+                      {account.accountCode || <span className="text-red-500 italic">Kosong</span>}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {account.accountName}
+                      {account.accountName || <span className="text-red-500 italic">Kosong</span>}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
@@ -412,6 +489,9 @@ export default function ChartOfAccountsPage() {
                       >
                         {account.valueType}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {account.division.name}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       Rp 0
@@ -436,13 +516,13 @@ export default function ChartOfAccountsPage() {
             </table>
           </div>
 
-          {filteredAccounts.length === 0 && (
+          {accounts.length === 0 && (
             <div className="text-center py-12 text-gray-500">
               <div className="text-lg mb-2">
                 Tidak ada data akun yang ditemukan.
               </div>
               <p className="text-sm">
-                Silakan tambah akun baru atau ubah filter pencarian.
+                Silakan tambah akun baru atau periksa koneksi API.
               </p>
             </div>
           )}
