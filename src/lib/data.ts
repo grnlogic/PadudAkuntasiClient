@@ -291,21 +291,31 @@ export const generateAccountCode = (type: string): string => {
 export const getEntriHarian = async (): Promise<EntriHarian[]> => {
   try {
     const response = await entriesAPI.getAll();
+    console.log("getEntriHarian API response:", response); // ✅ Debug log
+
     if (response.success && response.data && Array.isArray(response.data)) {
-      return response.data.map((entry: any) => ({
-        id: entry.id?.toString() || "",
-        accountId: entry.accountId?.toString() || "",
-        date: entry.date || entry.tanggal || "",
-        tanggal: entry.tanggal || entry.date || "",
-        nilai: Number(entry.nilai) || 0,
-        description: entry.description || "",
-        createdBy: entry.createdBy || "system",
-        createdAt: entry.createdAt || new Date().toISOString(),
-      }));
+      const mappedEntries = response.data.map((entry: any) => {
+        console.log("Mapping entry in getEntriHarian:", entry); // ✅ Debug log
+
+        return {
+          id: entry.id?.toString() || "",
+          accountId:
+            entry.account?.id?.toString() || entry.accountId?.toString() || "",
+          date: entry.tanggalLaporan || entry.date || "",
+          tanggal: entry.tanggalLaporan || entry.date || "",
+          nilai: Number(entry.nilai) || 0,
+          description: entry.description || "",
+          createdBy: entry.user?.username || entry.createdBy || "system",
+          createdAt: entry.createdAt || new Date().toISOString(),
+        };
+      });
+
+      console.log("Mapped entries in getEntriHarian:", mappedEntries); // ✅ Debug log
+      return mappedEntries;
     }
     return [];
   } catch (error) {
-    console.warn("Error fetching entries, returning empty array:", error);
+    console.error("Error fetching entries in getEntriHarian:", error);
     return [];
   }
 };
@@ -315,58 +325,72 @@ export const getEntriHarianByDate = async (
 ): Promise<EntriHarian[]> => {
   try {
     const response = await entriesAPI.getByDate(tanggal);
+    console.log("Raw API response for entries by date:", response); // ✅ Debug log
+
     if (response.success && response.data && Array.isArray(response.data)) {
-      return response.data.map((entry: any) => ({
-        id: entry.id?.toString() || "",
-        accountId:
-          entry.accountId?.toString() || entry.account?.id?.toString() || "",
-        date: entry.date || entry.tanggalLaporan || "",
-        tanggal: entry.tanggalLaporan || entry.date || "",
-        nilai: Number(entry.nilai) || 0,
-        description: entry.description || "",
-        createdBy: entry.createdBy || entry.user?.username || "system",
-        createdAt: entry.createdAt || new Date().toISOString(),
-      }));
+      const mappedEntries = response.data.map((entry: any) => {
+        console.log("Mapping entry:", entry); // ✅ Debug log
+
+        return {
+          id: entry.id?.toString() || "",
+          accountId:
+            entry.account?.id?.toString() || entry.accountId?.toString() || "",
+          date: entry.tanggalLaporan || entry.date || "",
+          tanggal: entry.tanggalLaporan || entry.date || "",
+          nilai: Number(entry.nilai) || 0,
+          description: entry.description || "",
+          createdBy: entry.user?.username || entry.createdBy || "system",
+          createdAt: entry.createdAt || new Date().toISOString(),
+        };
+      });
+
+      console.log("Mapped entries:", mappedEntries); // ✅ Debug log
+      return mappedEntries;
     }
     return [];
   } catch (error) {
-    console.warn(
-      `Entries API failed for date ${tanggal}, using empty fallback:`,
-      error
-    );
+    console.error("Error fetching entries by date:", error);
     return [];
   }
 };
 
 export const saveEntriHarianBatch = async (
-  entries: CreateEntriHarianRequest[] // ✅ Use correct type
+  entries: CreateEntriHarianRequest[]
 ): Promise<EntriHarian[]> => {
   try {
     console.log("Sending to backend:", entries);
 
     const response = await entriesAPI.createBatch(entries);
-
     console.log("Backend response:", response);
 
     if (response.success && response.data) {
-      return Array.isArray(response.data) ? response.data : [response.data];
+      // ✅ FIXED: Map backend response to frontend format
+      const backendEntries = Array.isArray(response.data)
+        ? response.data
+        : [response.data];
+
+      const mappedEntries = backendEntries.map((entry: any) => ({
+        id: entry.id?.toString() || "",
+        accountId:
+          entry.account?.id?.toString() || entry.accountId?.toString() || "",
+        date: entry.tanggalLaporan || entry.date || "",
+        tanggal: entry.tanggalLaporan || entry.date || "",
+        nilai: Number(entry.nilai) || 0,
+        description: entry.description || "",
+        createdBy: entry.user?.username || entry.createdBy || "system",
+        createdAt: entry.createdAt || new Date().toISOString(),
+      }));
+
+      console.log("Mapped saved entries:", mappedEntries); // ✅ Debug log
+      return mappedEntries;
     }
+
     throw new Error(
       response.error || response.message || "Failed to save entries"
     );
   } catch (error: any) {
     console.error("Error saving entries batch:", error);
-    // Fallback: return mock data untuk development
-    return entries.map((entry, index) => ({
-      id: (Date.now() + index).toString(),
-      accountId: entry.accountId.toString(),
-      date: entry.tanggal,
-      tanggal: entry.tanggal,
-      nilai: entry.nilai,
-      description: entry.description,
-      createdBy: "system",
-      createdAt: new Date().toISOString(),
-    }));
+    throw error;
   }
 };
 

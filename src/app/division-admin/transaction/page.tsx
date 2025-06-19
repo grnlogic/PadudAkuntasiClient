@@ -49,24 +49,50 @@ export default function TransactionPage() {
   }, [entries, searchTerm, filterType, filterDate]);
 
   const loadEntries = async () => {
-    const data = await getEntriHarian();
-    // Filter by user's division - need to get accounts first to filter properly
-    const accountsData = await getAccountsByDivision(user?.division?.id || "");
-    setAccounts(accountsData);
-    const accountIds = accountsData.map((acc: Account) => acc.id);
-    const divisionEntries = data.filter((entry) =>
-      accountIds.includes(entry.accountId)
-    );
-    setEntries(divisionEntries);
+    console.log("=== TRANSACTION PAGE: Loading entries ===");
+    console.log("User division:", user?.division);
+
+    if (!user?.division?.id) {
+      console.log("No user division found");
+      return;
+    }
+
+    try {
+      // ✅ Load accounts dari divisi user dulu
+      const accountsData = await getAccountsByDivision(user.division.id);
+      console.log("Loaded accounts for division:", accountsData);
+      setAccounts(accountsData);
+
+      // ✅ Load ALL entries, kemudian filter by division
+      const allEntries = await getEntriHarian();
+      console.log("All entries from API:", allEntries);
+
+      // ✅ Filter entries yang belong to current division
+      const accountIds = accountsData.map((acc: Account) => acc.id);
+      console.log("Account IDs for current division:", accountIds);
+
+      const divisionEntries = allEntries.filter((entry) => {
+        const belongs = accountIds.includes(entry.accountId);
+        console.log(
+          `Entry ${entry.id} (accountId: ${entry.accountId}) belongs to division:`,
+          belongs
+        );
+        return belongs;
+      });
+
+      console.log("Filtered division entries:", divisionEntries);
+      setEntries(divisionEntries);
+    } catch (error) {
+      console.error("Error loading entries:", error);
+    }
   };
 
   const filterEntries = () => {
     let filtered = entries;
 
-    // Search filter - update field names
+    // Search filter
     if (searchTerm) {
       filtered = filtered.filter((entry) => {
-        // Get account info for this entry
         const account = accounts.find(
           (acc: Account) => acc.id === entry.accountId
         );
@@ -77,14 +103,20 @@ export default function TransactionPage() {
             .includes(searchTerm.toLowerCase()) ||
             account.accountCode
               .toLowerCase()
-              .includes(searchTerm.toLowerCase()))
+              .includes(searchTerm.toLowerCase()) ||
+            (entry.description &&
+              entry.description.toLowerCase().includes(searchTerm.toLowerCase())))
         );
       });
     }
 
-    // Date filter
+    // Date filter - ✅ FIXED: Use correct field name
     if (filterDate) {
-      filtered = filtered.filter((entry) => entry.tanggal === filterDate); // Changed from entry.date
+      filtered = filtered.filter((entry) => {
+        // Handle both possible date field names
+        const entryDate = entry.tanggal || entry.date;
+        return entryDate === filterDate;
+      });
     }
 
     // Sort by creation time (most recent first)
@@ -122,8 +154,9 @@ export default function TransactionPage() {
     );
   };
 
+  // ✅ FIXED: Use correct date field
   const todayEntries = entries.filter((entry) => {
-    const entryDate = new Date(entry.tanggal);
+    const entryDate = new Date(entry.tanggal || entry.date);
     const today = new Date();
     return (
       entryDate.getDate() === today.getDate() &&
@@ -253,11 +286,13 @@ export default function TransactionPage() {
         <CardHeader>
           <CardTitle>Daftar Transaksi</CardTitle>
           <CardDescription>
-            {todayEntries.length} entri tercatat untuk divisi{" "}
-            {user?.division?.name}
+            {filteredEntries.length} entri ditemukan dari {entries.length} total
+            entri divisi {user?.division?.name}
           </CardDescription>
         </CardHeader>
         <CardContent>
+          
+
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -280,7 +315,10 @@ export default function TransactionPage() {
                   return (
                     <TableRow key={entry.id}>
                       <TableCell>
-                        {new Date(entry.tanggal).toLocaleDateString("id-ID")}
+                        {/* ✅ FIXED: Use correct date field */}
+                        {new Date(entry.tanggal || entry.date).toLocaleDateString(
+                          "id-ID"
+                        )}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
                         <div>
@@ -297,11 +335,15 @@ export default function TransactionPage() {
                       </TableCell>
                       <TableCell>
                         <Badge className="bg-blue-100 text-blue-800">
-                          Entry
+                          {account?.valueType === "NOMINAL"
+                            ? "💰 Nominal"
+                            : "📦 Kuantitas"}
                         </Badge>
                       </TableCell>
                       <TableCell className="font-medium">
-                        {formatCurrency(entry.nilai)}
+                        {account?.valueType === "NOMINAL"
+                          ? formatCurrency(entry.nilai)
+                          : `${entry.nilai.toLocaleString("id-ID")} unit`}
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
                         {new Date(entry.createdAt).toLocaleString("id-ID")}
@@ -320,7 +362,9 @@ export default function TransactionPage() {
 
           {filteredEntries.length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              Tidak ada transaksi yang ditemukan
+              {entries.length === 0
+                ? "Belum ada transaksi yang tercatat untuk divisi ini"
+                : "Tidak ada transaksi yang sesuai dengan filter"}
             </div>
           )}
         </CardContent>

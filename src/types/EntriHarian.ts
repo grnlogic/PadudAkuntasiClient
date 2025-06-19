@@ -9,10 +9,18 @@ export interface EntriHarian {
   createdAt: string;
 }
 
-// ✅ Add separate type for create request
+// ✅ UPDATE: Add specialized division fields
 export interface CreateEntriHarianRequest {
   accountId: number;
   tanggal: string;
   nilai: number;
   description: string;
+
+  // ✅ NEW: Fields for division-specific data
+  transactionType?: "PENERIMAAN" | "PENGELUARAN"; // Keuangan
+  targetAmount?: number; // Pemasaran
+  realisasiAmount?: number; // Pemasaran
+  hppAmount?: number; // Produksi
+  pemakaianAmount?: number; // Gudang
+  stokAkhir?: number; // Gudang
 }
