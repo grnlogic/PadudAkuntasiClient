@@ -1,5 +1,9 @@
 // Updated data.ts to use API calls instead of localStorage
 import { accountsAPI, divisionsAPI, usersAPI, entriesAPI } from "./api";
+import type {
+  EntriHarian as ImportedEntriHarian,
+  CreateEntriHarianRequest,
+} from "@/types/EntriHarian";
 
 // Keep interfaces for type safety
 export interface Account {
@@ -154,12 +158,12 @@ export const getAccounts = async (): Promise<Account[]> => {
               id: account.division?.id?.toString() || "",
               name: account.division?.name || "Unknown Division",
             },
-            status: account.status || "active" as const,
+            status: account.status || ("active" as const),
             createdBy: account.createdBy || "system",
             createdAt: account.createdAt || new Date().toISOString(),
           };
         }
-        
+
         // Transform from backend format
         return transformAccountFromBackend(account);
       });
@@ -181,7 +185,7 @@ export const getAccountsByDivision = async (
   try {
     const response = await accountsAPI.getByDivision(divisionId);
     console.log("API Response for division accounts:", response); // ✅ Debug log
-    
+
     if (response.success && response.data && Array.isArray(response.data)) {
       const accounts = response.data.map((account: any) => {
         // Check if data is already in frontend format
@@ -195,16 +199,16 @@ export const getAccountsByDivision = async (
               id: account.division?.id?.toString() || "",
               name: account.division?.name || "Unknown Division",
             },
-            status: account.status || "active" as const,
+            status: account.status || ("active" as const),
             createdBy: account.createdBy || "system",
             createdAt: account.createdAt || new Date().toISOString(),
           };
         }
-        
+
         // Transform from backend format if needed
         return transformAccountFromBackend(account);
       });
-      
+
       console.log("Division accounts:", accounts); // ✅ Debug log
       return accounts;
     }
@@ -236,9 +240,11 @@ export const saveAccount = async (
     console.log("Sending account data to API:", accountData);
 
     const response = await accountsAPI.create(accountData);
-    
+
     if (!response.success) {
-      throw new Error(response.error || response.message || "Failed to create account");
+      throw new Error(
+        response.error || response.message || "Failed to create account"
+      );
     }
 
     return response.data!;
@@ -312,37 +318,53 @@ export const getEntriHarianByDate = async (
     if (response.success && response.data && Array.isArray(response.data)) {
       return response.data.map((entry: any) => ({
         id: entry.id?.toString() || "",
-        accountId: entry.accountId?.toString() || "",
-        date: entry.date || entry.tanggal || "",
-        tanggal: entry.tanggal || entry.date || "",
+        accountId:
+          entry.accountId?.toString() || entry.account?.id?.toString() || "",
+        date: entry.date || entry.tanggalLaporan || "",
+        tanggal: entry.tanggalLaporan || entry.date || "",
         nilai: Number(entry.nilai) || 0,
         description: entry.description || "",
-        createdBy: entry.createdBy || "system",
+        createdBy: entry.createdBy || entry.user?.username || "system",
         createdAt: entry.createdAt || new Date().toISOString(),
       }));
     }
     return [];
   } catch (error) {
-    console.warn(`Error fetching entries for date ${tanggal}, returning empty array:`, error);
+    console.warn(
+      `Entries API failed for date ${tanggal}, using empty fallback:`,
+      error
+    );
     return [];
   }
 };
 
 export const saveEntriHarianBatch = async (
-  entries: Omit<EntriHarian, "id" | "createdAt">[]
+  entries: CreateEntriHarianRequest[] // ✅ Use correct type
 ): Promise<EntriHarian[]> => {
   try {
+    console.log("Sending to backend:", entries);
+
     const response = await entriesAPI.createBatch(entries);
+
+    console.log("Backend response:", response);
+
     if (response.success && response.data) {
       return Array.isArray(response.data) ? response.data : [response.data];
     }
-    throw new Error(response.error || "Failed to save entries");
-  } catch (error) {
-    console.warn("Error saving entries batch, using fallback:", error);
+    throw new Error(
+      response.error || response.message || "Failed to save entries"
+    );
+  } catch (error: any) {
+    console.error("Error saving entries batch:", error);
     // Fallback: return mock data untuk development
     return entries.map((entry, index) => ({
       id: (Date.now() + index).toString(),
-      ...entry,
+      accountId: entry.accountId.toString(),
+      date: entry.tanggal,
+      tanggal: entry.tanggal,
+      nilai: entry.nilai,
+      description: entry.description,
+      createdBy: "system",
       createdAt: new Date().toISOString(),
     }));
   }

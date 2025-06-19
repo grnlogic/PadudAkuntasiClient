@@ -1,3 +1,5 @@
+import type { CreateEntriHarianRequest } from "@/types/EntriHarian";
+
 // Updated data.ts to use API calls instead of localStorage
 
 const API_BASE_URL =
@@ -225,97 +227,45 @@ export const divisionsAPI = {
 // Entri Harian API (untuk yang belum ada endpoint)
 export const entriesAPI = {
   getAll: async () => {
-    // Temporary fallback - return empty array jika endpoint belum ada
-    try {
-      return await apiRequest<any[]>("/entries");
-    } catch (error) {
-      console.warn("Entries endpoint not available, using fallback");
-      return { success: true, data: [] };
-    }
+    return await apiRequest<any[]>("/entri-harian");
   },
 
   getByDate: async (date: string) => {
-    // Temporary fallback - return empty array jika endpoint belum ada
-    try {
-      return await apiRequest<any[]>(`/entries/date/${date}`);
-    } catch (error) {
-      console.warn(`Entries by date endpoint not available for ${date}, using fallback`);
-      return { success: true, data: [] };
-    }
+    return await apiRequest<any[]>(`/entri-harian/date/${date}`);
   },
 
   getByDivision: async (divisionId: string) => {
-    // Temporary fallback
-    try {
-      return await apiRequest<any[]>(`/entries/division/${divisionId}`);
-    } catch (error) {
-      console.warn("Entries by division endpoint not available, using fallback");
-      return { success: true, data: [] };
-    }
+    return await apiRequest<any[]>(`/entri-harian/division/${divisionId}`);
   },
 
-  create: async (entry: any) => {
-    // Temporary fallback
-    try {
-      return await apiRequest<any>("/entries", {
-        method: "POST",
-        body: JSON.stringify(entry),
-      });
-    } catch (error) {
-      console.warn("Create entry endpoint not available, using fallback");
-      // Return mock success untuk development
-      return { 
-        success: true, 
-        data: { 
-          id: Date.now().toString(), 
-          ...entry, 
-          createdAt: new Date().toISOString() 
-        } 
-      };
-    }
+  getById: async (id: string) => {
+    return await apiRequest<any>(`/entri-harian/${id}`);
   },
 
-  createBatch: async (entries: any[]) => {
-    // Temporary fallback
-    try {
-      return await apiRequest<any[]>("/entries/batch", {
-        method: "POST",
-        body: JSON.stringify(entries),
-      });
-    } catch (error) {
-      console.warn("Batch create entries endpoint not available, using fallback");
-      // Return mock success untuk development
-      return { 
-        success: true, 
-        data: entries.map((entry, index) => ({
-          id: (Date.now() + index).toString(),
-          ...entry,
-          createdAt: new Date().toISOString()
-        }))
-      };
-    }
+  create: async (entry: CreateEntriHarianRequest) => {
+    return await apiRequest<any>("/entri-harian", {
+      method: "POST",
+      body: JSON.stringify(entry),
+    });
   },
 
-  update: async (id: string, updates: any) => {
-    try {
-      return await apiRequest<any>(`/entries/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(updates),
-      });
-    } catch (error) {
-      console.warn("Update entry endpoint not available, using fallback");
-      return { success: true, data: { id, ...updates } };
-    }
+  createBatch: async (entries: CreateEntriHarianRequest[]) => {
+    return await apiRequest<any[]>("/entri-harian/batch", {
+      method: "POST",
+      body: JSON.stringify(entries),
+    });
+  },
+
+  update: async (id: string, updates: CreateEntriHarianRequest) => {
+    return await apiRequest<any>(`/entri-harian/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(updates),
+    });
   },
 
   delete: async (id: string) => {
-    try {
-      return await apiRequest(`/entries/${id}`, {
-        method: "DELETE",
-      });
-    } catch (error) {
-      console.warn("Delete entry endpoint not available, using fallback");
-      return { success: true };
-    }
+    return await apiRequest(`/entri-harian/${id}`, {
+      method: "DELETE",
+    });
   },
 };

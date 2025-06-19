@@ -38,6 +38,7 @@ import {
   type EntriHarian,
 } from "@/lib/data";
 import { Label } from "@/components/ui/label";
+import type { CreateEntriHarianRequest } from "@/types/EntriHarian";
 
 interface JournalRow {
   id: string;
@@ -164,15 +165,36 @@ export default function JournalPage() {
   };
 
   const saveJournalEntries = async () => {
+    console.log("=== FRONTEND: saveJournalEntries START ===");
+    console.log("Current journalRows:", journalRows);
+    console.log("Selected date:", selectedDate);
+
     // Filter rows yang sudah diisi
     const validRows = journalRows.filter((row) => {
       const account = getSelectedAccount(row.accountId);
-      if (!account) return false;
+      if (!account) {
+        console.log("Row filtered out - no account:", row);
+        return false;
+      }
 
       const value =
         account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
-      return row.accountId && value && Number.parseFloat(value) > 0;
+      const isValid = row.accountId && value && Number.parseFloat(value) > 0;
+
+      console.log("Row validation:", {
+        accountId: row.accountId,
+        account: account.accountName,
+        valueType: account.valueType,
+        nominal: row.nominal,
+        kuantitas: row.kuantitas,
+        value,
+        isValid,
+      });
+
+      return isValid;
     });
+
+    console.log("Valid rows count:", validRows.length);
 
     if (validRows.length === 0) {
       setError("Tidak ada entri yang valid untuk disimpan");
@@ -180,30 +202,45 @@ export default function JournalPage() {
       return;
     }
 
-    // Convert ke format EntriHarian
-    const entriesToSave = validRows.map((row) => {
-      const account = getSelectedAccount(row.accountId)!;
-      const value =
-        account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
+    // Convert ke format CreateEntriHarianRequest
+    const entriesToSave: CreateEntriHarianRequest[] = validRows.map(
+      (row, index) => {
+        const account = getSelectedAccount(row.accountId)!;
+        const value =
+          account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
 
-      return {
-        accountId: row.accountId,
-        date: selectedDate,
-        tanggal: selectedDate,
-        nilai: Number.parseFloat(value),
-        description: row.keterangan || "",
-        createdBy: user?.username || "",
-      };
-    });
+        const entry: CreateEntriHarianRequest = {
+          accountId: Number(row.accountId),
+          tanggal: selectedDate,
+          nilai: Number.parseFloat(value),
+          description: row.keterangan || "",
+        };
+
+        console.log(`Entry[${index}] transformation:`, {
+          original: row,
+          transformed: entry,
+          accountType: account.valueType,
+        });
+
+        return entry;
+      }
+    );
+
+    console.log(
+      "Final entries to save:",
+      JSON.stringify(entriesToSave, null, 2)
+    );
 
     try {
       const saved = await saveEntriHarianBatch(entriesToSave);
+      console.log("Saved entries:", saved);
+
       loadData();
 
       // Reset form
       setJournalRows([
         {
-          id: "1",
+          id: "row_1",
           accountId: "",
           keterangan: "",
           nominal: "",
@@ -218,6 +255,7 @@ export default function JournalPage() {
       );
       setTimeout(() => setSuccess(""), 5000);
     } catch (err) {
+      console.error("Save error:", err);
       setError("Gagal menyimpan entri jurnal");
       setTimeout(() => setError(""), 3000);
     }
@@ -233,6 +271,35 @@ export default function JournalPage() {
         setError("Gagal menghapus entri");
         setTimeout(() => setError(""), 3000);
       }
+    }
+  };
+
+  const testSaveMinimal = async () => {
+    const testEntry: CreateEntriHarianRequest = {
+      accountId: 11, // ID account yang ada
+      tanggal: "2025-06-19", // Pastikan format ISO string
+      nilai: 100.0,
+      description: "Test entry manual",
+    };
+
+    console.log(
+      "Testing with minimal data:",
+      JSON.stringify(testEntry, null, 2)
+    );
+    console.log("Data types:", {
+      accountId: typeof testEntry.accountId,
+      tanggal: typeof testEntry.tanggal,
+      nilai: typeof testEntry.nilai,
+      description: typeof testEntry.description,
+    });
+
+    try {
+      const saved = await saveEntriHarianBatch([testEntry]);
+      console.log("Test successful:", saved);
+      setSuccess("Test berhasil!");
+    } catch (error) {
+      console.error("Test failed:", error);
+      setError("Test gagal: " + (error as Error).message);
     }
   };
 
