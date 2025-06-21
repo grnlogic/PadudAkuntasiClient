@@ -29,6 +29,15 @@ export interface EntriHarian {
   description?: string;
   createdBy: string;
   createdAt: string;
+  // ✅ ADD: Support for specialized fields
+  transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR";
+  targetAmount?: number;
+  realisasiAmount?: number;
+  hppAmount?: number;
+  pemakaianAmount?: number;
+  stokAkhir?: number;
+  // ✅ NEW: Keuangan saldo akhir
+  saldoAkhir?: number;
 }
 
 export interface AppUser {
@@ -99,17 +108,16 @@ const transformAccountFromBackend = (
 const transformDivisionFromBackend = (
   backendDivision: BackendDivision
 ): Division => {
-  // Safety checks untuk memastikan data tidak undefined/null
   if (!backendDivision) {
     throw new Error("Backend division data is null or undefined");
   }
 
   return {
-    id: (backendDivision.id || 0).toString(), // Convert Integer ke String
-    name: backendDivision.name || "Unknown Division", // FIX: gunakan field yang benar
-    description: "", // Default value
-    isActive: true, // Default value
-    createdAt: new Date().toISOString(), // Default value
+    id: (backendDivision.id || 0).toString(),
+    name: backendDivision.name || "Unknown Division",
+    description: "",
+    isActive: true,
+    createdAt: new Date().toISOString(),
   };
 };
 
@@ -145,7 +153,6 @@ export const getAccounts = async (): Promise<Account[]> => {
     const response = await accountsAPI.getAll();
 
     if (response.success && response.data && Array.isArray(response.data)) {
-      // ✅ Improved transformation logic
       const accounts = response.data.map((account: any) => {
         // Check if data is already in frontend format
         if (account.accountCode && account.accountName) {
@@ -185,7 +192,6 @@ export const getAccountsByDivision = async (
 
     if (response.success && response.data && Array.isArray(response.data)) {
       const accounts = response.data.map((account: any) => {
-        // Check if data is already in frontend format
         if (account.accountCode && account.accountName) {
           return {
             id: account.id?.toString() || "",
@@ -202,7 +208,6 @@ export const getAccountsByDivision = async (
           };
         }
 
-        // Transform from backend format if needed
         return transformAccountFromBackend(account);
       });
 
@@ -218,13 +223,11 @@ export const saveAccount = async (
   account: Omit<Account, "id" | "createdAt">
 ): Promise<Account> => {
   try {
-    // ✅ Pastikan division ID dalam format yang benar
     const accountData = {
       accountCode: account.accountCode,
       accountName: account.accountName,
       valueType: account.valueType,
       division: {
-        // ✅ Konversi ID ke number dan pastikan valid
         id: Number(account.division.id),
         name: account.division.name,
       },
@@ -261,7 +264,6 @@ export const deleteAccount = async (id: string): Promise<boolean> => {
 
 // Generate account code (can be moved to backend later)
 export const generateAccountCode = (type: string): string => {
-  // This will be replaced by backend logic
   const typeToPrefix: { [key: string]: string } = {
     NOMINAL: "1",
     KUANTITAS: "3",
@@ -286,23 +288,97 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
 
     if (response.success && response.data && Array.isArray(response.data)) {
       const mappedEntries = response.data.map((entry: any) => {
-        return {
+        // ✅ CLEAN: Tanpa debug log yang berlebihan
+        const penerimaan = Number(entry.penerimaan || 0);
+        const pengeluaran = Number(entry.pengeluaran || 0);
+
+        let transactionType = "";
+        let nilai = 0;
+
+        if (penerimaan > 0) {
+          transactionType = "PENERIMAAN";
+          nilai = penerimaan;
+        } else if (pengeluaran > 0) {
+          transactionType = "PENGELUARAN";
+          nilai = pengeluaran;
+        } else {
+          nilai = Number(entry.nilai || 0);
+          transactionType = nilai >= 0 ? "PENERIMAAN" : "PENGELUARAN";
+        }
+
+        const mappedEntry = {
           id: entry.id?.toString() || "",
           accountId:
             entry.account?.id?.toString() || entry.accountId?.toString() || "",
           date: entry.tanggalLaporan || entry.date || "",
           tanggal: entry.tanggalLaporan || entry.date || "",
-          nilai: Number(entry.nilai) || 0,
+          nilai: nilai,
           description: entry.description || "",
           createdBy: entry.user?.username || entry.createdBy || "system",
           createdAt: entry.createdAt || new Date().toISOString(),
+          transactionType: transactionType,
+
+          // ✅ ENHANCED: Handle multiple possible field names from backend
+          ...(entry.transactionType && {
+            transactionType: entry.transactionType,
+          }),
+          ...(entry.transaction_type && {
+            transaction_type: entry.transaction_type,
+          }),
+
+          // ✅ FIXED: Map pemasaran fields with multiple fallbacks
+          ...(entry.targetAmount && {
+            targetAmount: Number(entry.targetAmount),
+          }),
+          ...(entry.target_amount && {
+            targetAmount: Number(entry.target_amount),
+          }),
+          ...(entry.realisasiAmount && {
+            realisasiAmount: Number(entry.realisasiAmount),
+          }),
+          ...(entry.realisasi_amount && {
+            realisasiAmount: Number(entry.realisasi_amount),
+          }),
+
+          // ✅ Map other specialized fields
+          ...(entry.hppAmount && { hppAmount: Number(entry.hppAmount) }),
+          ...(entry.hpp_amount && { hppAmount: Number(entry.hpp_amount) }),
+          ...(entry.pemakaianAmount && {
+            pemakaianAmount: Number(entry.pemakaianAmount),
+          }),
+          ...(entry.pemakaian_amount && {
+            pemakaianAmount: Number(entry.pemakaian_amount),
+          }),
+          ...(entry.stokAkhir && { stokAkhir: Number(entry.stokAkhir) }),
+          ...(entry.stok_akhir && { stokAkhir: Number(entry.stok_akhir) }),
+          // ✅ NEW: Map saldo akhir fields with debug
+          ...(entry.saldoAkhir !== undefined && {
+            saldoAkhir: Number(entry.saldoAkhir),
+          }),
+          ...(entry.saldo_akhir !== undefined && {
+            saldoAkhir: Number(entry.saldo_akhir),
+          }),
         };
+
+        // ✅ DEBUG: Log saldo akhir mapping
+        if (entry.saldoAkhir !== undefined || entry.saldo_akhir !== undefined) {
+          console.log("🔍 SALDO_AKHIR MAPPING:", {
+            entryId: entry.id,
+            backendSaldoAkhir: entry.saldoAkhir,
+            backendSaldo_akhir: entry.saldo_akhir,
+            mappedSaldoAkhir: mappedEntry.saldoAkhir,
+            transactionType: entry.transactionType || entry.transaction_type,
+          });
+        }
+
+        return mappedEntry;
       });
 
       return mappedEntries;
     }
     return [];
   } catch (error) {
+    console.error("Error in getEntriHarian:", error);
     return [];
   }
 };
@@ -315,23 +391,101 @@ export const getEntriHarianByDate = async (
 
     if (response.success && response.data && Array.isArray(response.data)) {
       const mappedEntries = response.data.map((entry: any) => {
-        return {
+        // ✅ FIXED: Apply same mapping logic as getEntriHarian
+        const penerimaan = Number(entry.penerimaan || 0);
+        const pengeluaran = Number(entry.pengeluaran || 0);
+
+        let transactionType = "";
+        let nilai = 0;
+
+        if (penerimaan > 0) {
+          transactionType = "PENERIMAAN";
+          nilai = penerimaan;
+        } else if (pengeluaran > 0) {
+          transactionType = "PENGELUARAN";
+          nilai = pengeluaran;
+        } else {
+          nilai = Number(entry.nilai || 0);
+          transactionType = nilai >= 0 ? "PENERIMAAN" : "PENGELUARAN";
+        }
+
+        const mappedEntry = {
           id: entry.id?.toString() || "",
           accountId:
             entry.account?.id?.toString() || entry.accountId?.toString() || "",
           date: entry.tanggalLaporan || entry.date || "",
           tanggal: entry.tanggalLaporan || entry.date || "",
-          nilai: Number(entry.nilai) || 0,
+          nilai: nilai,
           description: entry.description || "",
           createdBy: entry.user?.username || entry.createdBy || "system",
           createdAt: entry.createdAt || new Date().toISOString(),
+
+          // ✅ FIXED: Map all specialized fields
+          ...(entry.transactionType && {
+            transactionType: entry.transactionType,
+          }),
+          ...(entry.transaction_type && {
+            transactionType: entry.transaction_type,
+          }),
+          ...(entry.targetAmount !== undefined && {
+            targetAmount: Number(entry.targetAmount),
+          }),
+          ...(entry.target_amount !== undefined && {
+            targetAmount: Number(entry.target_amount),
+          }),
+          ...(entry.realisasiAmount !== undefined && {
+            realisasiAmount: Number(entry.realisasiAmount),
+          }),
+          ...(entry.realisasi_amount !== undefined && {
+            realisasiAmount: Number(entry.realisasi_amount),
+          }),
+          ...(entry.hppAmount !== undefined && {
+            hppAmount: Number(entry.hppAmount),
+          }),
+          ...(entry.hpp_amount !== undefined && {
+            hppAmount: Number(entry.hpp_amount),
+          }),
+          ...(entry.pemakaianAmount !== undefined && {
+            pemakaianAmount: Number(entry.pemakaianAmount),
+          }),
+          ...(entry.pemakaian_amount !== undefined && {
+            pemakaianAmount: Number(entry.pemakaian_amount),
+          }),
+          ...(entry.stokAkhir !== undefined && {
+            stokAkhir: Number(entry.stokAkhir),
+          }),
+          ...(entry.stok_akhir !== undefined && {
+            stokAkhir: Number(entry.stok_akhir),
+          }),
+          // ✅ CRITICAL FIX: Map saldo akhir fields
+          ...(entry.saldoAkhir !== undefined && {
+            saldoAkhir: Number(entry.saldoAkhir),
+          }),
+          ...(entry.saldo_akhir !== undefined && {
+            saldoAkhir: Number(entry.saldo_akhir),
+          }),
         };
+
+        // ✅ DEBUG: Log saldo akhir mapping for getEntriHarianByDate
+        if (entry.saldoAkhir !== undefined || entry.saldo_akhir !== undefined) {
+          console.log("🔍 getEntriHarianByDate SALDO_AKHIR MAPPING:", {
+            entryId: entry.id,
+            backendSaldoAkhir: entry.saldoAkhir,
+            backendSaldo_akhir: entry.saldo_akhir,
+            backendTransactionType: entry.transactionType,
+            mappedSaldoAkhir: mappedEntry.saldoAkhir,
+            mappedTransactionType: mappedEntry.transactionType,
+          });
+        }
+
+        return mappedEntry;
       });
 
       return mappedEntries;
     }
     return [];
   } catch (error) {
+    console.error("Error in getEntriHarianByDate:", error);
     return [];
   }
 };
@@ -343,7 +497,6 @@ export const saveEntriHarianBatch = async (
     const response = await entriesAPI.createBatch(entries);
 
     if (response.success && response.data) {
-      // ✅ FIXED: Map backend response to frontend format
       const backendEntries = Array.isArray(response.data)
         ? response.data
         : [response.data];
@@ -426,18 +579,3 @@ export const deleteUser = async (id: string): Promise<boolean> => {
   const response = await usersAPI.delete(id);
   return response.success;
 };
-
-// Backward compatibility exports
-export const getJournalEntries = getEntriHarian;
-export const saveJournalEntry = (entry: any) => saveEntriHarianBatch([entry]);
-export const deleteJournalEntry = deleteEntriHarian;
-export type JournalEntry = EntriHarian;
-
-// Default divisions list (can be fetched from API)
-export const DIVISIONS = [
-  "KEUANGAN & ADMINISTRASI",
-  "PEMASARAN & PENJUALAN",
-  "PRODUKSI",
-  "DISTRIBUSI & GUDANG",
-  "HRD",
-];

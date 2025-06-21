@@ -11,8 +11,19 @@ import {
   Package,
   DollarSign,
   Warehouse,
+  Users, // ✅ Add Users icon for HRD
+  Clock, // ✅ Add Clock icon for attendance
+  ArrowUpCircle, // ✅ Add for Penerimaan
+  ArrowDownCircle, // ✅ Add for Pengeluaran
 } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import ClientErrorBoundary from "@/components/client-error-boundary";
+import {
+  toastSuccess,
+  toastError,
+  toastWarning,
+  toastInfo,
+  toastPromise,
+} from "@/lib/toast-utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -49,6 +60,7 @@ import {
 } from "@/lib/data";
 import { Label } from "@/components/ui/label";
 import type { CreateEntriHarianRequest } from "@/types/EntriHarian";
+import React from "react";
 
 interface JournalRow {
   id: string;
@@ -57,24 +69,37 @@ interface JournalRow {
   nominal: string;
   kuantitas: string;
   // ✅ New fields for specialized divisions
-  transactionType?: "PENERIMAAN" | "PENGELUARAN"; // For Keuangan
+  transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR"; // For Keuangan with 3 options
   targetAmount?: string; // For Pemasaran
   realisasiAmount?: string; // For Pemasaran
   hppAmount?: string; // For Produksi (paired with production)
   pemakaianAmount?: string; // For Gudang
   stokAkhir?: string; // For Gudang
+  // ✅ NEW: HRD fields
+  attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN"; // For HRD
+  overtimeHours?: string; // For HRD
+  shift?: "PAGI" | "SIANG" | "MALAM"; // For HRD
+  // ✅ NEW: Keuangan field - Saldo Akhir
+  saldoAkhir?: string; // For Keuangan
 }
 
 export default function JournalPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [existingEntries, setExistingEntries] = useState<EntriHarian[]>([]);
-  const [success, setSuccess] = useState("");
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const user = getCurrentUser();
 
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split("T")[0]
   );
+
+  // ✅ NEW: State untuk summary keuangan
+  const [keuanganSummary, setKeuanganSummary] = useState({
+    totalPenerimaan: 0,
+    totalPengeluaran: 0,
+    totalSaldoAkhir: 0,
+  });
 
   // Form rows untuk input multiple entries
   const [journalRows, setJournalRows] = useState<JournalRow[]>([
@@ -85,26 +110,90 @@ export default function JournalPage() {
     loadData();
   }, [selectedDate]);
 
+  // ✅ NEW: Fungsi untuk menghitung summary keuangan
+  const calculateKeuanganSummary = (entries: EntriHarian[]) => {
+    console.log("🔍 calculateKeuanganSummary called with entries:", entries);
+
+    const summary = {
+      totalPenerimaan: 0,
+      totalPengeluaran: 0,
+      totalSaldoAkhir: 0,
+    };
+
+    entries.forEach((entry, index) => {
+      // Cast ke any untuk mengakses field yang mungkin tidak ada di type
+      const entryData = entry as any;
+
+      console.log(`🔍 Processing entry ${index}:`, {
+        id: entry.id,
+        transactionType: entryData.transactionType,
+        nilai: entry.nilai,
+        saldoAkhir: entryData.saldoAkhir,
+      });
+
+      if (entryData.transactionType === "PENERIMAAN") {
+        summary.totalPenerimaan += Number(entry.nilai) || 0;
+        console.log(`✅ Added to PENERIMAAN: ${entry.nilai}`);
+      } else if (entryData.transactionType === "PENGELUARAN") {
+        summary.totalPengeluaran += Number(entry.nilai) || 0;
+        console.log(`✅ Added to PENGELUARAN: ${entry.nilai}`);
+      } else if (entryData.transactionType === "SALDO_AKHIR") {
+        // Untuk SALDO_AKHIR, gunakan field saldoAkhir jika ada, fallback ke nilai
+        const saldoValue =
+          Number(entryData.saldoAkhir) || Number(entry.nilai) || 0;
+        summary.totalSaldoAkhir += saldoValue;
+        console.log(
+          `✅ Added to SALDO_AKHIR: ${saldoValue} (from saldoAkhir: ${entryData.saldoAkhir}, nilai: ${entry.nilai})`
+        );
+      }
+    });
+
+    console.log("🔍 Final summary:", summary);
+    return summary;
+  };
+
   const loadData = async () => {
     if (user?.division?.id) {
       try {
-        // Load accounts dari "rak" divisi
-        const accountsData = await getAccountsByDivision(user.division.id);
-        setAccounts(accountsData);
+        setLoading(true);
 
-        // Load existing entries untuk tanggal yang dipilih
-        const entriesData = await getEntriHarianByDate(selectedDate);
+        // ✅ Use promise toast for loading
+        const accountsPromise = getAccountsByDivision(user.division.id);
+        const entriesPromise = getEntriHarianByDate(selectedDate);
+
+        const [accountsData, entriesData] = await Promise.all([
+          accountsPromise,
+          entriesPromise,
+        ]);
+
+        setAccounts(accountsData);
 
         // Filter entries yang belong to current division
         const accountIds = accountsData.map((acc) => acc.id);
-
-        const divisionEntries = entriesData.filter((entry) => {
-          return accountIds.includes(entry.accountId);
-        });
+        const divisionEntries = entriesData.filter(
+          (entry: { accountId: string }) => {
+            return accountIds.includes(entry.accountId);
+          }
+        );
 
         setExistingEntries(divisionEntries);
+
+        // ✅ NEW: Hitung summary untuk keuangan
+        if (divisionType === "KEUANGAN") {
+          const summary = calculateKeuanganSummary(divisionEntries);
+          setKeuanganSummary(summary);
+          console.log("🔍 KEUANGAN SUMMARY:", summary);
+        }
+
+        // ✅ Only show success for manual refresh
+        if (loading) {
+          toastSuccess.custom("Data berhasil dimuat ulang");
+        }
       } catch (error) {
-        setError("Gagal memuat data");
+        toastError.custom("Gagal memuat data");
+        console.error("Load data error:", error);
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -123,6 +212,7 @@ export default function JournalPage() {
       hppAmount: "",
       pemakaianAmount: "",
       stokAkhir: "",
+      saldoAkhir: "", // ✅ NEW: Initialize saldoAkhir
     };
     setJournalRows([...journalRows, newRow]);
   };
@@ -162,30 +252,47 @@ export default function JournalPage() {
     return account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
   };
 
-  const formatDisplayValue = (value: string, valueType: string) => {
-    if (!value || Number.parseFloat(value) === 0) return "-";
-
-    const numValue = Number.parseFloat(value);
-
-    if (valueType === "NOMINAL") {
-      return new Intl.NumberFormat("id-ID", {
-        style: "currency",
-        currency: "IDR",
-        minimumFractionDigits: 0,
-      }).format(numValue);
-    } else {
-      return `${numValue.toLocaleString("id-ID")} unit`;
+  // ✅ Helper function to get display value for entries
+  const getDisplayValue = (entry: EntriHarian) => {
+    if ((entry as any).transactionType === "SALDO_AKHIR") {
+      // For SALDO_AKHIR, prioritize saldoAkhir field, fallback to nilai
+      return (entry as any).saldoAkhir || entry.nilai || 0;
     }
+    // For other transaction types, use nilai
+    return entry.nilai || 0;
+  };
+
+  // ✅ Helper function to format display value
+  const formatDisplayValue = (
+    p0: string,
+    valueType: string,
+    entry: EntriHarian
+  ) => {
+    const value = getDisplayValue(entry);
+    return value ? formatCurrency(value) : "-";
   };
 
   const saveJournalEntries = async () => {
+    console.log("🚀 SAVE JOURNAL ENTRIES - START");
+
     const validRows = journalRows.filter((row) => {
       const account = getSelectedAccount(row.accountId);
       if (!account) {
         return false;
       }
 
-      // ✅ UPDATED: Special validation untuk KEUANGAN
+      // ✅ ENHANCED DEBUG: Log validation process for pemasaran
+      if (divisionType === "PEMASARAN") {
+        console.log("🎯 PEMASARAN VALIDATION:", {
+          rowId: row.id,
+          accountId: row.accountId,
+          targetAmount: row.targetAmount,
+          realisasiAmount: row.realisasiAmount,
+          hasTargetAmount: !!row.targetAmount,
+          hasRealisasiAmount: !!row.realisasiAmount,
+          hasEither: !!(row.targetAmount || row.realisasiAmount),
+        });
+      } // ✅ ENHANCED: For keuangan, use saldoAkhir if transaction type is SALDO_AKHIR
       if (divisionType === "KEUANGAN") {
         // Untuk keuangan, wajib ada transaction type dan nominal
         const hasKeuanganData =
@@ -201,7 +308,15 @@ export default function JournalPage() {
           (divisionType === "PEMASARAN" &&
             (row.targetAmount || row.realisasiAmount)) ||
           (divisionType === "PRODUKSI" && row.kuantitas && row.hppAmount) ||
-          (divisionType === "GUDANG" && (row.pemakaianAmount || row.stokAkhir));
+          (divisionType === "GUDANG" &&
+            (row.pemakaianAmount || row.stokAkhir)) ||
+          (divisionType === "HRD" && row.attendanceStatus); // ✅ NEW: HRD validation
+
+        console.log("✅ VALIDATION RESULT:", {
+          divisionType,
+          hasSpecificData,
+          accountId: row.accountId,
+        });
 
         return hasSpecificData && row.accountId;
       }
@@ -212,72 +327,127 @@ export default function JournalPage() {
       return row.accountId && value && Number.parseFloat(value) > 0;
     });
 
+    console.log("📊 VALID ROWS COUNT:", validRows.length);
+
     if (validRows.length === 0) {
-      setError("Tidak ada entri yang valid untuk disimpan");
-      setTimeout(() => setError(""), 3000);
+      console.log("❌ No valid rows - showing validation error");
+      toastError.validation("Tidak ada entri yang valid untuk disimpan");
       return;
     }
 
-    // ✅ UPDATED: Create entries dengan logic yang benar untuk keuangan
-    const entriesToSave: CreateEntriHarianRequest[] = validRows.map((row) => {
-      const account = getSelectedAccount(row.accountId)!;
-
-      // ✅ UPDATED: Determine nilai based on division type
-      let nilai: number;
-      if (divisionType === "GENERAL") {
-        const value =
-          account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
-        nilai = Number.parseFloat(value);
-      } else {
-        // For specialized divisions, determine nilai from appropriate field
-        switch (divisionType) {
-          case "KEUANGAN":
-            // ✅ FIXED: Untuk keuangan selalu gunakan nominal
-            nilai = Number.parseFloat(row.nominal || "0");
-            break;
-          case "PEMASARAN":
-            nilai = Number.parseFloat(
-              row.realisasiAmount || row.targetAmount || "0"
-            );
-            break;
-          case "PRODUKSI":
-            nilai = Number.parseFloat(row.kuantitas || "0");
-            break;
-          case "GUDANG":
-            nilai = Number.parseFloat(row.pemakaianAmount || "0");
-            break;
-          default:
-            nilai = 0;
-        }
-      }
-
-      const entry: CreateEntriHarianRequest = {
-        accountId: Number(row.accountId),
-        tanggal: selectedDate,
-        nilai: nilai,
-        description: row.keterangan || "",
-
-        // ✅ Include division-specific data
-        ...(row.transactionType && { transactionType: row.transactionType }),
-        ...(row.targetAmount && {
-          targetAmount: Number.parseFloat(row.targetAmount),
-        }),
-        ...(row.realisasiAmount && {
-          realisasiAmount: Number.parseFloat(row.realisasiAmount),
-        }),
-        ...(row.hppAmount && { hppAmount: Number.parseFloat(row.hppAmount) }),
-        ...(row.pemakaianAmount && {
-          pemakaianAmount: Number.parseFloat(row.pemakaianAmount),
-        }),
-        ...(row.stokAkhir && { stokAkhir: Number.parseFloat(row.stokAkhir) }),
-      };
-
-      return entry;
-    });
+    // ✅ Enhanced loading state
+    console.log("🔄 Starting save process...");
+    setLoading(true);
 
     try {
+      const entriesToSave: CreateEntriHarianRequest[] = validRows.map((row) => {
+        const account = getSelectedAccount(row.accountId)!;
+
+        let nilai: number;
+        if (divisionType === "GENERAL") {
+          const value =
+            account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
+          nilai = Number.parseFloat(value);
+        } else {
+          switch (divisionType) {
+            case "PEMASARAN":
+              // ✅ FIXED: Use realisasiAmount as primary nilai, fallback to targetAmount
+              nilai = Number.parseFloat(
+                row.realisasiAmount || row.targetAmount || "0"
+              );
+              console.log("🎯 PEMASARAN NILAI CALCULATION:", {
+                rowId: row.id,
+                realisasiAmount: row.realisasiAmount,
+                targetAmount: row.targetAmount,
+                calculatedNilai: nilai,
+              });
+              break;
+            case "KEUANGAN":
+              // ✅ FIXED: Untuk keuangan selalu gunakan nominal
+              nilai = Number.parseFloat(row.nominal || "0");
+              break;
+            case "PRODUKSI":
+              nilai = Number.parseFloat(row.kuantitas || "0");
+              break;
+            case "GUDANG":
+              nilai = Number.parseFloat(row.pemakaianAmount || "0");
+              break;
+            case "HRD": // ✅ NEW: HRD logic
+              // For HRD, nilai represents attendance (1 for present, 0 for absent)
+              nilai = row.attendanceStatus === "HADIR" ? 1 : 0;
+              break;
+            default:
+              nilai = 0;
+          }
+        } // ✅ ENHANCED: Set nilai berdasarkan jenis transaksi
+        let entryNilai = Number.parseFloat(row.nominal) || 0;
+        let entrySaldoAkhir: number | undefined = undefined;
+
+        // Jika jenis transaksi adalah SALDO_AKHIR, simpan ke field saldoAkhir
+        if (row.transactionType === "SALDO_AKHIR") {
+          entrySaldoAkhir = entryNilai;
+          entryNilai = 0; // Set nilai ke 0 karena ini bukan transaksi biasa
+        }
+
+        const entry: CreateEntriHarianRequest = {
+          accountId: Number(row.accountId),
+          tanggal: selectedDate,
+          nilai: nilai,
+          description: row.keterangan || "",
+
+          // ✅ ENHANCED DEBUG: Log before creating entry
+          ...(row.transactionType && { transactionType: row.transactionType }),
+          ...(row.targetAmount && {
+            targetAmount: Number.parseFloat(row.targetAmount),
+          }),
+          ...(row.realisasiAmount && {
+            realisasiAmount: Number.parseFloat(row.realisasiAmount),
+          }),
+          ...(row.hppAmount && { hppAmount: Number.parseFloat(row.hppAmount) }),
+          ...(row.pemakaianAmount && {
+            pemakaianAmount: Number.parseFloat(row.pemakaianAmount),
+          }),
+          ...(row.stokAkhir && { stokAkhir: Number.parseFloat(row.stokAkhir) }),
+          // ✅ NEW: HRD fields
+          ...(row.attendanceStatus && {
+            attendanceStatus: row.attendanceStatus,
+          }),
+          ...(row.overtimeHours && {
+            overtimeHours: Number.parseFloat(row.overtimeHours),
+          }),
+          ...(row.shift && { shift: row.shift }),
+          // ✅ NEW: Keuangan saldo akhir field
+          ...(entrySaldoAkhir && {
+            saldoAkhir: entrySaldoAkhir,
+          }),
+        };
+
+        // ✅ ENHANCED DEBUG: Log what we're about to send
+        if (divisionType === "PEMASARAN") {
+          console.log("🎯 SENDING PEMASARAN ENTRY:", {
+            id: row.id,
+            accountId: entry.accountId,
+            targetAmount: entry.targetAmount,
+            realisasiAmount: entry.realisasiAmount,
+            rawTargetAmount: row.targetAmount,
+            rawRealisasiAmount: row.realisasiAmount,
+            hasTarget: !!entry.targetAmount,
+            hasRealisasi: !!entry.realisasiAmount,
+          });
+        }
+
+        return entry;
+      });
+
+      console.log("📤 SENDING TO BACKEND:", entriesToSave);
+
+      // ✅ Manual save instead of promise toast for better debugging
       const saved = await saveEntriHarianBatch(entriesToSave);
-      await loadData(); // Force reload data from backend
+
+      console.log("✅ BACKEND RESPONSE:", saved);
+
+      // Force reload data
+      await loadData();
 
       // Reset form
       setJournalRows([
@@ -293,62 +463,75 @@ export default function JournalPage() {
           hppAmount: "",
           pemakaianAmount: "",
           stokAkhir: "",
+          saldoAkhir: "", // ✅ NEW: Reset saldoAkhir
         },
       ]);
 
-      // ✅ IMPROVED: Different success messages based on division behavior
-      let successMessage;
-      if (divisionType === "KEUANGAN") {
-        successMessage = `✅ ${saved.length} transaksi keuangan BARU berhasil ditambahkan untuk tanggal ${new Date(
-          selectedDate
-        ).toLocaleDateString("id-ID")}! 
-        (Setiap transaksi tersimpan sebagai record terpisah)`;
-      } else {
-        successMessage = saved.length === entriesToSave.length 
-          ? `✅ ${saved.length} entri ${divisionType} berhasil disimpan untuk tanggal ${new Date(selectedDate).toLocaleDateString("id-ID")}! 
-          (Data existing akan di-update, data baru akan ditambahkan)`
-          : `✅ ${saved.length} dari ${entriesToSave.length} entri berhasil disimpan`;
-      }
-      
-      setSuccess(successMessage);
-      setTimeout(() => setSuccess(""), 7000); // Longer display time for detailed message
-    } catch (err) {
-      let errorMessage = "Gagal menyimpan entri jurnal";
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      }
+      // ✅ Manual success toast
+      const totalRequested = entriesToSave.length;
+      const totalSaved = saved.length;
 
-      setError(errorMessage);
-      setTimeout(() => setError(""), 5000);
+      console.log("📊 SAVE SUMMARY:", { totalRequested, totalSaved });
+
+      if (totalSaved === totalRequested) {
+        console.log("✅ All entries saved successfully");
+        toastSuccess.save(totalSaved, `entri ${divisionType}`);
+      } else if (totalSaved > 0) {
+        console.log("⚠️ Partial save");
+        toastWarning.partial(totalSaved, totalRequested);
+      } else {
+        console.log("ℹ️ No changes");
+        toastInfo.noChanges();
+      }
+    } catch (err) {
+      console.error("❌ SAVE ERROR:", err);
+
+      if (err instanceof Error) {
+        const errorMsg = err.message.toLowerCase();
+        console.log("🔍 Error analysis:", errorMsg);
+
+        if (errorMsg.includes("duplicate") || errorMsg.includes("constraint")) {
+          console.log("🔄 Duplicate error detected");
+          toastError.duplicate();
+          setTimeout(() => loadData(), 1000);
+        } else if (
+          errorMsg.includes("validation") ||
+          errorMsg.includes("invalid")
+        ) {
+          console.log("❌ Validation error detected");
+          toastError.validation(err.message);
+        } else if (errorMsg.includes("network") || errorMsg.includes("fetch")) {
+          console.log("🌐 Network error detected");
+          toastError.network();
+        } else if (
+          errorMsg.includes("permission") ||
+          errorMsg.includes("access")
+        ) {
+          console.log("🚫 Permission error detected");
+          toastError.permission();
+        } else {
+          console.log("⚠️ Server error detected");
+          toastError.server();
+        }
+      } else {
+        console.log("❓ Unknown error detected");
+        toastError.custom("Terjadi kesalahan yang tidak diketahui");
+      }
+    } finally {
+      console.log("🏁 Save process finished");
+      setLoading(false);
     }
   };
 
   const removeExistingEntry = async (id: string) => {
-    if (confirm("Hapus entri ini?")) {
-      if (await deleteEntriHarian(id)) {
-        loadData();
-        setSuccess("Entri berhasil dihapus");
-        setTimeout(() => setSuccess(""), 3000);
-      } else {
-        setError("Gagal menghapus entri");
-        setTimeout(() => setError(""), 3000);
-      }
-    }
-  };
-
-  const testSaveMinimal = async () => {
-    const testEntry: CreateEntriHarianRequest = {
-      accountId: 11, // ID account yang ada
-      tanggal: "2025-06-19", // Pastikan format ISO string
-      nilai: 100.0,
-      description: "Test entry manual",
-    };
+    if (!confirm("Hapus entri ini?")) return;
 
     try {
-      const saved = await saveEntriHarianBatch([testEntry]);
-      setSuccess("Test berhasil!");
+      await toastPromise.delete(deleteEntriHarian(id), "entri jurnal");
+
+      loadData();
     } catch (error) {
-      setError("Test gagal: " + (error as Error).message);
+      toastError.custom("Gagal menghapus entri");
     }
   };
 
@@ -364,10 +547,24 @@ export default function JournalPage() {
       return "PEMASARAN";
     if (divisionName?.includes("gudang") || divisionName?.includes("warehouse"))
       return "GUDANG";
+    if (
+      divisionName?.includes("hrd") ||
+      divisionName?.includes("sumber daya manusia")
+    )
+      return "HRD"; // ✅ ADD: HRD division detection
     return "GENERAL";
   };
 
   const divisionType = getDivisionType();
+
+  // ✅ Helper function untuk format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
 
   // ✅ Get division color scheme
   const getDivisionStyle = () => {
@@ -396,6 +593,13 @@ export default function JournalPage() {
           hover: "hover:bg-purple-700",
           icon: Warehouse,
         };
+      // ✅ NEW: HRD style
+      case "HRD":
+        return {
+          bg: "bg-indigo-600",
+          hover: "hover:bg-indigo-700",
+          icon: Users,
+        };
       default:
         return {
           bg: "bg-gray-600",
@@ -408,7 +612,7 @@ export default function JournalPage() {
   const divisionStyle = getDivisionStyle();
   const DivisionIcon = divisionStyle.icon;
 
-  // ✅ Render specialized input based on division - MOVED AND IMPLEMENTED
+  // ✅ Render specialized input based on division - IMPLEMENTASI LENGKAP
   const renderSpecializedInput = (
     row: JournalRow,
     selectedAccount: Account | undefined
@@ -423,44 +627,70 @@ export default function JournalPage() {
             <div className="col-span-12 mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-blue-700 mb-1">
-                    <DollarSign className="inline h-3 w-3 mr-1" />
-                    Jenis Transaksi
-                  </label>
+                  <Label>Jenis Transaksi</Label>
                   <Select
                     value={row.transactionType || ""}
-                    onValueChange={(value) =>
-                      updateRow(row.id, "transactionType", value)
-                    }
+                    onValueChange={(
+                      value: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR"
+                    ) => updateRow(row.id, "transactionType", value)}
                   >
-                    <SelectTrigger className="text-sm">
+                    <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Pilih jenis..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="PENERIMAAN">💰 Penerimaan</SelectItem>
+                      <SelectItem value="PENERIMAAN">
+                        <div className="flex items-center gap-2">
+                          <ArrowUpCircle className="h-4 w-4 text-green-600" />
+                          Penerimaan
+                        </div>
+                      </SelectItem>
                       <SelectItem value="PENGELUARAN">
-                        💸 Pengeluaran
+                        <div className="flex items-center gap-2">
+                          <ArrowDownCircle className="h-4 w-4 text-red-600" />
+                          Pengeluaran
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="SALDO_AKHIR">
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-purple-600" />
+                          Saldo Akhir
+                        </div>
                       </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-blue-700 mb-1">
-                    Nominal
-                  </label>
+                  <Label>Nominal</Label>
                   <Input
                     type="number"
-                    placeholder="0"
-                    value={row.nominal}
-                    onChange={(e) =>
-                      updateRow(row.id, "nominal", e.target.value)
+                    placeholder={
+                      selectedAccount?.valueType === "NOMINAL"
+                        ? "Rp 0"
+                        : "0 unit"
                     }
-                    className="text-right text-sm"
+                    value={getInputValue(row)}
+                    onChange={(e) => {
+                      const field =
+                        selectedAccount?.valueType === "NOMINAL"
+                          ? "nominal"
+                          : "kuantitas";
+                      updateRow(row.id, field, e.target.value);
+                    }}
+                    className="mt-1"
+                    min="0"
+                    step={
+                      selectedAccount?.valueType === "NOMINAL" ? "1000" : "1"
+                    }
                   />
                 </div>
-                <div className="flex items-end">
-                  <div className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
-                    Saldo akan terhitung otomatis
+                <div>
+                  <Label>Nilai Tampil</Label>
+                  <div className="mt-1 p-2 bg-white rounded border text-sm">
+                    {selectedAccount
+                      ? getInputValue(row)
+                        ? formatCurrency(Number.parseFloat(getInputValue(row)))
+                        : "0"
+                      : "Pilih akun dulu"}
                   </div>
                 </div>
               </div>
@@ -631,437 +861,536 @@ export default function JournalPage() {
           </div>
         );
 
+      // ✅ NEW: HRD specialized input
+      case "HRD":
+        // For employee accounts, show attendance status
+        return (
+          <div className="col-span-12 mt-2 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-indigo-700 mb-1">
+                  <Users className="inline h-3 w-3 mr-1" />
+                  Status Kehadiran
+                </label>
+                <Select
+                  value={row.attendanceStatus || ""}
+                  onValueChange={(value) =>
+                    updateRow(row.id, "attendanceStatus", value)
+                  }
+                >
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Pilih status..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="HADIR">✅ Hadir</SelectItem>
+                    <SelectItem value="TIDAK_HADIR">❌ Tidak Hadir</SelectItem>
+                    <SelectItem value="SAKIT">🤒 Sakit</SelectItem>
+                    <SelectItem value="IZIN">📝 Izin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-indigo-700 mb-1">
+                  <Clock className="inline h-3 w-3 mr-1" />
+                  Jam Lembur
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={row.overtimeHours}
+                  onChange={(e) =>
+                    updateRow(row.id, "overtimeHours", e.target.value)
+                  }
+                  className="text-right text-sm"
+                  min="0"
+                  max="12"
+                  step="0.5"
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  Jam (maksimal 12 jam)
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-indigo-700 mb-1">
+                  Shift Kerja
+                </label>
+                <Select
+                  value={row.shift || ""}
+                  onValueChange={(value) => updateRow(row.id, "shift", value)}
+                >
+                  <SelectTrigger className="text-sm">
+                    <SelectValue placeholder="Pilih shift..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PAGI">🌅 Pagi (07:00-15:00)</SelectItem>
+                    <SelectItem value="SIANG">
+                      ☀️ Siang (15:00-23:00)
+                    </SelectItem>
+                    <SelectItem value="MALAM">
+                      🌙 Malam (23:00-07:00)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {/* Attendance summary */}
+            {row.attendanceStatus && (
+              <div className="mt-2 p-2 bg-white rounded border">
+                <div className="text-xs text-center">
+                  <div
+                    className={`font-medium ${
+                      row.attendanceStatus === "HADIR"
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {row.attendanceStatus === "HADIR"
+                      ? "✅ Karyawan Hadir"
+                      : `❌ Karyawan ${
+                          row.attendanceStatus === "SAKIT"
+                            ? "Sakit"
+                            : row.attendanceStatus === "IZIN"
+                            ? "Izin"
+                            : "Tidak Hadir"
+                        }`}
+                  </div>
+                  {row.overtimeHours &&
+                    Number.parseFloat(row.overtimeHours) > 0 && (
+                      <div className="text-blue-600 mt-1">
+                        ⏰ Lembur: {row.overtimeHours} jam
+                      </div>
+                    )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
       default:
         return null;
     }
   };
 
+  // ✅ Debug: Log existing entries to check saldoAkhir field
+  useEffect(() => {
+    if (existingEntries.length > 0) {
+      console.log("🔍 EXISTING ENTRIES DEBUG:", existingEntries);
+      existingEntries.forEach((entry, index) => {
+        console.log(`Entry ${index}:`, {
+          id: entry.id,
+          transactionType: (entry as any).transactionType,
+          nilai: entry.nilai,
+          saldoAkhir: (entry as any).saldoAkhir,
+          // ✅ ADDED: More debug info
+          rawEntry: entry,
+        });
+      });
+    }
+  }, [existingEntries]);
+
+  // ✅ Debug: Check if backend returns saldoAkhir field
+  useEffect(() => {
+    console.log("🔍 EXISTING ENTRIES:", existingEntries);
+  }, [existingEntries]);
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <DivisionIcon className="h-8 w-8 text-gray-600" />
-            Jurnal {user?.division?.name}
-            <Badge className={`${divisionStyle.bg} text-white text-sm`}>
-              {divisionType}
-            </Badge>
-          </h1>
-          <p className="text-gray-600 mt-2">
-            {divisionType === "KEUANGAN" &&
-              "Kategorisasi Transaksi Kas & Keuangan"}
-            {divisionType === "PRODUKSI" &&
-              "Input Hasil Produksi & HPP Terintegrasi"}
-            {divisionType === "PEMASARAN" &&
-              "Pelacakan Target vs Realisasi Penjualan"}
-            {divisionType === "GUDANG" && "Pencatatan Pemakaian & Stok Akhir"}
-            {divisionType === "GENERAL" && "Tambah Baru Data Jurnal"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Calendar className="h-4 w-4" />
-          {new Date(selectedDate).toLocaleDateString("id-ID", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
-        </div>
-      </div>
-
-      {success && (
-        <Alert className="border-green-200 bg-green-50">
-          <AlertDescription className="text-green-800">
-            {success}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Date Selector */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-4">
-            <Label htmlFor="date">Tgl Jurnal:</Label>
-            <Input
-              id="date"
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-auto"
-            />
+    <ClientErrorBoundary>
+      <div className="p-6 space-y-6">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              <DivisionIcon className="h-8 w-8 text-gray-600" />
+              Jurnal {user?.division?.name}
+              <Badge className={`${divisionStyle.bg} text-white text-sm`}>
+                {divisionType}
+              </Badge>
+            </h1>
+            <p className="text-gray-600 mt-2">
+              {divisionType === "KEUANGAN" &&
+                "Kategorisasi Transaksi Kas & Keuangan"}
+              {divisionType === "PRODUKSI" &&
+                "Input Hasil Produksi & HPP Terintegrasi"}
+              {divisionType === "PEMASARAN" &&
+                "Pelacakan Target vs Realisasi Penjualan"}
+              {divisionType === "GUDANG" && "Pencatatan Pemakaian & Stok Akhir"}
+              {divisionType === "HRD" &&
+                "Pencatatan Kehadiran & Aktivitas Karyawan"}{" "}
+              {/* ✅ NEW */}
+              {divisionType === "GENERAL" && "Tambah Baru Data Jurnal"}
+            </p>
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Calendar className="h-4 w-4" />
+            {new Date(selectedDate).toLocaleDateString("id-ID", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
+          </div>
+        </div>
 
-      {/* Journal Entry Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <DivisionIcon className="h-5 w-5" />
-            Form Input Jurnal {divisionType}
-          </CardTitle>
-          <CardDescription>
-            {divisionType === "KEUANGAN" &&
-              "Pilih akun kas, tentukan jenis transaksi (Penerimaan/Pengeluaran), dan masukkan nominal"}
-            {divisionType === "PRODUKSI" &&
-              "Input hasil produksi dan HPP dalam satu formulir terintegrasi"}
-            {divisionType === "PEMASARAN" &&
-              "Catat target dan realisasi penjualan untuk monitoring kinerja"}
-            {divisionType === "GUDANG" &&
-              "Catat pemakaian bahan baku dan update stok akhir"}
-            {divisionType === "GENERAL" &&
-              "Pilih akun dari rak divisi, tambahkan keterangan, dan masukkan nilai sesuai tipe akun"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {/* Header - Updated for specialized divisions */}
-            <div className="grid grid-cols-12 gap-4 font-medium text-sm text-gray-600 border-b pb-2">
-              <div className="col-span-2">Tgl Jurnal</div>
-              <div className="col-span-4">Akun</div>
-              <div className="col-span-3">Keterangan</div>
-              <div className="col-span-2">
-                {divisionType === "GENERAL" ? "Nilai" : "Nilai Dasar"}
-              </div>
-              <div className="col-span-1">Aksi</div>
+        {/* Date Selector */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <Label htmlFor="date">Tgl Jurnal:</Label>
+              <Input
+                id="date"
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-auto"
+              />
             </div>
+          </CardContent>
+        </Card>
 
-            {/* Journal Rows */}
-            {journalRows.map((row) => {
-              const selectedAccount = getSelectedAccount(row.accountId);
+        {/* Journal Entry Form */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DivisionIcon className="h-5 w-5" />
+              Form Input Jurnal {divisionType}
+            </CardTitle>
+            <CardDescription>
+              {divisionType === "KEUANGAN" &&
+                "Pilih akun kas, tentukan jenis transaksi (Penerimaan/Pengeluaran), dan masukkan nominal"}
+              {divisionType === "PRODUKSI" &&
+                "Input hasil produksi dan HPP dalam satu formulir terintegrasi"}
+              {divisionType === "PEMASARAN" &&
+                "Catat target dan realisasi penjualan untuk monitoring kinerja"}
+              {divisionType === "GUDANG" &&
+                "Catat pemakaian bahan baku dan update stok akhir"}
+              {divisionType === "GENERAL" &&
+                "Pilih akun dari rak divisi, tambahkan keterangan, dan masukkan nilai sesuai tipe akun"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Header - Updated for specialized divisions */}
+              <div className="grid grid-cols-12 gap-4 font-medium text-sm text-gray-600 border-b pb-2">
+                <div className="col-span-2">Tgl Jurnal</div>
+                <div className="col-span-4">Akun</div>
+                <div className="col-span-3">Keterangan</div>
+                <div className="col-span-2">
+                  {divisionType === "GENERAL" ? "Nilai" : "Nilai Dasar"}
+                </div>
+                <div className="col-span-1">Aksi</div>
+              </div>
 
-              return (
-                <div key={row.id} className="space-y-2">
-                  <div className="grid grid-cols-12 gap-4 items-center">
-                    {/* Tanggal */}
-                    <div className="col-span-2">
-                      <Input
-                        type="date"
-                        value={selectedDate}
-                        disabled
-                        className="bg-gray-50 text-sm"
-                      />
-                    </div>
+              {/* Journal Rows */}
+              {journalRows.map((row, index) => {
+                const selectedAccount = getSelectedAccount(row.accountId);
 
-                    {/* Akun Dropdown */}
-                    <div className="col-span-4">
+                return (
+                  <div
+                    key={row.id}
+                    className="grid grid-cols-12 gap-4 items-end p-4 border rounded-lg bg-gray-50"
+                  >
+                    {/* SIMPLIFIED: Hanya Akun dan Keterangan di form row putih */}
+
+                    {/* Akun - 6 kolom */}
+                    <div className="col-span-6">
+                      <Label>Akun</Label>
                       <Select
                         value={row.accountId}
-                        onValueChange={(value) => {
-                          if (value && value !== "no-accounts") {
-                            updateRow(row.id, "accountId", value);
-                            // Reset all values when account changes
-                            updateRow(row.id, "nominal", "");
-                            updateRow(row.id, "kuantitas", "");
-                            updateRow(row.id, "transactionType", "");
-                            updateRow(row.id, "targetAmount", "");
-                            updateRow(row.id, "realisasiAmount", "");
-                            updateRow(row.id, "hppAmount", "");
-                            updateRow(row.id, "pemakaianAmount", "");
-                            updateRow(row.id, "stokAkhir", "");
-                          }
-                        }}
+                        onValueChange={(value) =>
+                          updateRow(row.id, "accountId", value)
+                        }
                       >
-                        <SelectTrigger className="text-sm">
-                          <SelectValue placeholder="Pilih akun dari rak...">
-                            {/* ✅ Custom display untuk selected value */}
-                            {row.accountId
-                              ? (() => {
-                                  const selectedAccount = getSelectedAccount(
-                                    row.accountId
-                                  );
-                                  return selectedAccount ? (
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-mono text-xs text-blue-600">
-                                        {selectedAccount.accountCode}
-                                      </span>
-                                      <span className="text-sm">
-                                        {selectedAccount.accountName}
-                                      </span>
-                                      <Badge
-                                        className={`text-xs ${
-                                          selectedAccount.valueType ===
-                                          "NOMINAL"
-                                            ? "bg-blue-100 text-blue-800"
-                                            : "bg-green-100 text-green-800"
-                                        }`}
-                                      >
-                                        {selectedAccount.valueType === "NOMINAL"
-                                          ? "Rp"
-                                          : "Unit"}
-                                      </Badge>
-                                    </div>
-                                  ) : (
-                                    "Akun tidak ditemukan"
-                                  );
-                                })()
-                              : "Pilih akun dari rak..."}
-                          </SelectValue>
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Pilih akun" />
                         </SelectTrigger>
                         <SelectContent>
-                          {accounts.length > 0 ? (
-                            accounts.map((account) => (
-                              <SelectItem key={account.id} value={account.id}>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-xs text-blue-600">
-                                    {account.accountCode}
-                                  </span>
-                                  <span className="text-sm">
-                                    {account.accountName}
-                                  </span>
-                                  <Badge
-                                    className={`text-xs ${
-                                      account.valueType === "NOMINAL"
-                                        ? "bg-blue-100 text-blue-800"
-                                        : "bg-green-100 text-green-800"
-                                    }`}
-                                  >
-                                    {account.valueType === "NOMINAL"
-                                      ? "Rp"
-                                      : "Unit"}
-                                  </Badge>
-                                </div>
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="no-accounts" disabled>
-                              Tidak ada akun tersedia
+                          {accounts.map((account) => (
+                            <SelectItem key={account.id} value={account.id}>
+                              {getAccountDisplay(account.id)}
                             </SelectItem>
-                          )}
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
 
-                    {/* Keterangan */}
-                    <div className="col-span-3">
+                    {/* Keterangan - 5 kolom */}
+                    <div className="col-span-5">
+                      <Label>Keterangan</Label>
                       <Input
-                        placeholder="Keterangan..."
+                        placeholder="Deskripsi"
                         value={row.keterangan}
                         onChange={(e) =>
                           updateRow(row.id, "keterangan", e.target.value)
                         }
-                        className="text-sm"
+                        className="mt-1"
                       />
                     </div>
 
-                    {/* Nilai Input - Only show for GENERAL or as fallback */}
-                    <div className="col-span-2">
-                      {divisionType === "GENERAL" && selectedAccount ? (
-                        <div className="space-y-1">
-                          <Input
-                            type="number"
-                            placeholder={
-                              selectedAccount.valueType === "NOMINAL"
-                                ? "0"
-                                : "0 unit"
-                            }
-                            value={
-                              selectedAccount.valueType === "NOMINAL"
-                                ? row.nominal
-                                : row.kuantitas
-                            }
-                            onChange={(e) => {
-                              const field =
-                                selectedAccount.valueType === "NOMINAL"
-                                  ? "nominal"
-                                  : "kuantitas";
-                              updateRow(row.id, field, e.target.value);
-                            }}
-                            className="text-right text-sm"
-                          />
-                          <div className="text-xs text-gray-500 text-center">
-                            {selectedAccount.valueType === "NOMINAL"
-                              ? "💰 Rupiah"
-                              : "📦 Unit/Jumlah"}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center text-xs text-gray-400 py-2">
-                          {selectedAccount
-                            ? "Gunakan form di bawah"
-                            : "Pilih akun dulu"}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Action */}
+                    {/* Delete Button - 1 kolom */}
                     <div className="col-span-1">
                       <Button
+                        type="button"
                         variant="outline"
                         size="sm"
                         onClick={() => removeRow(row.id)}
-                        className="text-red-600 hover:text-red-700"
                         disabled={journalRows.length === 1}
+                        className="text-red-600 hover:text-red-700"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
+
+                    {/* SEMUA FIELD LAINNYA dipindahkan ke bar bawah */}
+                    {renderSpecializedInput(row, selectedAccount)}
                   </div>
+                );
+              })}
 
-                  {/* ✅ Specialized Input Section - NOW WORKING */}
-                  {renderSpecializedInput(row, selectedAccount)}
-                </div>
-              );
-            })}
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={addNewRow}
+                  className="bg-gray-50 hover:bg-gray-100"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  ADD{" "}
+                  {divisionType === "KEUANGAN"
+                    ? "TRANSAKSI"
+                    : divisionType === "PRODUKSI"
+                    ? "PRODUKSI"
+                    : divisionType === "PEMASARAN"
+                    ? "PENJUALAN"
+                    : divisionType === "GUDANG"
+                    ? "INVENTORY"
+                    : "TRANSACTION"}
+                </Button>
 
-            {/* Action Buttons */}
-            <div className="flex gap-2 pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={addNewRow}
-                className="bg-gray-50 hover:bg-gray-100"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                ADD{" "}
-                {divisionType === "KEUANGAN"
-                  ? "TRANSAKSI"
-                  : divisionType === "PRODUKSI"
-                  ? "PRODUKSI"
-                  : divisionType === "PEMASARAN"
-                  ? "PENJUALAN"
-                  : divisionType === "GUDANG"
-                  ? "INVENTORY"
-                  : "TRANSACTION"}
-              </Button>
-
-              <Button
-                onClick={saveJournalEntries}
-                className={`${divisionStyle.bg} ${divisionStyle.hover} text-white`}
-              >
-                <Save className="mr-2 h-4 w-4" />
-                SAVE {divisionType}
-              </Button>
+                <Button
+                  onClick={saveJournalEntries}
+                  className={`${divisionStyle.bg} ${divisionStyle.hover} text-white`}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                      Menyimpan...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      SAVE {divisionType}
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Existing Entries - Updated Display */}
-      {existingEntries.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              Entri Tersimpan -{" "}
-              {new Date(selectedDate).toLocaleDateString("id-ID")}
-            </CardTitle>
-            <CardDescription>
-              {existingEntries.length} entri tercatat untuk divisi{" "}
-              {user?.division?.name}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Waktu</TableHead>
-                    <TableHead>Kode Akun</TableHead>
-                    <TableHead>Nama Akun</TableHead>
-                    <TableHead>Tipe</TableHead>
-                    <TableHead>Keterangan</TableHead>
-                    <TableHead>Nilai</TableHead>
-                    <TableHead className="text-right">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {existingEntries.map((entry) => {
-                    const account = accounts.find(
-                      (acc) => acc.id === entry.accountId
-                    );
-                    return (
-                      <TableRow key={entry.id}>
-                        <TableCell className="text-sm text-gray-500">
-                          {new Date(entry.createdAt).toLocaleTimeString(
-                            "id-ID",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }
-                          )}
-                        </TableCell>
-                        <TableCell className="font-mono text-blue-600">
-                          {account?.accountCode}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {account?.accountName}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            className={
-                              account?.valueType === "NOMINAL"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-green-100 text-green-800"
-                            }
-                          >
-                            {account?.valueType === "NOMINAL"
-                              ? "💰 Rp"
-                              : "📦 Unit"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {entry.description || "-"}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {formatDisplayValue(
-                            entry.nilai.toString(),
-                            account?.valueType || "NOMINAL"
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => removeExistingEntry(entry.id)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Summary - Updated */}
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <div className="text-center">
-                  <p className="text-sm text-blue-600">
-                    Total Nominal (Rupiah)
+        {/* ✅ NEW: Riwayat Transaksi Harian (Khusus Keuangan) */}
+        {divisionType === "KEUANGAN" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Ringkasan Transaksi Harian KEUANGAN
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                Ringkasan transaksi keuangan untuk tanggal{" "}
+                {new Date(selectedDate).toLocaleDateString("id-ID", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Total Penerimaan */}
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2">
+                    <ArrowUpCircle className="h-5 w-5 text-green-600" />
+                    <h3 className="font-semibold text-green-800">
+                      Total Penerimaan
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-green-900 mt-2">
+                    {formatCurrency(keuanganSummary.totalPenerimaan)}
                   </p>
-                  <p className="text-xl font-bold text-blue-800">
-                    {formatDisplayValue(
-                      existingEntries
-                        .filter((entry) => {
-                          const acc = accounts.find(
-                            (a) => a.id === entry.accountId
-                          );
-                          return acc?.valueType === "NOMINAL";
-                        })
-                        .reduce((sum, entry) => sum + entry.nilai, 0)
-                        .toString(),
-                      "NOMINAL"
-                    )}
+                </div>
+
+                {/* Total Pengeluaran */}
+                <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                  <div className="flex items-center gap-2">
+                    <ArrowDownCircle className="h-5 w-5 text-red-600" />
+                    <h3 className="font-semibold text-red-800">
+                      Total Pengeluaran
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-red-900 mt-2">
+                    {formatCurrency(keuanganSummary.totalPengeluaran)}
+                  </p>
+                </div>
+
+                {/* Total Saldo Akhir */}
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5 text-blue-600" />
+                    <h3 className="font-semibold text-blue-800">
+                      Total Saldo Akhir
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-900 mt-2">
+                    {formatCurrency(keuanganSummary.totalSaldoAkhir)}
                   </p>
                 </div>
               </div>
 
-              <div className="p-4 bg-green-50 rounded-lg">
-                <div className="text-center">
-                  <p className="text-sm text-green-600">
-                    Total Kuantitas (Unit)
+              {/* Net Balance */}
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-800">
+                    Saldo Bersih Harian
+                  </h3>
+                  <p
+                    className={`text-xl font-bold ${
+                      keuanganSummary.totalPenerimaan -
+                        keuanganSummary.totalPengeluaran >=
+                      0
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {formatCurrency(
+                      keuanganSummary.totalPenerimaan -
+                        keuanganSummary.totalPengeluaran
+                    )}
                   </p>
-                  <p className="text-xl font-bold text-green-800">
-                    {formatDisplayValue(
-                      existingEntries
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Existing Entries - Updated Display */}
+        {existingEntries.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                Entri Tersimpan -{" "}
+                {new Date(selectedDate).toLocaleDateString("id-ID")}
+              </CardTitle>
+              <CardDescription>
+                {existingEntries.length} entri tercatat untuk divisi{" "}
+                {user?.division?.name}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Waktu</TableHead>
+                      <TableHead>Kode Akun</TableHead>
+                      <TableHead>Nama Akun</TableHead>
+                      <TableHead>Tipe</TableHead>
+                      <TableHead>Keterangan</TableHead>
+                      <TableHead>Nilai</TableHead>
+                      <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {existingEntries.map((entry) => {
+                      const account = accounts.find(
+                        (acc) => acc.id === entry.accountId
+                      );
+                      return (
+                        <TableRow key={entry.id}>
+                          <TableCell className="text-sm text-gray-500">
+                            {new Date(entry.createdAt).toLocaleTimeString(
+                              "id-ID",
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
+                          </TableCell>
+                          <TableCell className="font-mono text-blue-600">
+                            {account?.accountCode}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {account?.accountName}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={
+                                account?.valueType === "NOMINAL"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-green-100 text-green-800"
+                              }
+                            >
+                              {account?.valueType === "NOMINAL"
+                                ? "💰 Rp"
+                                : "📦 Unit"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {entry.description || "-"}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {formatDisplayValue(
+                              entry.nilai.toString(),
+                              account?.valueType || "NOMINAL",
+                              entry
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeExistingEntry(entry.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Summary - Updated */}
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="text-center">
+                    <p className="text-sm text-blue-600">
+                      Total Nominal (Rupiah)
+                    </p>
+                    <p className="text-xl font-bold text-blue-800">
+                      {formatCurrency(
+                        existingEntries
+                          .filter((entry) => {
+                            const acc = accounts.find(
+                              (a) => a.id === entry.accountId
+                            );
+                            return acc?.valueType === "NOMINAL";
+                          })
+                          .reduce((sum, entry) => sum + entry.nilai, 0)
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-green-50 rounded-lg">
+                  <div className="text-center">
+                    <p className="text-sm text-green-600">
+                      Total Kuantitas (Unit)
+                    </p>
+                    <p className="text-xl font-bold text-green-800">
+                      {existingEntries
                         .filter((entry) => {
                           const acc = accounts.find(
                             (a) => a.id === entry.accountId
@@ -1069,34 +1398,34 @@ export default function JournalPage() {
                           return acc?.valueType === "KUANTITAS";
                         })
                         .reduce((sum, entry) => sum + entry.nilai, 0)
-                        .toString(),
-                      "KUANTITAS"
-                    )}
-                  </p>
+                        .toLocaleString("id-ID")}{" "}
+                      unit
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        )}
 
-      {/* Info untuk akun kosong */}
-      {accounts.length === 0 && (
-        <Card className="bg-yellow-50 border-yellow-200">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <BookOpen className="h-12 w-12 text-yellow-600 mx-auto mb-4" />
-              <h3 className="font-semibold text-yellow-900">
-                Rak Akun Masih Kosong
-              </h3>
-              <p className="text-yellow-800 text-sm mt-2">
-                Belum ada akun di rak divisi {user?.division?.name}. Silakan
-                tambahkan akun terlebih dahulu di menu "Rak Akun Divisi".
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+        {/* Info untuk akun kosong */}
+        {accounts.length === 0 && (
+          <Card className="bg-yellow-50 border-yellow-200">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <BookOpen className="h-12 w-12 text-yellow-600 mx-auto mb-4" />
+                <h3 className="font-semibold text-yellow-900">
+                  Rak Akun Masih Kosong
+                </h3>
+                <p className="text-yellow-800 text-sm mt-2">
+                  Belum ada akun di rak divisi {user?.division?.name}. Silakan
+                  tambahkan akun terlebih dahulu di menu "Rak Akun Divisi".
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </ClientErrorBoundary>
   );
 }

@@ -26,10 +26,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Search, Filter, Eye } from "lucide-react";
+import {
+  Search,
+  Filter,
+  Eye,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Package,
+  TrendingUp,
+  DollarSign,
+  Warehouse,
+  Target,
+  Zap,
+  Users, // ✅ Add Users icon for HRD
+  Clock, // ✅ Add Clock icon for attendance
+} from "lucide-react";
 import { getEntriHarian, type EntriHarian } from "@/lib/data";
 import { getCurrentUser } from "@/lib/auth";
 import { getAccountsByDivision, type Account } from "@/lib/data";
+import ClientErrorBoundary from "@/components/client-error-boundary";
 
 export default function TransactionPage() {
   const [entries, setEntries] = useState<EntriHarian[]>([]);
@@ -58,17 +73,39 @@ export default function TransactionPage() {
       setAccounts(accountsData);
 
       const allEntries = await getEntriHarian();
-      const accountIds = accountsData.map((acc: Account) => acc.id);
 
+      const accountIds = accountsData.map((acc: Account) => acc.id);
       const divisionEntries = allEntries.filter((entry) => {
         return accountIds.includes(entry.accountId);
       });
 
       setEntries(divisionEntries);
     } catch (error) {
-      // Handle error silently
+      console.error("Error loading entries:", error);
     }
   };
+
+  // ✅ ENHANCED: Get division type for conditional rendering
+  const getDivisionType = () => {
+    const divisionName = user?.division?.name?.toLowerCase();
+    if (divisionName?.includes("keuangan")) return "KEUANGAN";
+    if (divisionName?.includes("produksi")) return "PRODUKSI";
+    if (
+      divisionName?.includes("pemasaran") ||
+      divisionName?.includes("marketing")
+    )
+      return "PEMASARAN";
+    if (divisionName?.includes("gudang") || divisionName?.includes("warehouse"))
+      return "GUDANG";
+    if (
+      divisionName?.includes("hrd") ||
+      divisionName?.includes("sumber daya manusia")
+    )
+      return "HRD"; // ✅ ADD: HRD division detection
+    return "GENERAL";
+  };
+
+  const divisionType = getDivisionType();
 
   const filterEntries = () => {
     let filtered = entries;
@@ -95,10 +132,113 @@ export default function TransactionPage() {
       });
     }
 
-    // Date filter - ✅ FIXED: Use correct field name
+    // ✅ ENHANCED: Filter type logic for all divisions
+    if (filterType !== "all") {
+      filtered = filtered.filter((entry) => {
+        switch (divisionType) {
+          case "KEUANGAN":
+            const transactionType =
+              (entry as any).transactionType ||
+              (entry as any).transaction_type ||
+              (entry as any).type;
+
+            if (filterType === "Penerimaan") {
+              return transactionType === "PENERIMAAN";
+            } else if (filterType === "Pengeluaran") {
+              return transactionType === "PENGELUARAN";
+            }
+            return true;
+
+          case "PRODUKSI":
+            const hasProductionData = (entry as any).hppAmount != null;
+
+            if (filterType === "Produksi") {
+              return hasProductionData && entry.nilai > 0;
+            } else if (filterType === "HPP") {
+              return hasProductionData;
+            }
+            return true;
+
+          case "PEMASARAN":
+            const hasMarketingData =
+              (entry as any).targetAmount != null ||
+              (entry as any).realisasiAmount != null;
+
+            if (filterType === "Target") {
+              return hasMarketingData && (entry as any).targetAmount > 0;
+            } else if (filterType === "Realisasi") {
+              return hasMarketingData && (entry as any).realisasiAmount > 0;
+            } else if (filterType === "Tercapai") {
+              const target = (entry as any).targetAmount || 0;
+              const realisasi = (entry as any).realisasiAmount || 0;
+              return target > 0 && realisasi >= target;
+            } else if (filterType === "Belum Tercapai") {
+              const target = (entry as any).targetAmount || 0;
+              const realisasi = (entry as any).realisasiAmount || 0;
+              return target > 0 && realisasi < target;
+            }
+            return true;
+
+          case "GUDANG":
+            const hasInventoryData =
+              (entry as any).pemakaianAmount != null ||
+              (entry as any).stokAkhir != null;
+
+            if (filterType === "Pemakaian") {
+              return hasInventoryData && (entry as any).pemakaianAmount > 0;
+            } else if (filterType === "Stok Rendah") {
+              const stokAkhir = (entry as any).stokAkhir || 0;
+              return hasInventoryData && stokAkhir < 100;
+            } else if (filterType === "Stok Aman") {
+              const stokAkhir = (entry as any).stokAkhir || 0;
+              return hasInventoryData && stokAkhir >= 100;
+            }
+            return true;
+
+          // ✅ NEW: HRD division filtering
+          case "HRD":
+            const hasAttendanceData =
+              (entry as any).attendanceStatus != null ||
+              (entry as any).overtimeHours != null;
+
+            if (filterType === "Hadir") {
+              return (
+                hasAttendanceData && (entry as any).attendanceStatus === "HADIR"
+              );
+            } else if (filterType === "Tidak Hadir") {
+              return (
+                hasAttendanceData &&
+                ((entry as any).attendanceStatus === "TIDAK_HADIR" ||
+                  (entry as any).attendanceStatus === "SAKIT" ||
+                  (entry as any).attendanceStatus === "IZIN")
+              );
+            } else if (filterType === "Overtime") {
+              const overtime = (entry as any).overtimeHours || 0;
+              return hasAttendanceData && overtime > 0;
+            } else if (filterType === "Perfect Attendance") {
+              return (
+                hasAttendanceData &&
+                (entry as any).attendanceStatus === "HADIR" &&
+                ((entry as any).overtimeHours || 0) === 0
+              );
+            }
+            return true;
+
+          default:
+            // For general division, use debet/kredit logic
+            if (filterType === "Debet") {
+              return entry.nilai > 0;
+            } else if (filterType === "Kredit") {
+              return entry.nilai < 0;
+            }
+            return true;
+        }
+      });
+    }
+
+    // Date filter
     if (filterDate) {
       filtered = filtered.filter((entry) => {
-        // Handle both possible date field names
         const entryDate = entry.tanggal || entry.date;
         return entryDate === filterDate;
       });
@@ -121,237 +261,928 @@ export default function TransactionPage() {
     }).format(amount);
   };
 
-  const getTotalAmount = () => {
-    return filteredEntries.reduce((sum, entry) => sum + entry.nilai, 0);
+  // ✅ HELPER: Get account info for better detection
+  const getAccountInfo = (accountId: string) => {
+    return accounts.find((acc) => acc.id === accountId);
   };
 
-  const getTotalDebet = () => {
-    return filteredEntries.reduce(
-      (sum, entry) => sum + (entry.nilai > 0 ? entry.nilai : 0),
-      0
-    );
+  // ✅ ENHANCED: Different calculations for each division
+  const getDivisionMetrics = () => {
+    switch (divisionType) {
+      case "KEUANGAN":
+        // ✅ SIMPLIFIED: Gunakan transactionType yang sudah benar dari backend
+        const totalPenerimaan = filteredEntries.reduce((sum, entry) => {
+          const transactionType = (entry as any).transactionType;
+          return transactionType === "PENERIMAAN" ? sum + Math.abs(entry.nilai) : sum;
+        }, 0);
+
+        const totalPengeluaran = filteredEntries.reduce((sum, entry) => {
+          const transactionType = (entry as any).transactionType;
+          return transactionType === "PENGELUARAN" ? sum + Math.abs(entry.nilai) : sum;
+        }, 0);
+
+        // ✅ CLEAN DEBUG: Hanya untuk development
+        if (process.env.NODE_ENV === 'development') {
+          console.log("🏦 KEUANGAN METRICS DEBUG:", {
+            totalEntries: filteredEntries.length,
+            totalPenerimaan,
+            totalPengeluaran,
+            entriesBreakdown: filteredEntries.map(entry => ({
+              id: entry.id,
+              type: (entry as any).transactionType,
+              nilai: entry.nilai
+            }))
+          });
+        }
+
+        return {
+          metric1: {
+            label: "Total Penerimaan",
+            value: totalPenerimaan,
+            type: "currency",
+            color: "text-green-600",
+          },
+          metric2: {
+            label: "Total Pengeluaran",
+            value: totalPengeluaran,
+            type: "currency",
+            color: "text-red-600",
+          },
+          metric3: {
+            label: "Saldo Bersih",
+            value: totalPenerimaan - totalPengeluaran,
+            type: "currency",
+            color: totalPenerimaan >= totalPengeluaran ? "text-green-600" : "text-red-600",
+          },
+          metric4: {
+            label: "Total Transaksi",
+            value: filteredEntries.length,
+            type: "number",
+            color: "text-blue-600",
+          },
+        };
+
+      case "PRODUKSI":
+        const totalProduksi = filteredEntries.reduce(
+          (sum, entry) => sum + entry.nilai,
+          0
+        );
+        const totalHPP = filteredEntries.reduce((sum, entry) => {
+          const hpp = (entry as any).hppAmount || 0;
+          return sum + hpp;
+        }, 0);
+        const avgHPPPerUnit = totalProduksi > 0 ? totalHPP / totalProduksi : 0;
+
+        return {
+          metric1: {
+            label: "Total Produksi",
+            value: totalProduksi,
+            type: "unit",
+            color: "text-blue-600",
+          },
+          metric2: {
+            label: "Total HPP",
+            value: totalHPP,
+            type: "currency",
+            color: "text-orange-600",
+          },
+          metric3: {
+            label: "HPP per Unit",
+            value: avgHPPPerUnit,
+            type: "currency",
+            color: "text-purple-600",
+          },
+          metric4: {
+            label: "Efisiensi",
+            value:
+              avgHPPPerUnit < 5000 ? "Efisien" : "Review",
+            type: "text",
+            color:
+              avgHPPPerUnit < 5000
+                ? "text-green-600"
+                : "text-yellow-600",
+          },
+        };
+
+      case "PEMASARAN":
+        const totalTarget = filteredEntries.reduce((sum, entry) => {
+          const target = (entry as any).targetAmount || 0;
+          return sum + target;
+        }, 0);
+        const totalRealisasi = filteredEntries.reduce((sum, entry) => {
+          const realisasi = (entry as any).realisasiAmount || 0;
+          return sum + realisasi;
+        }, 0);
+        const achievementRate =
+          totalTarget > 0 ? (totalRealisasi / totalTarget) * 100 : 0;
+
+        return {
+          metric1: {
+            label: "Total Target",
+            value: totalTarget,
+            type: "currency",
+            color: "text-blue-600",
+          },
+          metric2: {
+            label: "Total Realisasi",
+            value: totalRealisasi,
+            type: "currency",
+            color: "text-green-600",
+          },
+          metric3: {
+            label: "Achievement Rate",
+            value: achievementRate,
+            type: "percentage",
+            color:
+              achievementRate >= 100 ? "text-green-600" : "text-orange-600",
+          },
+          metric4: {
+            label: "Status",
+            value:
+              achievementRate >= 100 ? "Target Tercapai" : "Belum Tercapai",
+            type: "text",
+            color:
+              achievementRate >= 100 ? "text-green-600" : "text-red-600",
+          },
+        };
+
+      case "GUDANG":
+        const totalPemakaian = filteredEntries.reduce((sum, entry) => {
+          const pemakaian = (entry as any).pemakaianAmount || 0;
+          return sum + pemakaian;
+        }, 0);
+
+        // ✅ FIXED: Calculate average current stock instead of "mutasi"
+        const avgStokAkhir =
+          filteredEntries.length > 0
+            ? filteredEntries.reduce((sum, entry) => {
+                const stok = (entry as any).stokAkhir || 0;
+                return sum + stok;
+              }, 0) / filteredEntries.length
+            : 0;
+
+        const lowStockItems = filteredEntries.filter(
+          (entry) => (entry as any).stokAkhir < 100
+        ).length;
+
+        // ✅ NEW: Calculate total movement (pemakaian)
+        const totalMovement = totalPemakaian;
+
+        return {
+          metric1: {
+            label: "Total Pemakaian",
+            value: totalPemakaian,
+            type: "unit",
+            color: "text-blue-600",
+          },
+          metric2: {
+            label: "Rata-rata Stok",
+            value: avgStokAkhir,
+            type: "unit",
+            color: "text-green-600",
+          },
+          metric3: {
+            label: "Item Stok Rendah",
+            value: lowStockItems,
+            type: "number",
+            color: lowStockItems > 0 ? "text-red-600" : "text-green-600",
+          },
+          metric4: {
+            label: "Status Gudang",
+            value: lowStockItems > 0 ? "Perlu Restock" : "Stok Aman",
+            type: "text",
+            color: lowStockItems > 0 ? "text-red-600" : "text-green-600",
+          },
+        };
+
+      // ✅ NEW: HRD metrics
+      case "HRD":
+        const totalKaryawan = filteredEntries.length;
+        const hadirCount = filteredEntries.filter(
+          (entry) => (entry as any).attendanceStatus === "HADIR"
+        ).length;
+        const tidakHadirCount = filteredEntries.filter(
+          (entry) =>
+            (entry as any).attendanceStatus === "TIDAK_HADIR" ||
+            (entry as any).attendanceStatus === "SAKIT" ||
+            (entry as any).attendanceStatus === "IZIN"
+        ).length;
+        const attendanceRate =
+          totalKaryawan > 0 ? (hadirCount / totalKaryawan) * 100 : 0;
+        const totalOvertimeHours = filteredEntries.reduce((sum, entry) => {
+          const overtime = (entry as any).overtimeHours || 0;
+          return sum + overtime;
+        }, 0);
+
+        return {
+          metric1: {
+            label: "Total Karyawan",
+            value: totalKaryawan,
+            type: "number",
+            color: "text-blue-600",
+          },
+          metric2: {
+            label: "Tingkat Kehadiran",
+            value: attendanceRate,
+            type: "percentage",
+            color:
+              attendanceRate >= 90
+                ? "text-green-600"
+                : attendanceRate >= 80
+                ? "text-yellow-600"
+                : "text-red-600",
+          },
+          metric3: {
+            label: "Total Jam Lembur",
+            value: totalOvertimeHours,
+            type: "hours",
+            color: "text-purple-600",
+          },
+          metric4: {
+            label: "Status Kehadiran",
+            value:
+              attendanceRate >= 90
+                ? "Excellent"
+                : attendanceRate >= 80
+                ? "Good"
+                : "Needs Improvement",
+            type: "text",
+            color:
+              attendanceRate >= 90
+                ? "text-green-600"
+                : attendanceRate >= 80
+                ? "text-yellow-600"
+                : "text-red-600",
+          },
+        };
+
+      default:
+        const positiveSum = filteredEntries.reduce(
+          (sum, entry) => sum + (entry.nilai > 0 ? entry.nilai : 0),
+          0
+        );
+        const negativeSum = filteredEntries.reduce(
+          (sum, entry) => sum + (entry.nilai < 0 ? Math.abs(entry.nilai) : 0),
+          0
+        );
+
+        return {
+          metric1: {
+            label: "Total Debet",
+            value: positiveSum,
+            type: "currency",
+            color: "text-green-600",
+          },
+          metric2: {
+            label: "Total Kredit",
+            value: negativeSum,
+            type: "currency",
+            color: "text-red-600",
+          },
+          metric3: {
+            label: "Selisih",
+            value: Math.abs(positiveSum - negativeSum),
+            type: "currency",
+            color:
+              positiveSum >= negativeSum ? "text-green-600" : "text-red-600",
+          },
+          metric4: {
+            label: "Total Transaksi",
+            value: filteredEntries.length,
+            type: "number",
+            color: "text-blue-600",
+          },
+        };
+    }
   };
 
-  const getTotalKredit = () => {
-    return filteredEntries.reduce(
-      (sum, entry) => sum + (entry.nilai < 0 ? Math.abs(entry.nilai) : 0),
-      0
-    );
+  const metrics = getDivisionMetrics();
+
+  // ✅ SIMPLIFIED: Badge logic menggunakan transactionType yang benar
+  const getTransactionBadge = (entry: EntriHarian) => {
+    const transactionType = (entry as any).transactionType;
+
+    switch (divisionType) {
+      case "KEUANGAN":
+        if (transactionType === "PENERIMAAN") {
+          return (
+            <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+              ✅ Penerimaan
+            </span>
+          );
+        } else if (transactionType === "PENGELUARAN") {
+          return (
+            <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
+              ❌ Pengeluaran
+            </span>
+          );
+        } else {
+          return (
+            <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">
+              📄 Transaksi
+            </span>
+          );
+        }
+
+      case "PRODUKSI":
+        const hppAmount = (entry as any).hppAmount;
+        const efficiency =
+          hppAmount && entry.nilai > 0 ? hppAmount / entry.nilai : 0;
+
+        return (
+          <Badge
+            className={`${
+              efficiency < 5000
+                ? "bg-green-100 text-green-800"
+                : "bg-yellow-100 text-yellow-800"
+            }`}
+          >
+            <Package className="h-3 w-3 mr-1" />
+            {efficiency < 5000 ? "Efisien" : "Review"}
+          </Badge>
+        );
+
+      case "PEMASARAN":
+        const target = (entry as any).targetAmount || 0;
+        const realisasi = (entry as any).realisasiAmount || 0;
+        const achievement = target > 0 ? (realisasi / target) * 100 : 0;
+
+        return (
+          <Badge
+            className={`${
+              achievement >= 100
+                ? "bg-green-100 text-green-800"
+                : "bg-orange-100 text-orange-800"
+            }`}
+          >
+            <Target className="h-3 w-3 mr-1" />
+            {achievement.toFixed(0)}%
+          </Badge>
+        );
+
+      case "GUDANG":
+        const stokAkhir = (entry as any).stokAkhir || 0;
+
+        return (
+          <Badge
+            className={`${
+              stokAkhir >= 100
+                ? "bg-green-100 text-green-800"
+                : "bg-red-100 text-red-800"
+            }`}
+          >
+            <Warehouse className="h-3 w-3 mr-1" />
+            {stokAkhir >= 100 ? "Stok Aman" : "Stok Rendah"}
+          </Badge>
+        );
+
+      // ✅ NEW: HRD badge
+      case "HRD":
+        const attendanceStatus = (entry as any).attendanceStatus;
+        const overtimeHours = (entry as any).overtimeHours || 0;
+
+        if (attendanceStatus === "HADIR") {
+          if (overtimeHours > 0) {
+            return (
+              <Badge className="bg-blue-100 text-blue-800">
+                <Clock className="h-3 w-3 mr-1" />
+                Hadir + Lembur ({overtimeHours}h)
+              </Badge>
+            );
+          } else {
+            return (
+              <Badge className="bg-green-100 text-green-800">
+                <Users className="h-3 w-3 mr-1" />
+                Hadir
+              </Badge>
+            );
+          }
+        } else if (attendanceStatus === "SAKIT") {
+          return (
+            <Badge className="bg-yellow-100 text-yellow-800">
+              <Users className="h-3 w-3 mr-1" />
+              Sakit
+            </Badge>
+          );
+        } else if (attendanceStatus === "IZIN") {
+          return (
+            <Badge className="bg-orange-100 text-orange-800">
+              <Users className="h-3 w-3 mr-1" />
+              Izin
+            </Badge>
+          );
+        } else if (attendanceStatus === "TIDAK_HADIR") {
+          return (
+            <Badge className="bg-red-100 text-red-800">
+              <Users className="h-3 w-3 mr-1" />
+              Tidak Hadir
+            </Badge>
+          );
+        } else {
+          return (
+            <Badge className="bg-gray-100 text-gray-800">
+              <Users className="h-3 w-3 mr-1" />
+              Belum Dicatat
+            </Badge>
+          );
+        }
+
+      default:
+        if (entry.nilai > 0) {
+          return (
+            <Badge className="bg-blue-100 text-blue-800">
+              <ArrowUpCircle className="h-3 w-3 mr-1" />
+              Debet
+            </Badge>
+          );
+        } else {
+          return (
+            <Badge className="bg-orange-100 text-orange-800">
+              <ArrowDownCircle className="h-3 w-3 mr-1" />
+              Kredit
+            </Badge>
+          );
+        }
+    }
   };
 
-  // ✅ FIXED: Use correct date field
-  const todayEntries = entries.filter((entry) => {
-    const entryDate = new Date(entry.tanggal || entry.date);
-    const today = new Date();
-    return (
-      entryDate.getDate() === today.getDate() &&
-      entryDate.getMonth() === today.getMonth() &&
-      entryDate.getFullYear() === today.getFullYear()
-    );
-  });
+  // ✅ NEW: Get division-specific filter options
+  const getDivisionFilterOptions = () => {
+    switch (divisionType) {
+      case "KEUANGAN":
+        return [
+          {
+            value: "Penerimaan",
+            label: "Penerimaan",
+            icon: ArrowUpCircle,
+            color: "text-green-600",
+          },
+          {
+            value: "Pengeluaran",
+            label: "Pengeluaran",
+            icon: ArrowDownCircle,
+            color: "text-red-600",
+          },
+        ];
+
+      case "PRODUKSI":
+        return [
+          {
+            value: "Produksi",
+            label: "Hasil Produksi",
+            icon: Package,
+            color: "text-blue-600",
+          },
+          {
+            value: "HPP",
+            label: "Data HPP",
+            icon: DollarSign,
+            color: "text-orange-600",
+          },
+        ];
+
+      case "PEMASARAN":
+        return [
+          {
+            value: "Target",
+            label: "Ada Target",
+            icon: Target,
+            color: "text-blue-600",
+          },
+          {
+            value: "Realisasi",
+            label: "Ada Realisasi",
+            icon: TrendingUp,
+            color: "text-green-600",
+          },
+          {
+            value: "Tercapai",
+            label: "Target Tercapai",
+            icon: Zap,
+            color: "text-green-600",
+          },
+          {
+            value: "Belum Tercapai",
+            label: "Belum Tercapai",
+            icon: TrendingUp,
+            color: "text-orange-600",
+          },
+        ];
+
+      case "GUDANG":
+        return [
+          {
+            value: "Pemakaian",
+            label: "Ada Pemakaian",
+            icon: Package,
+            color: "text-blue-600",
+          },
+          {
+            value: "Stok Rendah",
+            label: "Stok Rendah",
+            icon: Warehouse,
+            color: "text-red-600",
+          },
+          {
+            value: "Stok Aman",
+            label: "Stok Aman",
+            icon: Warehouse,
+            color: "text-green-600",
+          },
+        ];
+
+      // ✅ NEW: HRD filter options
+      case "HRD":
+        return [
+          {
+            value: "Hadir",
+            label: "Hadir",
+            icon: Users,
+            color: "text-green-600",
+          },
+          {
+            value: "Tidak Hadir",
+            label: "Tidak Hadir/Sakit/Izin",
+            icon: Users,
+            color: "text-red-600",
+          },
+          {
+            value: "Overtime",
+            label: "Ada Lembur",
+            icon: Clock,
+            color: "text-blue-600",
+          },
+          {
+            value: "Perfect Attendance",
+            label: "Kehadiran Sempurna",
+            icon: Target,
+            color: "text-green-600",
+          },
+        ];
+
+      default:
+        return [
+          {
+            value: "Debet",
+            label: "Debet",
+            icon: ArrowUpCircle,
+            color: "text-blue-600",
+          },
+          {
+            value: "Kredit",
+            label: "Kredit",
+            icon: ArrowDownCircle,
+            color: "text-orange-600",
+          },
+        ];
+    }
+  };
+
+  const filterOptions = getDivisionFilterOptions();
+
+  // ✅ NEW: Format value based on type
+  const formatValue = (value: number, type: string) => {
+    switch (type) {
+      case "currency":
+        return formatCurrency(value);
+      case "unit":
+        return `${value.toLocaleString("id-ID")} unit`;
+      case "percentage":
+        return `${value.toFixed(1)}%`;
+      case "number":
+        return value.toString();
+      case "hours": // ✅ NEW: Hours formatting for HRD
+        return `${value} jam`;
+      case "text":
+        return value.toString();
+      default:
+        return value.toString();
+    }
+  };
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Riwayat Transaksi</h1>
-        <p className="text-gray-600 mt-2">
-          Lihat semua transaksi divisi {user?.division?.name}
-        </p>
-      </div>
+    <ClientErrorBoundary>
+      <div className="p-6 space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Riwayat Transaksi {divisionType === "GENERAL" ? "" : divisionType}
+          </h1>
+          <p className="text-gray-600 mt-2">
+            {divisionType === "KEUANGAN" &&
+              `Riwayat penerimaan dan pengeluaran  ${user?.division?.name}`}
+            {divisionType === "PRODUKSI" &&
+              `Riwayat produksi dan HPP divisi ${user?.division?.name}`}
+            {divisionType === "PEMASARAN" &&
+              `Riwayat target dan realisasi penjualan divisi ${user?.division?.name}`}
+            {divisionType === "GUDANG" &&
+              `Riwayat pemakaian dan stok divisi ${user?.division?.name}`}
+            {divisionType === "HRD" &&
+              `Riwayat kehadiran dan aktivitas karyawan divisi ${user?.division?.name}`}{" "}
+            {/* ✅ NEW */}
+            {divisionType === "GENERAL" &&
+              `Lihat semua transaksi divisi ${user?.division?.name}`}
+          </p>
+        </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+        {/* Filters */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Cari transaksi..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger>
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua Tipe</SelectItem>
+                    {filterOptions.map((option) => {
+                      const Icon = option.icon;
+                      return (
+                        <SelectItem key={option.value} value={option.value}>
+                          <div className="flex items-center">
+                            <Icon className={`h-4 w-4 mr-2 ${option.color}`} />
+                            {option.label}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
                 <Input
-                  placeholder="Cari transaksi..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  placeholder="Filter tanggal"
                 />
               </div>
-            </div>
 
-            <div>
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger>
-                  <Filter className="mr-2 h-4 w-4" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua Tipe</SelectItem>
-                  <SelectItem value="Debet">Debet</SelectItem>
-                  <SelectItem value="Kredit">Kredit</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Input
-                type="date"
-                value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
-                placeholder="Filter tanggal"
-              />
-            </div>
-
-            <div>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSearchTerm("");
-                  setFilterType("all");
-                  setFilterDate("");
-                }}
-                className="w-full"
-              >
-                Reset Filter
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <p className="text-sm text-gray-600">Total Transaksi</p>
-              <p className="text-2xl font-bold">{filteredEntries.length}</p>
+              <div>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setFilterType("all");
+                    setFilterDate("");
+                  }}
+                  className="w-full"
+                >
+                  Reset Filter
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <p className="text-sm text-gray-600">Total Debet</p>
-              <p className="text-xl font-bold text-green-600">
-                {formatCurrency(getTotalDebet())}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Summary Cards - ENHANCED for all divisions */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-sm text-gray-600">Total Transaksi</p>
+                <p className="text-2xl font-bold">{filteredEntries.length}</p>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <p className="text-sm text-gray-600">Total Kredit</p>
-              <p className="text-xl font-bold text-red-600">
-                {formatCurrency(getTotalKredit())}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-sm text-gray-600">{metrics.metric1.label}</p>
+                <p className={`text-xl font-bold ${metrics.metric1.color}`}>
+                  {formatValue(metrics.metric1.value, metrics.metric1.type)}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-sm text-gray-600">{metrics.metric2.label}</p>
+                <p className={`text-xl font-bold ${metrics.metric2.color}`}>
+                  {formatValue(metrics.metric2.value, metrics.metric2.type)}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <p className="text-sm text-gray-600">{metrics.metric3.label}</p>
+                <p className={`text-xl font-bold ${metrics.metric3.color}`}>
+                  {formatValue(metrics.metric3.value, metrics.metric3.type)}
+                </p>
+                {metrics.metric4 && (
+                  <p className={`text-xs mt-1 ${metrics.metric4.color}`}>
+                    {metrics.metric4.value}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Transactions Table - ENHANCED */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <p className="text-sm text-gray-600">Selisih</p>
-              <p
-                className={`text-xl font-bold ${
-                  getTotalDebet() === getTotalKredit()
-                    ? "text-green-600"
-                    : "text-orange-600"
-                }`}
-              >
-                {formatCurrency(Math.abs(getTotalDebet() - getTotalKredit()))}
-              </p>
+          <CardHeader>
+            <CardTitle>
+              Daftar Transaksi {divisionType === "GENERAL" ? "" : divisionType}
+            </CardTitle>
+            <CardDescription>
+              {filteredEntries.length} entri ditemukan dari {entries.length}{" "}
+              total entri divisi {user?.division?.name}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Akun</TableHead>
+                    <TableHead>Keterangan</TableHead>
+                    <TableHead>Status/Tipe</TableHead>
+                    <TableHead>Nilai Utama</TableHead>
+                    {/* ✅ CONDITIONAL: Additional columns based on division */}
+                    {divisionType === "PRODUKSI" && <TableHead>HPP</TableHead>}
+                    {divisionType === "PEMASARAN" && (
+                      <TableHead>Target vs Realisasi</TableHead>
+                    )}
+                    {divisionType === "GUDANG" && (
+                      <TableHead>Pemakaian/Stok</TableHead>
+                    )}
+                    {divisionType === "HRD" && (
+                      <TableHead>Detail Kehadiran</TableHead>
+                    )}{" "}
+                    {/* ✅ NEW: HRD column */}
+                    <TableHead>Waktu Input</TableHead>
+                    <TableHead className="text-right">Aksi</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredEntries.map((entry) => {
+                    const account = accounts.find(
+                      (acc: Account) => acc.id === entry.accountId
+                    );
+
+                    return (
+                      <TableRow key={entry.id}>
+                        <TableCell>
+                          {new Date(
+                            entry.tanggal || entry.date
+                          ).toLocaleDateString("id-ID")}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          <div>
+                            <div className="font-medium">
+                              {account?.accountCode || "N/A"}
+                            </div>
+                            <div className="text-gray-500 text-xs">
+                              {account?.accountName || "N/A"}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {entry.description || "No description"}
+                        </TableCell>
+                        <TableCell>{getTransactionBadge(entry)}</TableCell>
+                        <TableCell className="font-medium">
+                          {account?.valueType === "NOMINAL"
+                            ? formatCurrency(entry.nilai)
+                            : `${entry.nilai.toLocaleString("id-ID")} unit`}
+                        </TableCell>
+
+                        {/* ✅ CONDITIONAL: Additional data columns */}
+                        {divisionType === "PRODUKSI" && (
+                          <TableCell className="text-sm">
+                            {(entry as any).hppAmount
+                              ? formatCurrency((entry as any).hppAmount)
+                              : "-"}
+                          </TableCell>
+                        )}
+
+                        {divisionType === "PEMASARAN" && (
+                          <TableCell className="text-sm">
+                            <div className="space-y-1">
+                              <div className="text-blue-600">
+                                Target:{" "}
+                                {(entry as any).targetAmount
+                                  ? formatCurrency((entry as any).targetAmount)
+                                  : "-"}
+                              </div>
+                              <div className="text-green-600">
+                                Realisasi:{" "}
+                                {(entry as any).realisasiAmount
+                                  ? formatCurrency(
+                                      (entry as any).realisasiAmount
+                                    )
+                                  : "-"}
+                              </div>
+                            </div>
+                          </TableCell>
+                        )}
+
+                        {divisionType === "GUDANG" && (
+                          <TableCell className="text-sm">
+                            <div className="space-y-1">
+                              <div className="text-orange-600">
+                                Pakai:{" "}
+                                {(entry as any).pemakaianAmount
+                                  ? `${(entry as any).pemakaianAmount} unit`
+                                  : "-"}
+                              </div>
+                              <div className="text-purple-600">
+                                Stok:{" "}
+                                {(entry as any).stokAkhir
+                                  ? `${(entry as any).stokAkhir} unit`
+                                  : "-"}
+                              </div>
+                              {/* ✅ NEW: Show status if both values exist */}
+                              {(entry as any).pemakaianAmount &&
+                                (entry as any).stokAkhir && (
+                                  <div className="text-gray-500 text-xs">
+                                    Status:{" "}
+                                    {(entry as any).stokAkhir >= 100
+                                      ? "✅ Aman"
+                                      : "⚠️ Rendah"}
+                                  </div>
+                                )}
+                            </div>
+                          </TableCell>
+                        )}
+
+                        {/* ✅ NEW: HRD specific column */}
+                        {divisionType === "HRD" && (
+                          <TableCell className="text-sm">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <Users className="h-3 w-3 text-blue-500" />
+                                <span className="text-blue-600">
+                                  Status:{" "}
+                                  {(entry as any).attendanceStatus ||
+                                    "Belum dicatat"}
+                                </span>
+                              </div>
+                              {(entry as any).overtimeHours && (
+                                <div className="flex items-center gap-2">
+                                  <Clock className="h-3 w-3 text-purple-500" />
+                                  <span className="text-purple-600">
+                                    Lembur: {(entry as any).overtimeHours} jam
+                                  </span>
+                                </div>
+                              )}
+                              {/* ✅ Show shift info if available */}
+                              {(entry as any).shift && (
+                                <div className="text-gray-500 text-xs">
+                                  Shift: {(entry as any).shift}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
+
+                        <TableCell className="text-sm text-gray-500">
+                          {new Date(entry.createdAt).toLocaleString("id-ID")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="outline" size="sm">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
+
+            {filteredEntries.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                {entries.length === 0
+                  ? `Belum ada transaksi yang tercatat untuk divisi ${divisionType}`
+                  : "Tidak ada transaksi yang sesuai dengan filter"}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      {/* Transactions Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Daftar Transaksi</CardTitle>
-          <CardDescription>
-            {filteredEntries.length} entri ditemukan dari {entries.length} total
-            entri divisi {user?.division?.name}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tanggal</TableHead>
-                  <TableHead>Akun</TableHead>
-                  <TableHead>Keterangan</TableHead>
-                  <TableHead>Tipe</TableHead>
-                  <TableHead>Nominal</TableHead>
-                  <TableHead>Waktu Input</TableHead>
-                  <TableHead className="text-right">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredEntries.map((entry) => {
-                  const account = accounts.find(
-                    (acc: Account) => acc.id === entry.accountId
-                  );
-
-                  return (
-                    <TableRow key={entry.id}>
-                      <TableCell>
-                        {/* ✅ FIXED: Use correct date field */}
-                        {new Date(
-                          entry.tanggal || entry.date
-                        ).toLocaleDateString("id-ID")}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        <div>
-                          <div className="font-medium">
-                            {account?.accountCode || "N/A"}
-                          </div>
-                          <div className="text-gray-500 text-xs">
-                            {account?.accountName || "N/A"}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {entry.description || "No description"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge className="bg-blue-100 text-blue-800">
-                          {account?.valueType === "NOMINAL"
-                            ? "💰 Nominal"
-                            : "📦 Kuantitas"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {account?.valueType === "NOMINAL"
-                          ? formatCurrency(entry.nilai)
-                          : `${entry.nilai.toLocaleString("id-ID")} unit`}
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-500">
-                        {new Date(entry.createdAt).toLocaleString("id-ID")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="outline" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-
-          {filteredEntries.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              {entries.length === 0
-                ? "Belum ada transaksi yang tercatat untuk divisi ini"
-                : "Tidak ada transaksi yang sesuai dengan filter"}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+    </ClientErrorBoundary>
   );
 }

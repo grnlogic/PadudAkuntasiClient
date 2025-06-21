@@ -28,6 +28,7 @@ interface ApiResponse<T> {
 }
 
 // Request helper function
+// ✅ Enhanced error handling
 async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -53,14 +54,47 @@ async function apiRequest<T>(
     }
 
     if (!response.ok) {
-      // Handle specific error cases
-      if (response.status === 409 && data?.error === "CONSTRAINT_VIOLATION") {
-        throw new Error(data.message || "Constraint violation error");
-      }
+      // ✅ Enhanced error mapping
+      let errorMessage =
+        data?.message || data?.error || `HTTP ${response.status}`;
 
-      throw new Error(
-        data?.message || `HTTP error! status: ${response.status}`
-      );
+      switch (response.status) {
+        case 400:
+          if (
+            data?.error === "CONSTRAINT_VIOLATION" ||
+            errorMessage.toLowerCase().includes("duplicate")
+          ) {
+            throw new Error("DUPLICATE_ERROR: Data sudah ada atau duplikat");
+          } else if (errorMessage.toLowerCase().includes("validation")) {
+            throw new Error(`VALIDATION_ERROR: ${errorMessage}`);
+          }
+          throw new Error(`VALIDATION_ERROR: ${errorMessage}`);
+
+        case 401:
+          throw new Error(
+            "PERMISSION_ERROR: Sesi telah berakhir, silakan login ulang"
+          );
+
+        case 403:
+          throw new Error(
+            "PERMISSION_ERROR: Anda tidak memiliki izin untuk operasi ini"
+          );
+
+        case 404:
+          throw new Error("NOT_FOUND_ERROR: Data tidak ditemukan");
+
+        case 409:
+          throw new Error("DUPLICATE_ERROR: Konflik data atau duplikat");
+
+        case 500:
+          throw new Error("SERVER_ERROR: Terjadi masalah pada server");
+
+        default:
+          if (!navigator.onLine) {
+            throw new Error("NETWORK_ERROR: Tidak ada koneksi internet");
+          }
+          throw new Error(`SERVER_ERROR: ${errorMessage}`);
+      }
     }
 
     return {
@@ -69,9 +103,23 @@ async function apiRequest<T>(
       message: data?.message,
     };
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+
+    // ✅ Categorize errors properly
+    if (
+      errorMessage.includes("Failed to fetch") ||
+      errorMessage.includes("NetworkError")
+    ) {
+      return {
+        success: false,
+        error: "NETWORK_ERROR: Masalah koneksi ke server",
+      };
+    }
+
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: errorMessage,
     };
   }
 }

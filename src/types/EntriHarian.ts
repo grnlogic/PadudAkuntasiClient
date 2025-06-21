@@ -1,26 +1,48 @@
+// EntriHarian types with specialized division fields
 export interface EntriHarian {
   id: string;
   accountId: string;
-  date: string;
   tanggal: string;
+  date: string;
   nilai: number;
-  description: string;
+  description?: string;
   createdBy: string;
   createdAt: string;
+
+  // ✅ Specialized fields for different divisions
+  transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR";
+  targetAmount?: number;
+  realisasiAmount?: number;
+  hppAmount?: number;
+  pemakaianAmount?: number;
+  stokAkhir?: number;
+  // ✅ NEW: Keuangan saldo akhir
+  saldoAkhir?: number;
+
+  // ✅ NEW: HRD fields
+  attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
+  overtimeHours?: number;
+  shift?: "PAGI" | "SIANG" | "MALAM";
 }
 
-// ✅ UPDATE: Add specialized division fields
 export interface CreateEntriHarianRequest {
   accountId: number;
   tanggal: string;
   nilai: number;
-  description: string;
+  description?: string;
 
-  // ✅ NEW: Fields for division-specific data
-  transactionType?: "PENERIMAAN" | "PENGELUARAN"; // Keuangan
-  targetAmount?: number; // Pemasaran
-  realisasiAmount?: number; // Pemasaran
-  hppAmount?: number; // Produksi
-  pemakaianAmount?: number; // Gudang
-  stokAkhir?: number; // Gudang
+  // ✅ Specialized fields
+  transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR";
+  targetAmount?: number;
+  realisasiAmount?: number;
+  hppAmount?: number;
+  pemakaianAmount?: number;
+  stokAkhir?: number;
+  // ✅ NEW: Keuangan saldo akhir
+  saldoAkhir?: number;
+
+  // ✅ NEW: HRD fields
+  attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
+  overtimeHours?: number;
+  shift?: "PAGI" | "SIANG" | "MALAM";
 }
