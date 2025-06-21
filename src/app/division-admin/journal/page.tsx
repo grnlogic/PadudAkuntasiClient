@@ -167,6 +167,12 @@ export default function JournalPage() {
       }
     });
 
+    // ✅ NEW: Ambil saldo akhir terakhir
+    summary.totalSaldoAkhir = entries
+      .filter((e: any) => e.transactionType === "SALDO_AKHIR")
+      .map((e: any) => Number(e.saldoAkhir) || Number(e.nilai) || 0)
+      .pop() || 0; // Ambil saldo akhir terakhir
+
     console.log("🔍 Final summary:", summary);
     return summary;
   };

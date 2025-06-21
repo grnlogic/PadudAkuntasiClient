@@ -21,6 +21,7 @@ export interface Account {
 }
 
 export interface EntriHarian {
+  keterangan: string;
   date: string;
   id: string;
   accountId: string;
@@ -591,6 +592,7 @@ export const saveEntriHarianBatch = async (
         tanggal: entry.tanggalLaporan || entry.date || "",
         nilai: Number(entry.nilai) || 0,
         description: entry.description || "",
+        keterangan: entry.keterangan || entry.description || "", // Ensure keterangan is present
         createdBy: entry.user?.username || entry.createdBy || "system",
         createdAt: entry.createdAt || new Date().toISOString(),
       }));

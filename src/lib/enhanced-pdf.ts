@@ -533,11 +533,29 @@ function generateDetailsSection(data: PDFReportData): string {
 
       if (divisionName.includes("KEUANGAN")) {
         const transactionType = (entry as any).transactionType || "-";
-        const nilai = entry.nilai || 0;
+        // Ganti logika ini:
+        // const nilai = entry.nilai || 0;
+        // const saldoAkhir =
+        //   transactionType === "SALDO_AKHIR"
+        //     ? (entry as any).saldoAkhir || nilai
+        //     : "";
+        // dataCells = `
+        //   <td style="text-align: center;">${transactionType}</td>
+        //   <td style="text-align: right;">${formatCurrency(nilai)}</td>
+        //   <td style="text-align: right;">${
+        //     saldoAkhir !== "" ? formatCurrency(saldoAkhir) : "-"
+        //   }</td>
+        // `;
+
+        // Ganti dengan hanya satu kolom nominal:
+        const nominalValue =
+          transactionType === "SALDO_AKHIR"
+            ? (entry as any).saldoAkhir ?? entry.nilai
+            : entry.nilai;
         dataCells = `
-        <td style="text-align: center;">${transactionType}</td>
-        <td style="text-align: right;">${formatCurrency(nilai)}</td>
-      `;
+          <td style="text-align: center;">${transactionType}</td>
+          <td style="text-align: right;">${formatCurrency(nominalValue)}</td>
+        `;
       } else if (divisionName.includes("PEMASARAN")) {
         const target = (entry as any).targetAmount || 0;
         const realisasi = (entry as any).realisasiAmount || 0;

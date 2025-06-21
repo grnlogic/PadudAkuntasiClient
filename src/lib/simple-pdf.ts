@@ -522,7 +522,7 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
                 <th>Keterangan</th>
                 ${
                   data.divisionName.includes("KEUANGAN")
-                    ? "<th>Jenis Transaksi</th><th>Nilai</th><th>Saldo Akhir</th>"
+                    ? "<th>Jenis Transaksi</th><th>Nominal</th>"
                     : ""
                 }
                 ${
@@ -556,71 +556,22 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
             </thead>
             <tbody>
               ${data.entries
-                .map((entry, index) => {
-                  const account = data.accounts.find(
-                    (acc) => acc.id === entry.accountId
-                  );
-                  const accountDisplay = account
-                    ? `${account.accountCode} - ${account.accountName}`
-                    : "Akun tidak ditemukan";
-                  let cells = `
-                    <td>${index + 1}</td>
-                    <td>${accountDisplay}</td>
-                    <td>${entry.description || "-"}</td>
+                .map((entry, idx) => {
+                  const isSaldoAkhir = entry.transactionType === "SALDO_AKHIR";
+                  const nominalValue = isSaldoAkhir
+                    ? entry.saldoAkhir ?? entry.nilai
+                    : entry.nilai;
+                  return `
+                    <tr>
+                      <td>${idx + 1}</td>
+                      <td>${entry.accountId}</td>
+                      <td>${entry.keterangan || "-"}</td>
+                      <td>${entry.transactionType || "-"}</td>
+                      <td style="text-align: right;">
+                        ${formatCurrency(nominalValue)}
+                      </td>
+                    </tr>
                   `;
-                  if (data.divisionName.includes("KEUANGAN")) {
-                    cells += `
-                      <td>${(entry as any).transactionType || "-"}</td>
-                      <td class="currency">${formatCurrency(entry.nilai)}</td>
-                      <td class="currency">${
-                        (entry as any).saldoAkhir !== undefined
-                          ? formatCurrency((entry as any).saldoAkhir)
-                          : "-"
-                      }</td>
-                    `;
-                  } else if (data.divisionName.includes("PEMASARAN")) {
-                    const target = (entry as any).targetAmount || 0;
-                    const realisasi = (entry as any).realisasiAmount || 0;
-                    const achievement =
-                      target > 0
-                        ? ((realisasi / target) * 100).toFixed(1) + "%"
-                        : "-";
-                    cells += `
-                      <td class="currency">${formatCurrency(target)}</td>
-                      <td class="currency">${formatCurrency(realisasi)}</td>
-                      <td>${achievement}</td>
-                    `;
-                  } else if (data.divisionName.includes("PRODUKSI")) {
-                    const produksi = entry.nilai || 0;
-                    const hpp = (entry as any).hppAmount || 0;
-                    const hppPerUnit = produksi > 0 ? hpp / produksi : 0;
-                    cells += `
-                      <td>${produksi.toLocaleString("id-ID")}</td>
-                      <td class="currency">${formatCurrency(hpp)}</td>
-                      <td class="currency">${formatCurrency(hppPerUnit)}</td>
-                    `;
-                  } else if (data.divisionName.includes("GUDANG")) {
-                    const pemakaian = (entry as any).pemakaianAmount || 0;
-                    const stokAkhir = (entry as any).stokAkhir || 0;
-                    const status =
-                      stokAkhir < 100 ? "Stok Rendah" : "Stok Aman";
-                    cells += `
-                      <td>${pemakaian.toLocaleString("id-ID")}</td>
-                      <td>${stokAkhir.toLocaleString("id-ID")}</td>
-                      <td>${status}</td>
-                    `;
-                  } else if (data.divisionName.includes("HRD")) {
-                    cells += `
-                      <td>${(entry as any).attendanceStatus || "-"}</td>
-                      <td>${(entry as any).absentCount || 0} orang</td>
-                      <td>${(entry as any).shift || "-"}</td>
-                    `;
-                  } else {
-                    cells += `
-                      <td class="currency">${formatCurrency(entry.nilai)}</td>
-                    `;
-                  }
-                  return `<tr>${cells}</tr>`;
                 })
                 .join("")}
             </tbody>
