@@ -454,6 +454,13 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
                 } orang</td>
               </tr>
               <tr>
+                <td>Total Tidak Hadir</td>
+                <td>${data.entries.reduce((sum, entry) => {
+                  const absentCount = (entry as any).absentCount || 0;
+                  return sum + Number(absentCount);
+                }, 0)} orang</td>
+              </tr>
+              <tr>
                 <td>Tingkat Kehadiran</td>
                 <td>${(() => {
                   const totalKaryawan = data.entries.length;
@@ -467,11 +474,13 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
                 })()}</td>
               </tr>
               <tr>
-                <td>Total Jam Lembur</td>
-                <td>${data.entries.reduce((sum, entry) => {
-                  const overtime = (entry as any).overtimeHours || 0;
-                  return sum + Number(overtime);
-                }, 0)} jam</td>
+                <td>Shift Lembur</td>
+                <td>${
+                  data.entries.filter((entry) => {
+                    const shift = (entry as any).shift;
+                    return shift === "LEMBUR";
+                  }).length
+                } orang</td>
               </tr>
               <tr style="background-color: #ecf0f1; font-weight: bold;">
                 <td>Status Kehadiran</td>
@@ -511,25 +520,36 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
                 <th>No</th>
                 <th>Akun</th>
                 <th>Keterangan</th>
-                <th>Nilai</th>
                 ${
                   data.divisionName.includes("KEUANGAN")
-                    ? "<th>Jenis Transaksi</th><th>Saldo Akhir</th>"
+                    ? "<th>Jenis Transaksi</th><th>Nilai</th><th>Saldo Akhir</th>"
                     : ""
                 }
                 ${
                   data.divisionName.includes("PEMASARAN")
-                    ? "<th>Target</th><th>Realisasi</th><th>%</th>"
+                    ? "<th>Target</th><th>Realisasi</th><th>Achievement</th>"
                     : ""
                 }
                 ${
                   data.divisionName.includes("PRODUKSI")
-                    ? "<th>HPP Total</th><th>HPP/Unit</th>"
+                    ? "<th>Produksi</th><th>HPP</th><th>HPP/Unit</th>"
                     : ""
                 }
                 ${
                   data.divisionName.includes("GUDANG")
-                    ? "<th>Pemakaian</th><th>Stok Akhir</th>"
+                    ? "<th>Pemakaian</th><th>Stok Akhir</th><th>Status</th>"
+                    : ""
+                }
+                ${
+                  data.divisionName.includes("HRD")
+                    ? "<th>Status Kehadiran</th><th>Tidak Hadir</th><th>Shift</th>"
+                    : ""
+                }
+                ${
+                  !["KEUANGAN", "PEMASARAN", "PRODUKSI", "GUDANG", "HRD"].some(
+                    (d) => data.divisionName.toUpperCase().includes(d)
+                  )
+                    ? "<th>Nilai</th>"
                     : ""
                 }
               </tr>
@@ -543,77 +563,64 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
                   const accountDisplay = account
                     ? `${account.accountCode} - ${account.accountName}`
                     : "Akun tidak ditemukan";
-
-                  let additionalCells = "";
-                  const entryData = entry as any;
-                  if (data.divisionName.includes("KEUANGAN")) {
-                    additionalCells = `
-                    <td>${entryData.transactionType || "-"}</td>
-                    <td class="currency">${
-                      entryData.transactionType === "SALDO_AKHIR"
-                        ? formatCurrency(entryData.saldoAkhir || 0)
-                        : "-"
-                    }</td>
-                  `;
-                  } else if (data.divisionName.includes("PEMASARAN")) {
-                    const percentage =
-                      entryData.targetAmount && entryData.realisasiAmount
-                        ? (
-                            (entryData.realisasiAmount /
-                              entryData.targetAmount) *
-                            100
-                          ).toFixed(1) + "%"
-                        : "-";
-                    additionalCells = `
-                    <td class="currency">${
-                      entryData.targetAmount
-                        ? formatCurrency(entryData.targetAmount)
-                        : "-"
-                    }</td>
-                    <td class="currency">${
-                      entryData.realisasiAmount
-                        ? formatCurrency(entryData.realisasiAmount)
-                        : "-"
-                    }</td>
-                    <td>${percentage}</td>
-                  `;
-                  } else if (data.divisionName.includes("PRODUKSI")) {
-                    const hppPerUnit =
-                      entryData.hppAmount && entry.nilai > 0
-                        ? formatCurrency(entryData.hppAmount / entry.nilai)
-                        : "-";
-                    additionalCells = `
-                    <td class="currency">${
-                      entryData.hppAmount
-                        ? formatCurrency(entryData.hppAmount)
-                        : "-"
-                    }</td>
-                    <td class="currency">${hppPerUnit}</td>
-                  `;
-                  } else if (data.divisionName.includes("GUDANG")) {
-                    additionalCells = `
-                    <td class="currency">${
-                      entryData.pemakaianAmount
-                        ? formatCurrency(entryData.pemakaianAmount)
-                        : "-"
-                    }</td>
-                    <td class="currency">${
-                      entryData.stokAkhir
-                        ? formatCurrency(entryData.stokAkhir)
-                        : "-"
-                    }</td>
-                  `;
-                  }
-
-                  return `
-                  <tr>
+                  let cells = `
                     <td>${index + 1}</td>
                     <td>${accountDisplay}</td>
                     <td>${entry.description || "-"}</td>
-                    <td class="currency">${formatCurrency(entry.nilai)}</td>
-                    ${additionalCells}
-                  </tr>
-                `;
+                  `;
+                  if (data.divisionName.includes("KEUANGAN")) {
+                    cells += `
+                      <td>${(entry as any).transactionType || "-"}</td>
+                      <td class="currency">${formatCurrency(entry.nilai)}</td>
+                      <td class="currency">${
+                        (entry as any).saldoAkhir !== undefined
+                          ? formatCurrency((entry as any).saldoAkhir)
+                          : "-"
+                      }</td>
+                    `;
+                  } else if (data.divisionName.includes("PEMASARAN")) {
+                    const target = (entry as any).targetAmount || 0;
+                    const realisasi = (entry as any).realisasiAmount || 0;
+                    const achievement =
+                      target > 0
+                        ? ((realisasi / target) * 100).toFixed(1) + "%"
+                        : "-";
+                    cells += `
+                      <td class="currency">${formatCurrency(target)}</td>
+                      <td class="currency">${formatCurrency(realisasi)}</td>
+                      <td>${achievement}</td>
+                    `;
+                  } else if (data.divisionName.includes("PRODUKSI")) {
+                    const produksi = entry.nilai || 0;
+                    const hpp = (entry as any).hppAmount || 0;
+                    const hppPerUnit = produksi > 0 ? hpp / produksi : 0;
+                    cells += `
+                      <td>${produksi.toLocaleString("id-ID")}</td>
+                      <td class="currency">${formatCurrency(hpp)}</td>
+                      <td class="currency">${formatCurrency(hppPerUnit)}</td>
+                    `;
+                  } else if (data.divisionName.includes("GUDANG")) {
+                    const pemakaian = (entry as any).pemakaianAmount || 0;
+                    const stokAkhir = (entry as any).stokAkhir || 0;
+                    const status =
+                      stokAkhir < 100 ? "Stok Rendah" : "Stok Aman";
+                    cells += `
+                      <td>${pemakaian.toLocaleString("id-ID")}</td>
+                      <td>${stokAkhir.toLocaleString("id-ID")}</td>
+                      <td>${status}</td>
+                    `;
+                  } else if (data.divisionName.includes("HRD")) {
+                    cells += `
+                      <td>${(entry as any).attendanceStatus || "-"}</td>
+                      <td>${(entry as any).absentCount || 0} orang</td>
+                      <td>${(entry as any).shift || "-"}</td>
+                    `;
+                  } else {
+                    cells += `
+                      <td class="currency">${formatCurrency(entry.nilai)}</td>
+                    `;
+                  }
+                  return `<tr>${cells}</tr>`;
                 })
                 .join("")}
             </tbody>

@@ -77,10 +77,10 @@ interface JournalRow {
   hppAmount?: string; // For Produksi (paired with production)
   pemakaianAmount?: string; // For Gudang
   stokAkhir?: string; // For Gudang
-  // ✅ NEW: HRD fields
+  // ✅ NEW: HRD fields - Updated
   attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN"; // For HRD
-  overtimeHours?: string; // For HRD
-  shift?: "PAGI" | "SIANG" | "MALAM"; // For HRD
+  absentCount?: string; // For HRD - Jumlah tidak hadir (ganti dari overtimeHours)
+  shift?: "REGULER" | "LEMBUR"; // For HRD - Reguler (7-15) atau Lembur (15-20)
   // ✅ NEW: Keuangan field - Saldo Akhir
   saldoAkhir?: string; // For Keuangan
 }
@@ -105,7 +105,24 @@ export default function JournalPage() {
 
   // Form rows untuk input multiple entries
   const [journalRows, setJournalRows] = useState<JournalRow[]>([
-    { id: "1", accountId: "", keterangan: "", nominal: "", kuantitas: "" },
+    {
+      id: "1",
+      accountId: "",
+      keterangan: "",
+      nominal: "",
+      kuantitas: "",
+      // ✅ Initialize all optional fields to prevent controlled/uncontrolled warnings
+      transactionType: undefined,
+      targetAmount: "",
+      realisasiAmount: "",
+      hppAmount: "",
+      pemakaianAmount: "",
+      stokAkhir: "",
+      saldoAkhir: "",
+      attendanceStatus: undefined,
+      absentCount: "", // ✅ Initialize as empty string, not undefined
+      shift: undefined,
+    },
   ]);
 
   useEffect(() => {
@@ -207,14 +224,17 @@ export default function JournalPage() {
       keterangan: "",
       nominal: "",
       kuantitas: "",
-      // ✅ Initialize specialized fields
+      // ✅ Initialize specialized fields to prevent controlled/uncontrolled warnings
       transactionType: undefined,
       targetAmount: "",
       realisasiAmount: "",
       hppAmount: "",
       pemakaianAmount: "",
       stokAkhir: "",
-      saldoAkhir: "", // ✅ NEW: Initialize saldoAkhir
+      saldoAkhir: "",
+      attendanceStatus: undefined,
+      absentCount: "", // ✅ Initialize as empty string
+      shift: undefined,
     };
     setJournalRows([...journalRows, newRow]);
   };
@@ -410,12 +430,12 @@ export default function JournalPage() {
             pemakaianAmount: Number.parseFloat(row.pemakaianAmount),
           }),
           ...(row.stokAkhir && { stokAkhir: Number.parseFloat(row.stokAkhir) }),
-          // ✅ NEW: HRD fields
+          // ✅ NEW: HRD fields - Updated
           ...(row.attendanceStatus && {
             attendanceStatus: row.attendanceStatus,
           }),
-          ...(row.overtimeHours && {
-            overtimeHours: Number.parseFloat(row.overtimeHours),
+          ...(row.absentCount && {
+            absentCount: Number.parseFloat(row.absentCount),
           }),
           ...(row.shift && { shift: row.shift }),
           // ✅ NEW: Keuangan saldo akhir field
@@ -465,7 +485,10 @@ export default function JournalPage() {
           hppAmount: "",
           pemakaianAmount: "",
           stokAkhir: "",
-          saldoAkhir: "", // ✅ NEW: Reset saldoAkhir
+          saldoAkhir: "",
+          attendanceStatus: undefined,
+          absentCount: "",
+          shift: undefined,
         },
       ]);
 
@@ -915,7 +938,7 @@ export default function JournalPage() {
           </div>
         );
 
-      // ✅ NEW: HRD specialized input
+      // ✅ NEW: HRD specialized input - Updated
       case "HRD":
         // For employee accounts, show attendance status
         return (
@@ -945,23 +968,21 @@ export default function JournalPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-indigo-700 mb-1">
-                  <Clock className="inline h-3 w-3 mr-1" />
-                  Jam Lembur
+                  <Users className="inline h-3 w-3 mr-1" />
+                  Jumlah Tidak Hadir
                 </label>
                 <Input
                   type="number"
                   placeholder="0"
-                  value={row.overtimeHours}
+                  value={row.absentCount}
                   onChange={(e) =>
-                    updateRow(row.id, "overtimeHours", e.target.value)
+                    updateRow(row.id, "absentCount", e.target.value)
                   }
                   className="text-right text-sm"
                   min="0"
-                  max="12"
-                  step="0.5"
                 />
                 <div className="text-xs text-gray-500 mt-1">
-                  Jam (maksimal 12 jam)
+                  Orang yang tidak hadir
                 </div>
               </div>
               <div>
@@ -976,12 +997,11 @@ export default function JournalPage() {
                     <SelectValue placeholder="Pilih shift..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PAGI">🌅 Pagi (07:00-15:00)</SelectItem>
-                    <SelectItem value="SIANG">
-                      ☀️ Siang (15:00-23:00)
+                    <SelectItem value="REGULER">
+                      🌅 Reguler (07:00-15:00)
                     </SelectItem>
-                    <SelectItem value="MALAM">
-                      🌙 Malam (23:00-07:00)
+                    <SelectItem value="LEMBUR">
+                      ⏰ Lembur (15:00-20:00)
                     </SelectItem>
                   </SelectContent>
                 </Select>
@@ -1008,12 +1028,17 @@ export default function JournalPage() {
                             : "Tidak Hadir"
                         }`}
                   </div>
-                  {row.overtimeHours &&
-                    Number.parseFloat(row.overtimeHours) > 0 && (
-                      <div className="text-blue-600 mt-1">
-                        ⏰ Lembur: {row.overtimeHours} jam
+                  {row.absentCount &&
+                    Number.parseFloat(row.absentCount) > 0 && (
+                      <div className="text-red-600 mt-1">
+                        👥 Tidak Hadir: {row.absentCount} orang
                       </div>
                     )}
+                  {row.shift === "LEMBUR" && (
+                    <div className="text-blue-600 mt-1">
+                      ⏰ Shift Lembur (15:00-20:00)
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1025,7 +1050,7 @@ export default function JournalPage() {
     }
   };
 
-  // ✅ Debug: Log existing entries to check saldoAkhir field
+  // ✅ Debug: Log existing entries to check HRD field mapping
   useEffect(() => {
     if (existingEntries.length > 0) {
       console.log("🔍 EXISTING ENTRIES DEBUG:", existingEntries);
@@ -1035,12 +1060,38 @@ export default function JournalPage() {
           transactionType: (entry as any).transactionType,
           nilai: entry.nilai,
           saldoAkhir: (entry as any).saldoAkhir,
-          // ✅ ADDED: More debug info
+          // ✅ NEW: Debug HRD fields
+          attendanceStatus: (entry as any).attendanceStatus,
+          absentCount: (entry as any).absentCount,
+          shift: (entry as any).shift,
+          // ✅ Check if HRD data exists
+          hasHRDData: !!(
+            (entry as any).attendanceStatus ||
+            (entry as any).absentCount ||
+            (entry as any).shift
+          ),
           rawEntry: entry,
         });
       });
+
+      // ✅ NEW: Special HRD data summary
+      if (divisionType === "HRD") {
+        console.log("🎯 HRD DATA SUMMARY:", {
+          totalEntries: existingEntries.length,
+          hadirCount: existingEntries.filter(
+            (e) => (e as any).attendanceStatus === "HADIR"
+          ).length,
+          totalAbsent: existingEntries.reduce(
+            (sum, e) => sum + (Number((e as any).absentCount) || 0),
+            0
+          ),
+          lemburCount: existingEntries.filter(
+            (e) => (e as any).shift === "LEMBUR"
+          ).length,
+        });
+      }
     }
-  }, [existingEntries]);
+  }, [existingEntries, divisionType]);
 
   // ✅ Debug: Check if backend returns saldoAkhir field
   useEffect(() => {

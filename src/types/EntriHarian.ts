@@ -30,19 +30,19 @@ export interface CreateEntriHarianRequest {
   tanggal: string;
   nilai: number;
   description?: string;
-
-  // ✅ Specialized fields
+  // ✅ Keuangan fields
   transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR";
+  saldoAkhir?: number;
+  // ✅ Pemasaran fields
   targetAmount?: number;
   realisasiAmount?: number;
+  // ✅ Produksi fields
   hppAmount?: number;
+  // ✅ Gudang fields
   pemakaianAmount?: number;
   stokAkhir?: number;
-  // ✅ NEW: Keuangan saldo akhir
-  saldoAkhir?: number;
-
-  // ✅ NEW: HRD fields
+  // ✅ NEW: HRD fields - Fixed enum values
   attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
-  overtimeHours?: number;
-  shift?: "PAGI" | "SIANG" | "MALAM";
+  absentCount?: number;
+  shift?: "REGULER" | "LEMBUR"; // HRD shift values, different from production shift
 }

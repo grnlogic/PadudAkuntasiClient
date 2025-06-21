@@ -568,11 +568,11 @@ function generateDetailsSection(data: PDFReportData): string {
       `;
       } else if (divisionName.includes("HRD")) {
         const status = (entry as any).attendanceStatus || "-";
-        const overtime = (entry as any).overtimeHours || 0;
+        const absentCount = (entry as any).absentCount || 0;
         const shift = (entry as any).shift || "-";
         dataCells = `
         <td style="text-align: center;">${status}</td>
-        <td style="text-align: right;">${overtime} jam</td>
+        <td style="text-align: right;">${absentCount} orang</td>
         <td style="text-align: center;">${shift}</td>
       `;
       } else {

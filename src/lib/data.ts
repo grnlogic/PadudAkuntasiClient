@@ -38,6 +38,10 @@ export interface EntriHarian {
   stokAkhir?: number;
   // ✅ NEW: Keuangan saldo akhir
   saldoAkhir?: number;
+  // ✅ NEW: HRD fields
+  attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
+  absentCount?: number;
+  shift?: "REGULER" | "LEMBUR";
 }
 
 export interface AppUser {
@@ -358,6 +362,23 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
           ...(entry.saldo_akhir !== undefined && {
             saldoAkhir: Number(entry.saldo_akhir),
           }),
+
+          // ✅ NEW: Map HRD fields
+          ...(entry.attendanceStatus && {
+            attendanceStatus: entry.attendanceStatus,
+          }),
+          ...(entry.attendance_status && {
+            attendanceStatus: entry.attendance_status,
+          }),
+          ...(entry.absentCount !== undefined && {
+            absentCount: Number(entry.absentCount),
+          }),
+          ...(entry.absent_count !== undefined && {
+            absentCount: Number(entry.absent_count),
+          }),
+          ...(entry.shift && {
+            shift: entry.shift,
+          }),
         };
 
         // ✅ DEBUG: Log saldo akhir mapping
@@ -368,6 +389,28 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
             backendSaldo_akhir: entry.saldo_akhir,
             mappedSaldoAkhir: mappedEntry.saldoAkhir,
             transactionType: entry.transactionType || entry.transaction_type,
+          });
+        }
+
+        // ✅ NEW: Debug HRD field mapping
+        if (
+          entry.attendanceStatus ||
+          entry.attendance_status ||
+          entry.absentCount !== undefined ||
+          entry.absent_count !== undefined ||
+          entry.shift
+        ) {
+          console.log("🔍 HRD FIELD MAPPING (getEntriHarian):", {
+            entryId: entry.id,
+            backendAttendanceStatus: entry.attendanceStatus,
+            backend_attendance_status: entry.attendance_status,
+            backendAbsentCount: entry.absentCount,
+            backend_absent_count: entry.absent_count,
+            backendShift: entry.shift,
+            mappedAttendanceStatus: mappedEntry.attendanceStatus,
+            mappedAbsentCount: mappedEntry.absentCount,
+            mappedShift: mappedEntry.shift,
+            fullEntry: entry,
           });
         }
 
@@ -464,6 +507,23 @@ export const getEntriHarianByDate = async (
           ...(entry.saldo_akhir !== undefined && {
             saldoAkhir: Number(entry.saldo_akhir),
           }),
+
+          // ✅ NEW: Map HRD fields
+          ...(entry.attendanceStatus && {
+            attendanceStatus: entry.attendanceStatus,
+          }),
+          ...(entry.attendance_status && {
+            attendanceStatus: entry.attendance_status,
+          }),
+          ...(entry.absentCount !== undefined && {
+            absentCount: Number(entry.absentCount),
+          }),
+          ...(entry.absent_count !== undefined && {
+            absentCount: Number(entry.absent_count),
+          }),
+          ...(entry.shift && {
+            shift: entry.shift,
+          }),
         };
 
         // ✅ DEBUG: Log saldo akhir mapping for getEntriHarianByDate
@@ -475,6 +535,28 @@ export const getEntriHarianByDate = async (
             backendTransactionType: entry.transactionType,
             mappedSaldoAkhir: mappedEntry.saldoAkhir,
             mappedTransactionType: mappedEntry.transactionType,
+          });
+        }
+
+        // ✅ NEW: Debug HRD field mapping
+        if (
+          entry.attendanceStatus ||
+          entry.attendance_status ||
+          entry.absentCount !== undefined ||
+          entry.absent_count !== undefined ||
+          entry.shift
+        ) {
+          console.log("🔍 HRD FIELD MAPPING:", {
+            entryId: entry.id,
+            backendAttendanceStatus: entry.attendanceStatus,
+            backend_attendance_status: entry.attendance_status,
+            backendAbsentCount: entry.absentCount,
+            backend_absent_count: entry.absent_count,
+            backendShift: entry.shift,
+            mappedAttendanceStatus: mappedEntry.attendanceStatus,
+            mappedAbsentCount: mappedEntry.absentCount,
+            mappedShift: mappedEntry.shift,
+            fullEntry: entry,
           });
         }
 
