@@ -15,6 +15,8 @@ import {
   Clock, // ✅ Add Clock icon for attendance
   ArrowUpCircle, // ✅ Add for Penerimaan
   ArrowDownCircle, // ✅ Add for Pengeluaran
+  Download, // ✅ Add for PDF download
+  FileText, // ✅ Add for PDF preview
 } from "lucide-react";
 import ClientErrorBoundary from "@/components/client-error-boundary";
 import {
@@ -612,6 +614,58 @@ export default function JournalPage() {
   const divisionStyle = getDivisionStyle();
   const DivisionIcon = divisionStyle.icon;
 
+  // ✅ NEW: PDF Generation Functions
+  const generatePDFReport = () => {
+    try {
+      // Dynamic import to avoid SSR issues
+      import("@/lib/pdf-clean")
+        .then(({ downloadSimplePDF }) => {
+          const reportData = {
+            date: selectedDate,
+            divisionName: user?.division?.name || "UNKNOWN",
+            entries: existingEntries,
+            accounts: accounts,
+            ...(divisionType === "KEUANGAN" && { summary: keuanganSummary }),
+          };
+
+          downloadSimplePDF(reportData);
+          toastSuccess.custom("Jendela print PDF telah dibuka");
+        })
+        .catch((error) => {
+          console.error("PDF generation error:", error);
+          toastError.custom("Gagal generate PDF");
+        });
+    } catch (error) {
+      console.error("PDF error:", error);
+      toastError.custom("Terjadi kesalahan saat membuat PDF");
+    }
+  };
+
+  const previewPDFReport = () => {
+    try {
+      import("@/lib/pdf-clean")
+        .then(({ previewSimplePDF }) => {
+          const reportData = {
+            date: selectedDate,
+            divisionName: user?.division?.name || "UNKNOWN",
+            entries: existingEntries,
+            accounts: accounts,
+            ...(divisionType === "KEUANGAN" && { summary: keuanganSummary }),
+          };
+
+          previewSimplePDF(reportData);
+          toastSuccess.custom("Preview PDF telah dibuka di tab baru");
+        })
+        .catch((error) => {
+          console.error("PDF preview error:", error);
+          toastError.custom("Gagal preview PDF");
+        });
+    } catch (error) {
+      console.error("PDF preview error:", error);
+      toastError.custom("Terjadi kesalahan saat preview PDF");
+    }
+  };
+
   // ✅ Render specialized input based on division - IMPLEMENTASI LENGKAP
   const renderSpecializedInput = (
     row: JournalRow,
@@ -1001,32 +1055,56 @@ export default function JournalPage() {
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
               <DivisionIcon className="h-8 w-8 text-gray-600" />
               Jurnal {user?.division?.name}
-              <Badge className={`${divisionStyle.bg} text-white text-sm`}>
-                {divisionType}
-              </Badge>
             </h1>
             <p className="text-gray-600 mt-2">
-              {divisionType === "KEUANGAN" &&
-                "Kategorisasi Transaksi Kas & Keuangan"}
-              {divisionType === "PRODUKSI" &&
-                "Input Hasil Produksi & HPP Terintegrasi"}
-              {divisionType === "PEMASARAN" &&
-                "Pelacakan Target vs Realisasi Penjualan"}
-              {divisionType === "GUDANG" && "Pencatatan Pemakaian & Stok Akhir"}
-              {divisionType === "HRD" &&
-                "Pencatatan Kehadiran & Aktivitas Karyawan"}{" "}
-              {/* ✅ NEW */}
-              {divisionType === "GENERAL" && "Tambah Baru Data Jurnal"}
+              Pilih akun, jenis transaksi, dan masukkan nominal.{" "}
+              <span className="text-blue-600 font-medium">
+                Gunakan "Cetak PDF" untuk laporan ke atasan.
+              </span>
             </p>
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Calendar className="h-4 w-4" />
-            {new Date(selectedDate).toLocaleDateString("id-ID", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
+          <div className="flex items-center gap-4">
+            {/* PDF Actions - Only show if there are entries or for summary view */}
+            {(existingEntries.length > 0 ||
+              (divisionType === "KEUANGAN" &&
+                (keuanganSummary.totalPenerimaan > 0 ||
+                  keuanganSummary.totalPengeluaran > 0 ||
+                  keuanganSummary.totalSaldoAkhir > 0))) && (
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={previewPDFReport}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+                  disabled={loading}
+                  title="Preview laporan sebelum mencetak"
+                >
+                  <FileText className="h-4 w-4" />
+                  Preview Laporan
+                </Button>
+                <Button
+                  onClick={generatePDFReport}
+                  className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white"
+                  size="sm"
+                  disabled={loading}
+                  title="Cetak laporan untuk diserahkan ke atasan"
+                >
+                  <Download className="h-4 w-4" />
+                  Cetak PDF
+                </Button>
+              </div>
+            )}
+
+            {/* Date Info */}
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <Calendar className="h-4 w-4" />
+              {new Date(selectedDate).toLocaleDateString("id-ID", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </div>
           </div>
         </div>
 
