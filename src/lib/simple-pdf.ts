@@ -204,43 +204,298 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
         Dicetak pada: ${new Date().toLocaleString("id-ID")}
       </div>
       
-      ${
-        data.summary
-          ? `
-      <div class="summary-section">
-        <div class="summary-title">RINGKASAN TRANSAKSI</div>
-        <table class="summary-table">
-          <thead>
-            <tr>
-              <th>Keterangan</th>
-              <th>Jumlah</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Total Penerimaan</td>
-              <td>${formatCurrency(data.summary.totalPenerimaan)}</td>
-            </tr>
-            <tr>
-              <td>Total Pengeluaran</td>
-              <td>${formatCurrency(data.summary.totalPengeluaran)}</td>
-            </tr>
-            <tr>
-              <td>Total Saldo Akhir</td>
-              <td>${formatCurrency(data.summary.totalSaldoAkhir)}</td>
-            </tr>
-            <tr style="background-color: #ecf0f1; font-weight: bold;">
-              <td>Saldo Bersih</td>
-              <td>${formatCurrency(
-                data.summary.totalPenerimaan - data.summary.totalPengeluaran
-              )}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      `
-          : ""
-      }
+        {/* ✅ ENHANCED: Division-specific summary */}
+        ${
+          data.summary
+            ? `
+        <div class="summary-section">
+          <div class="summary-title">RINGKASAN TRANSAKSI KEUANGAN</div>
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>Keterangan</th>
+                <th>Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Total Penerimaan</td>
+                <td>${formatCurrency(data.summary.totalPenerimaan)}</td>
+              </tr>
+              <tr>
+                <td>Total Pengeluaran</td>
+                <td>${formatCurrency(data.summary.totalPengeluaran)}</td>
+              </tr>
+              <tr>
+                <td>Total Saldo Akhir</td>
+                <td>${formatCurrency(data.summary.totalSaldoAkhir)}</td>
+              </tr>
+              <tr style="background-color: #ecf0f1; font-weight: bold;">
+                <td>Saldo Bersih</td>
+                <td>${formatCurrency(
+                  data.summary.totalPenerimaan - data.summary.totalPengeluaran
+                )}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        `
+            : data.divisionName.includes("PEMASARAN")
+            ? `
+        <div class="summary-section">
+          <div class="summary-title">RINGKASAN PERFORMANCE PEMASARAN</div>
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>Metrik</th>
+                <th>Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Total Target</td>
+                <td>${formatCurrency(
+                  data.entries.reduce((sum, entry) => {
+                    const target = (entry as any).targetAmount || 0;
+                    return sum + Number(target);
+                  }, 0)
+                )}</td>
+              </tr>
+              <tr>
+                <td>Total Realisasi</td>
+                <td>${formatCurrency(
+                  data.entries.reduce((sum, entry) => {
+                    const realisasi = (entry as any).realisasiAmount || 0;
+                    return sum + Number(realisasi);
+                  }, 0)
+                )}</td>
+              </tr>
+              <tr>
+                <td>Achievement Rate</td>
+                <td>${(() => {
+                  const totalTarget = data.entries.reduce((sum, entry) => {
+                    const target = (entry as any).targetAmount || 0;
+                    return sum + Number(target);
+                  }, 0);
+                  const totalRealisasi = data.entries.reduce((sum, entry) => {
+                    const realisasi = (entry as any).realisasiAmount || 0;
+                    return sum + Number(realisasi);
+                  }, 0);
+                  const rate =
+                    totalTarget > 0 ? (totalRealisasi / totalTarget) * 100 : 0;
+                  return rate.toFixed(1) + "%";
+                })()}</td>
+              </tr>
+              <tr style="background-color: #ecf0f1; font-weight: bold;">
+                <td>Status</td>
+                <td>${(() => {
+                  const totalTarget = data.entries.reduce((sum, entry) => {
+                    const target = (entry as any).targetAmount || 0;
+                    return sum + Number(target);
+                  }, 0);
+                  const totalRealisasi = data.entries.reduce((sum, entry) => {
+                    const realisasi = (entry as any).realisasiAmount || 0;
+                    return sum + Number(realisasi);
+                  }, 0);
+                  const rate =
+                    totalTarget > 0 ? (totalRealisasi / totalTarget) * 100 : 0;
+                  return rate >= 100 ? "Target Tercapai" : "Belum Tercapai";
+                })()}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        `
+            : data.divisionName.includes("PRODUKSI")
+            ? `
+        <div class="summary-section">
+          <div class="summary-title">RINGKASAN PRODUKSI HARIAN</div>
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>Metrik</th>
+                <th>Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Total Produksi</td>
+                <td>${data.entries
+                  .reduce((sum, entry) => {
+                    return sum + Number(entry.nilai);
+                  }, 0)
+                  .toLocaleString("id-ID")} unit</td>
+              </tr>
+              <tr>
+                <td>Total HPP</td>
+                <td>${formatCurrency(
+                  data.entries.reduce((sum, entry) => {
+                    const hpp = (entry as any).hppAmount || 0;
+                    return sum + Number(hpp);
+                  }, 0)
+                )}</td>
+              </tr>
+              <tr>
+                <td>HPP per Unit</td>
+                <td>${(() => {
+                  const totalProduksi = data.entries.reduce((sum, entry) => {
+                    return sum + Number(entry.nilai);
+                  }, 0);
+                  const totalHPP = data.entries.reduce((sum, entry) => {
+                    const hpp = (entry as any).hppAmount || 0;
+                    return sum + Number(hpp);
+                  }, 0);
+                  const hppPerUnit =
+                    totalProduksi > 0 ? totalHPP / totalProduksi : 0;
+                  return formatCurrency(hppPerUnit);
+                })()}</td>
+              </tr>
+              <tr style="background-color: #ecf0f1; font-weight: bold;">
+                <td>Status Efisiensi</td>
+                <td>${(() => {
+                  const totalProduksi = data.entries.reduce((sum, entry) => {
+                    return sum + Number(entry.nilai);
+                  }, 0);
+                  const totalHPP = data.entries.reduce((sum, entry) => {
+                    const hpp = (entry as any).hppAmount || 0;
+                    return sum + Number(hpp);
+                  }, 0);
+                  const hppPerUnit =
+                    totalProduksi > 0 ? totalHPP / totalProduksi : 0;
+                  return hppPerUnit < 5000 ? "Efisien" : "Perlu Review";
+                })()}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        `
+            : data.divisionName.includes("GUDANG")
+            ? `
+        <div class="summary-section">
+          <div class="summary-title">RINGKASAN INVENTORI HARIAN</div>
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>Metrik</th>
+                <th>Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Total Pemakaian</td>
+                <td>${data.entries
+                  .reduce((sum, entry) => {
+                    const pemakaian = (entry as any).pemakaianAmount || 0;
+                    return sum + Number(pemakaian);
+                  }, 0)
+                  .toLocaleString("id-ID")} unit</td>
+              </tr>
+              <tr>
+                <td>Rata-rata Stok</td>
+                <td>${(() => {
+                  const validEntries = data.entries.filter(
+                    (entry) => (entry as any).stokAkhir != null
+                  );
+                  if (validEntries.length === 0) return "0 unit";
+                  const avgStok =
+                    validEntries.reduce((sum, entry) => {
+                      const stok = (entry as any).stokAkhir || 0;
+                      return sum + Number(stok);
+                    }, 0) / validEntries.length;
+                  return avgStok.toLocaleString("id-ID") + " unit";
+                })()}</td>
+              </tr>
+              <tr>
+                <td>Item Stok Rendah</td>
+                <td>${
+                  data.entries.filter((entry) => {
+                    const stok = (entry as any).stokAkhir || 0;
+                    return Number(stok) < 100;
+                  }).length
+                } item</td>
+              </tr>
+              <tr style="background-color: #ecf0f1; font-weight: bold;">
+                <td>Status Gudang</td>
+                <td>${(() => {
+                  const lowStockCount = data.entries.filter((entry) => {
+                    const stok = (entry as any).stokAkhir || 0;
+                    return Number(stok) < 100;
+                  }).length;
+                  return lowStockCount > 0 ? "Perlu Restock" : "Stok Aman";
+                })()}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        `
+            : data.divisionName.includes("HRD")
+            ? `
+        <div class="summary-section">
+          <div class="summary-title">RINGKASAN KEHADIRAN HARIAN</div>
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>Metrik</th>
+                <th>Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Total Karyawan</td>
+                <td>${data.entries.length} orang</td>
+              </tr>
+              <tr>
+                <td>Karyawan Hadir</td>
+                <td>${
+                  data.entries.filter((entry) => {
+                    const status = (entry as any).attendanceStatus;
+                    return status === "HADIR";
+                  }).length
+                } orang</td>
+              </tr>
+              <tr>
+                <td>Tingkat Kehadiran</td>
+                <td>${(() => {
+                  const totalKaryawan = data.entries.length;
+                  const hadirCount = data.entries.filter((entry) => {
+                    const status = (entry as any).attendanceStatus;
+                    return status === "HADIR";
+                  }).length;
+                  const rate =
+                    totalKaryawan > 0 ? (hadirCount / totalKaryawan) * 100 : 0;
+                  return rate.toFixed(1) + "%";
+                })()}</td>
+              </tr>
+              <tr>
+                <td>Total Jam Lembur</td>
+                <td>${data.entries.reduce((sum, entry) => {
+                  const overtime = (entry as any).overtimeHours || 0;
+                  return sum + Number(overtime);
+                }, 0)} jam</td>
+              </tr>
+              <tr style="background-color: #ecf0f1; font-weight: bold;">
+                <td>Status Kehadiran</td>
+                <td>${(() => {
+                  const totalKaryawan = data.entries.length;
+                  const hadirCount = data.entries.filter((entry) => {
+                    const status = (entry as any).attendanceStatus;
+                    return status === "HADIR";
+                  }).length;
+                  const rate =
+                    totalKaryawan > 0 ? (hadirCount / totalKaryawan) * 100 : 0;
+                  return rate >= 90
+                    ? "Excellent"
+                    : rate >= 80
+                    ? "Good"
+                    : "Needs Improvement";
+                })()}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        `
+            : ""
+        }
       
       <div class="details-section">
         <div class="details-title">DETAIL TRANSAKSI</div>

@@ -614,12 +614,12 @@ export default function JournalPage() {
   const divisionStyle = getDivisionStyle();
   const DivisionIcon = divisionStyle.icon;
 
-  // ✅ NEW: PDF Generation Functions
+  // ✅ ENHANCED: PDF Generation Functions with Division-Specific Features
   const generatePDFReport = () => {
     try {
       // Dynamic import to avoid SSR issues
-      import("@/lib/pdf-clean")
-        .then(({ downloadSimplePDF }) => {
+      import("@/lib/enhanced-pdf")
+        .then(({ downloadEnhancedPDF }) => {
           const reportData = {
             date: selectedDate,
             divisionName: user?.division?.name || "UNKNOWN",
@@ -628,7 +628,7 @@ export default function JournalPage() {
             ...(divisionType === "KEUANGAN" && { summary: keuanganSummary }),
           };
 
-          downloadSimplePDF(reportData);
+          downloadEnhancedPDF(reportData);
           toastSuccess.custom("Jendela print PDF telah dibuka");
         })
         .catch((error) => {
@@ -643,8 +643,8 @@ export default function JournalPage() {
 
   const previewPDFReport = () => {
     try {
-      import("@/lib/pdf-clean")
-        .then(({ previewSimplePDF }) => {
+      import("@/lib/enhanced-pdf")
+        .then(({ previewEnhancedPDF }) => {
           const reportData = {
             date: selectedDate,
             divisionName: user?.division?.name || "UNKNOWN",
@@ -653,7 +653,7 @@ export default function JournalPage() {
             ...(divisionType === "KEUANGAN" && { summary: keuanganSummary }),
           };
 
-          previewSimplePDF(reportData);
+          previewEnhancedPDF(reportData);
           toastSuccess.custom("Preview PDF telah dibuka di tab baru");
         })
         .catch((error) => {
@@ -1265,7 +1265,9 @@ export default function JournalPage() {
           </CardContent>
         </Card>
 
-        {/* ✅ NEW: Riwayat Transaksi Harian (Khusus Keuangan) */}
+        {/* ✅ ENHANCED: Summary Cards untuk Semua Divisi */}
+
+        {/* Summary untuk KEUANGAN */}
         {divisionType === "KEUANGAN" && (
           <Card>
             <CardHeader>
@@ -1344,6 +1346,421 @@ export default function JournalPage() {
                       keuanganSummary.totalPenerimaan -
                         keuanganSummary.totalPengeluaran
                     )}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ✅ NEW: Summary untuk PEMASARAN */}
+        {divisionType === "PEMASARAN" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Ringkasan Performance PEMASARAN
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                Target vs Realisasi penjualan untuk tanggal{" "}
+                {new Date(selectedDate).toLocaleDateString("id-ID")}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-5 w-5 text-blue-600" />
+                    <h3 className="font-semibold text-blue-800">
+                      Total Target
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-900 mt-2">
+                    {formatCurrency(
+                      existingEntries.reduce((sum, entry) => {
+                        const target = (entry as any).targetAmount || 0;
+                        return sum + Number(target);
+                      }, 0)
+                    )}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-green-600" />
+                    <h3 className="font-semibold text-green-800">
+                      Total Realisasi
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-green-900 mt-2">
+                    {formatCurrency(
+                      existingEntries.reduce((sum, entry) => {
+                        const realisasi = (entry as any).realisasiAmount || 0;
+                        return sum + Number(realisasi);
+                      }, 0)
+                    )}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5 text-orange-600" />
+                    <h3 className="font-semibold text-orange-800">
+                      Achievement Rate
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-orange-900 mt-2">
+                    {(() => {
+                      const totalTarget = existingEntries.reduce(
+                        (sum, entry) => {
+                          const target = (entry as any).targetAmount || 0;
+                          return sum + Number(target);
+                        },
+                        0
+                      );
+                      const totalRealisasi = existingEntries.reduce(
+                        (sum, entry) => {
+                          const realisasi = (entry as any).realisasiAmount || 0;
+                          return sum + Number(realisasi);
+                        },
+                        0
+                      );
+                      const rate =
+                        totalTarget > 0
+                          ? (totalRealisasi / totalTarget) * 100
+                          : 0;
+                      return rate.toFixed(1) + "%";
+                    })()}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="flex items-center gap-2">
+                    <Warehouse className="h-5 w-5 text-purple-600" />
+                    <h3 className="font-semibold text-purple-800">Status</h3>
+                  </div>
+                  <p className="text-lg font-bold text-purple-900 mt-2">
+                    {(() => {
+                      const totalTarget = existingEntries.reduce(
+                        (sum, entry) => {
+                          const target = (entry as any).targetAmount || 0;
+                          return sum + Number(target);
+                        },
+                        0
+                      );
+                      const totalRealisasi = existingEntries.reduce(
+                        (sum, entry) => {
+                          const realisasi = (entry as any).realisasiAmount || 0;
+                          return sum + Number(realisasi);
+                        },
+                        0
+                      );
+                      const rate =
+                        totalTarget > 0
+                          ? (totalRealisasi / totalTarget) * 100
+                          : 0;
+                      return rate >= 100 ? "Target Tercapai" : "Belum Tercapai";
+                    })()}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ✅ NEW: Summary untuk PRODUKSI */}
+        {divisionType === "PRODUKSI" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Ringkasan Produksi Harian
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                Hasil produksi dan HPP untuk tanggal{" "}
+                {new Date(selectedDate).toLocaleDateString("id-ID")}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-5 w-5 text-blue-600" />
+                    <h3 className="font-semibold text-blue-800">
+                      Total Produksi
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-900 mt-2">
+                    {existingEntries
+                      .reduce((sum, entry) => {
+                        return sum + Number(entry.nilai);
+                      }, 0)
+                      .toLocaleString("id-ID")}{" "}
+                    unit
+                  </p>
+                </div>
+
+                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5 text-orange-600" />
+                    <h3 className="font-semibold text-orange-800">Total HPP</h3>
+                  </div>
+                  <p className="text-2xl font-bold text-orange-900 mt-2">
+                    {formatCurrency(
+                      existingEntries.reduce((sum, entry) => {
+                        const hpp = (entry as any).hppAmount || 0;
+                        return sum + Number(hpp);
+                      }, 0)
+                    )}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-green-600" />
+                    <h3 className="font-semibold text-green-800">
+                      HPP per Unit
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-green-900 mt-2">
+                    {(() => {
+                      const totalProduksi = existingEntries.reduce(
+                        (sum, entry) => {
+                          return sum + Number(entry.nilai);
+                        },
+                        0
+                      );
+                      const totalHPP = existingEntries.reduce((sum, entry) => {
+                        const hpp = (entry as any).hppAmount || 0;
+                        return sum + Number(hpp);
+                      }, 0);
+                      const hppPerUnit =
+                        totalProduksi > 0 ? totalHPP / totalProduksi : 0;
+                      return formatCurrency(hppPerUnit);
+                    })()}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="flex items-center gap-2">
+                    <Warehouse className="h-5 w-5 text-purple-600" />
+                    <h3 className="font-semibold text-purple-800">Efisiensi</h3>
+                  </div>
+                  <p className="text-lg font-bold text-purple-900 mt-2">
+                    {(() => {
+                      const totalProduksi = existingEntries.reduce(
+                        (sum, entry) => {
+                          return sum + Number(entry.nilai);
+                        },
+                        0
+                      );
+                      const totalHPP = existingEntries.reduce((sum, entry) => {
+                        const hpp = (entry as any).hppAmount || 0;
+                        return sum + Number(hpp);
+                      }, 0);
+                      const hppPerUnit =
+                        totalProduksi > 0 ? totalHPP / totalProduksi : 0;
+                      return hppPerUnit < 5000 ? "Efisien" : "Review";
+                    })()}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ✅ NEW: Summary untuk GUDANG */}
+        {divisionType === "GUDANG" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Warehouse className="h-5 w-5" />
+                Ringkasan Inventori Harian
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                Pemakaian dan stok untuk tanggal{" "}
+                {new Date(selectedDate).toLocaleDateString("id-ID")}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-5 w-5 text-blue-600" />
+                    <h3 className="font-semibold text-blue-800">
+                      Total Pemakaian
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-900 mt-2">
+                    {existingEntries
+                      .reduce((sum, entry) => {
+                        const pemakaian = (entry as any).pemakaianAmount || 0;
+                        return sum + Number(pemakaian);
+                      }, 0)
+                      .toLocaleString("id-ID")}{" "}
+                    unit
+                  </p>
+                </div>
+
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2">
+                    <Warehouse className="h-5 w-5 text-green-600" />
+                    <h3 className="font-semibold text-green-800">
+                      Rata-rata Stok
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-green-900 mt-2">
+                    {(() => {
+                      const validEntries = existingEntries.filter(
+                        (entry) => (entry as any).stokAkhir != null
+                      );
+                      if (validEntries.length === 0) return "0 unit";
+                      const avgStok =
+                        validEntries.reduce((sum, entry) => {
+                          const stok = (entry as any).stokAkhir || 0;
+                          return sum + Number(stok);
+                        }, 0) / validEntries.length;
+                      return avgStok.toLocaleString("id-ID") + " unit";
+                    })()}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-5 w-5 text-orange-600" />
+                    <h3 className="font-semibold text-orange-800">
+                      Item Stok Rendah
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-orange-900 mt-2">
+                    {
+                      existingEntries.filter((entry) => {
+                        const stok = (entry as any).stokAkhir || 0;
+                        return Number(stok) < 100;
+                      }).length
+                    }{" "}
+                    item
+                  </p>
+                </div>
+
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-purple-600" />
+                    <h3 className="font-semibold text-purple-800">
+                      Status Gudang
+                    </h3>
+                  </div>
+                  <p className="text-lg font-bold text-purple-900 mt-2">
+                    {(() => {
+                      const lowStockCount = existingEntries.filter((entry) => {
+                        const stok = (entry as any).stokAkhir || 0;
+                        return Number(stok) < 100;
+                      }).length;
+                      return lowStockCount > 0 ? "Perlu Restock" : "Stok Aman";
+                    })()}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ✅ NEW: Summary untuk HRD */}
+        {divisionType === "HRD" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Ringkasan Kehadiran Harian
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                Status kehadiran karyawan untuk tanggal{" "}
+                {new Date(selectedDate).toLocaleDateString("id-ID")}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-green-600" />
+                    <h3 className="font-semibold text-green-800">
+                      Karyawan Hadir
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-green-900 mt-2">
+                    {
+                      existingEntries.filter((entry) => {
+                        const status = (entry as any).attendanceStatus;
+                        return status === "HADIR";
+                      }).length
+                    }{" "}
+                    orang
+                  </p>
+                </div>
+
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-blue-600" />
+                    <h3 className="font-semibold text-blue-800">
+                      Tingkat Kehadiran
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-900 mt-2">
+                    {(() => {
+                      const totalKaryawan = existingEntries.length;
+                      const hadirCount = existingEntries.filter((entry) => {
+                        const status = (entry as any).attendanceStatus;
+                        return status === "HADIR";
+                      }).length;
+                      const rate =
+                        totalKaryawan > 0
+                          ? (hadirCount / totalKaryawan) * 100
+                          : 0;
+                      return rate.toFixed(1) + "%";
+                    })()}
+                  </p>
+                </div>
+
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-purple-600" />
+                    <h3 className="font-semibold text-purple-800">
+                      Total Jam Lembur
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-purple-900 mt-2">
+                    {existingEntries.reduce((sum, entry) => {
+                      const overtime = (entry as any).overtimeHours || 0;
+                      return sum + Number(overtime);
+                    }, 0)}{" "}
+                    jam
+                  </p>
+                </div>
+
+                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                  <div className="flex items-center gap-2">
+                    <Warehouse className="h-5 w-5 text-orange-600" />
+                    <h3 className="font-semibold text-orange-800">
+                      Status Kehadiran
+                    </h3>
+                  </div>
+                  <p className="text-lg font-bold text-orange-900 mt-2">
+                    {(() => {
+                      const totalKaryawan = existingEntries.length;
+                      const hadirCount = existingEntries.filter((entry) => {
+                        const status = (entry as any).attendanceStatus;
+                        return status === "HADIR";
+                      }).length;
+                      const rate =
+                        totalKaryawan > 0
+                          ? (hadirCount / totalKaryawan) * 100
+                          : 0;
+                      return rate >= 90
+                        ? "Excellent"
+                        : rate >= 80
+                        ? "Good"
+                        : "Needs Improvement";
+                    })()}
                   </p>
                 </div>
               </div>
