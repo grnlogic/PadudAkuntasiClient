@@ -162,20 +162,20 @@ export default function LoginPage() {
                     <p className="font-medium text-gray-900">Fajar</p>
                     <p className="text-xs text-gray-600">Developer</p>
                   </div>
-                  <Button
+                    <Button
                     variant="outline"
                     size="sm"
                     className="text-blue-600 border-blue-200 hover:bg-blue-50 text-xs px-2 py-1"
                     onClick={() =>
                       window.open(
-                        `https://wa.me/6281395195039?text=Halo%20Fajar%2C%20saya%20mengalami%20kendala%20teknis%20dengan%20sistem%20akuntansi.%20Mohon%20bantuan%20untuk%20mengatasi%20masalah%20ini.`,
-                        "_blank"
+                      `https://wa.me/6281395195039?text=Halo%20Fajar%2C%20saya%20ingin%20menambahkan%20akun%20baru%20pada%20sistem%20akuntansi.%20Mohon%20bantuan%20untuk%20proses%20penambahan%20akun.`,
+                      "_blank"
                       )
                     }
-                  >
+                    >
                     <MessageCircle className="h-3 w-3 mr-1" />
                     WA
-                  </Button>
+                    </Button>
                 </div>
               </div>
             </div>
