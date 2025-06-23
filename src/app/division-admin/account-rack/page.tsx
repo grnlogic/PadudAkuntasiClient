@@ -105,7 +105,7 @@ export default function AccountRackPage() {
       "KEUANGAN & ADMINISTRASI": "1",
       "PEMASARAN & PENJUALAN": "2",
       PRODUKSI: "3",
-      "DISTRIBUSI & GUDANG": "4",
+      "BLENDING": "4",
       HRD: "5",
     };
 

@@ -25,9 +25,9 @@ const defaultDivisions: Division[] = [
     createdAt: new Date().toISOString(),
   },
   {
-    id: "4",
-    name: "DISTRIBUSI & GUDANG",
-    description: "Divisi distribusi dan pengelolaan gudang",
+    id: "10",
+    name: "BLENDING",
+    description: "Divisi blending",
     isActive: true,
     createdAt: new Date().toISOString(),
   },

@@ -335,7 +335,7 @@ export default function JournalPage() {
         const hasSpecificData =
           (divisionType === "PEMASARAN" &&
             (row.targetAmount || row.realisasiAmount)) ||
-          (divisionType === "PRODUKSI" && row.kuantitas && row.hppAmount) ||
+          (divisionType === "BLENDING" && row.kuantitas && row.hppAmount) ||
           (divisionType === "GUDANG" &&
             (row.pemakaianAmount || row.stokAkhir)) ||
           (divisionType === "HRD" && row.attendanceStatus); // ✅ NEW: HRD validation
@@ -394,7 +394,7 @@ export default function JournalPage() {
               // ✅ FIXED: Untuk keuangan selalu gunakan nominal
               nilai = Number.parseFloat(row.nominal || "0");
               break;
-            case "PRODUKSI":
+            case "BLENDING":
               nilai = Number.parseFloat(row.kuantitas || "0");
               break;
             case "GUDANG":
@@ -570,7 +570,7 @@ export default function JournalPage() {
   const getDivisionType = () => {
     const divisionName = user?.division?.name?.toLowerCase();
     if (divisionName?.includes("keuangan")) return "KEUANGAN";
-    if (divisionName?.includes("produksi")) return "PRODUKSI";
+    if (divisionName?.includes("blending")) return "BLENDING"; // ✅ ADD: Blending division detection
     if (
       divisionName?.includes("pemasaran") ||
       divisionName?.includes("marketing")
@@ -606,7 +606,7 @@ export default function JournalPage() {
           hover: "hover:bg-blue-700",
           icon: DollarSign,
         };
-      case "PRODUKSI":
+      case "BLENDING":
         return {
           bg: "bg-green-600",
           hover: "hover:bg-green-700",
@@ -782,15 +782,15 @@ export default function JournalPage() {
         }
         break;
 
-      case "PRODUKSI":
-        // For production accounts, show production + HPP input
+      case "BLENDING":
+        // For blending accounts, show blending + HPP input
         return (
           <div className="col-span-12 mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
                   <Package className="inline h-3 w-3 mr-1" />
-                  Hasil Produksi
+                  Hasil Blending
                 </label>
                 <Input
                   type="number"
@@ -1191,8 +1191,8 @@ export default function JournalPage() {
             <CardDescription>
               {divisionType === "KEUANGAN" &&
                 "Pilih akun kas, tentukan jenis transaksi (Penerimaan/Pengeluaran), dan masukkan nominal"}
-              {divisionType === "PRODUKSI" &&
-                "Input hasil produksi dan HPP dalam satu formulir terintegrasi"}
+              {divisionType === "BLENDING" &&
+                "Input hasil blending dan HPP dalam satu formulir terintegrasi"}
               {divisionType === "PEMASARAN" &&
                 "Catat target dan realisasi penjualan untuk monitoring kinerja"}
               {divisionType === "GUDANG" &&
@@ -1291,8 +1291,8 @@ export default function JournalPage() {
                   ADD{" "}
                   {divisionType === "KEUANGAN"
                     ? "TRANSAKSI"
-                    : divisionType === "PRODUKSI"
-                    ? "PRODUKSI"
+                    : divisionType === "BLENDING"
+                    ? "BLENDING"
                     : divisionType === "PEMASARAN"
                     ? "PENJUALAN"
                     : divisionType === "GUDANG"
@@ -1525,13 +1525,13 @@ export default function JournalPage() {
           </Card>
         )}
 
-        {/* ✅ NEW: Summary untuk PRODUKSI */}
-        {divisionType === "PRODUKSI" && (
+        {/* ✅ NEW: Summary untuk BLENDING */}
+        {divisionType === "BLENDING" && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                Ringkasan Produksi Harian
+                Ringkasan Blending Harian
               </CardTitle>
               <p className="text-sm text-gray-600">
                 Hasil produksi dan HPP untuk tanggal{" "}

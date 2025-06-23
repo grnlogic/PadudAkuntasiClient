@@ -2,8 +2,7 @@ import type { CreateEntriHarianRequest } from "@/types/EntriHarian";
 
 // Updated data.ts to use API calls instead of localStorage
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 // Keep interfaces for type safety
 export interface Account {

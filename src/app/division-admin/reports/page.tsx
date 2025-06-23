@@ -125,7 +125,7 @@ export default function ReportsPage() {
     if (
       divisionName?.includes("gudang") ||
       divisionName?.includes("warehouse") ||
-      divisionName?.includes("distribusi")
+      divisionName?.includes("Blending")
     )
       return "GUDANG";
     if (
@@ -742,69 +742,7 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {/* Debug Info Card */}
-        <Card className="bg-gray-50 border-gray-200">
-          <CardHeader>
-            <CardTitle className="text-sm text-gray-700">
-              Debug Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xs space-y-1 font-mono">
-              <div>
-                <strong>User:</strong> {user?.username} (ID: {user?.id})
-              </div>
-              <div>
-                <strong>Division:</strong> {user?.division?.name} (ID:{" "}
-                {user?.division?.id})
-              </div>
-              <div>
-                <strong>Accounts loaded:</strong> {accounts.length}
-              </div>
-              <div>
-                <strong>Total entries:</strong> {entries.length}
-              </div>
-              <div>
-                <strong>Report data items:</strong> {reportData.length}
-              </div>
-              <div>
-                <strong>Report type:</strong> {reportType}
-              </div>
-              <div>
-                <strong>Selected month:</strong> {selectedMonth}
-              </div>
-
-              <div className="mt-2">
-                <strong>Sample Accounts:</strong>
-              </div>
-              {accounts.slice(0, 3).map((acc, i) => (
-                <div key={i} className="pl-2">
-                  • {acc.accountCode} - {acc.accountName} (ID: {acc.id})
-                </div>
-              ))}
-
-              <div className="mt-2">
-                <strong>Sample Entries:</strong>
-              </div>
-              {entries.slice(0, 3).map((entry, i) => (
-                <div key={i} className="pl-2">
-                  • Entry {entry.id}: Account {entry.accountId}, Date:{" "}
-                  {entry.tanggal || entry.date}, Amount: {entry.nilai}
-                </div>
-              ))}
-
-              <div className="mt-2">
-                <strong>Sample Report Data:</strong>
-              </div>
-              {reportData.slice(0, 3).map((item, i) => (
-                <div key={i} className="pl-2">
-                  • {item.accountCode}: Debet {item.debet}, Transactions{" "}
-                  {item.transactions}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        
 
         {/* Report Filters */}
         <Card>
