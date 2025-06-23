@@ -183,7 +183,7 @@ export const accountsAPI = {
       throw new Error("Division is required");
     }
 
-    return apiRequest<any>("/accounts", {
+    return apiRequest<any>("/api/v1/accounts", {
       method: "POST",
       body: JSON.stringify(backendAccount),
     });
@@ -211,7 +211,7 @@ export const accountsAPI = {
 
   delete: async (id: string) => {
     const numericId = parseInt(id);
-    return apiRequest(`/accounts/${numericId}`, {
+    return apiRequest(`/api/v1/accounts/${numericId}`, {
       method: "DELETE",
     });
   },
@@ -224,7 +224,7 @@ export const usersAPI = {
   },
 
   create: async (user: any) => {
-    return apiRequest<any>("/users", {
+    return apiRequest<any>("/api/v1/users", {
       method: "POST",
       body: JSON.stringify(user),
     });
@@ -238,7 +238,7 @@ export const usersAPI = {
   },
 
   delete: async (id: string) => {
-    return apiRequest(`/users/${id}`, {
+    return apiRequest(`/api/v1/users/${id}`, {
       method: "DELETE",
     });
   },
@@ -251,7 +251,7 @@ export const divisionsAPI = {
   },
 
   create: async (division: any) => {
-    return apiRequest<any>("/divisions", {
+    return apiRequest<any>("/api/v1/divisions", {
       method: "POST",
       body: JSON.stringify(division),
     });
@@ -265,7 +265,7 @@ export const divisionsAPI = {
   },
 
   delete: async (id: string) => {
-    return apiRequest(`/divisions/${id}`, {
+    return apiRequest(`/api/v1/divisions/${id}`, {
       method: "DELETE",
     });
   },
@@ -278,7 +278,7 @@ export const entriesAPI = {
   },
 
   getByDate: async (date: string) => {
-    return await apiRequest<any[]>(`/entri-harian/date/${date}`);
+    return await apiRequest<any[]>(`/api/v1/entri-harian/date/${date}`);
   },
 
   getByDivision: async (divisionId: string) => {
@@ -290,7 +290,7 @@ export const entriesAPI = {
   },
 
   create: async (entry: CreateEntriHarianRequest) => {
-    return await apiRequest<any>("/entri-harian", {
+    return await apiRequest<any>("/api/v1/entri-harian", {
       method: "POST",
       body: JSON.stringify(entry),
     });
@@ -304,7 +304,7 @@ export const entriesAPI = {
   },
 
   update: async (id: string, updates: CreateEntriHarianRequest) => {
-    return await apiRequest<any>(`/entri-harian/${id}`, {
+    return await apiRequest<any>(`/api/v1/entri-harian/${id}`, {
       method: "PUT",
       body: JSON.stringify(updates),
     });
