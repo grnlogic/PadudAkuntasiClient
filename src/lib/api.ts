@@ -129,33 +129,33 @@ export const authAPI = {
     return apiRequest<{
       user: any;
       token: string;
-    }>("/auth/login", {
+    }>("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
   },
 
   logout: async () => {
-    return apiRequest("/auth/logout", {
+    return apiRequest("/api/v1/auth/logout", {
       method: "POST",
     });
   },
 
   getCurrentUser: async () => {
-    return apiRequest<any>("/auth/me");
+    return apiRequest<any>("/api/v1/auth/me");
   },
 };
 
 // Accounts (COA) API - sesuaikan dengan backend endpoint
 export const accountsAPI = {
   getAll: async () => {
-    return apiRequest<any[]>("/accounts");
+    return apiRequest<any[]>("/api/v1/accounts");
   },
 
   getByDivision: async (divisionId: string | number) => {
     const numericId =
       typeof divisionId === "string" ? parseInt(divisionId) : divisionId;
-    return apiRequest<any[]>(`/accounts/by-division/${numericId}`);
+    return apiRequest<any[]>(`/api/v1/accounts/by-division/${numericId}`);
   },
 
   create: async (account: any) => {
@@ -203,7 +203,7 @@ export const accountsAPI = {
       }),
     };
 
-    return apiRequest<any>(`/accounts/${numericId}`, {
+    return apiRequest<any>(`/api/v1/accounts/${numericId}`, {
       method: "PUT",
       body: JSON.stringify(backendUpdates),
     });
@@ -220,7 +220,7 @@ export const accountsAPI = {
 // Users API (untuk yang belum ada endpoint)
 export const usersAPI = {
   getAll: async () => {
-    return apiRequest<any[]>("/users");
+    return apiRequest<any[]>("/api/v1/users");
   },
 
   create: async (user: any) => {
@@ -231,7 +231,7 @@ export const usersAPI = {
   },
 
   update: async (id: string, updates: any) => {
-    return apiRequest<any>(`/users/${id}`, {
+    return apiRequest<any>(`/api/v1/users/${id}`, {
       method: "PUT",
       body: JSON.stringify(updates),
     });
@@ -247,7 +247,7 @@ export const usersAPI = {
 // Divisions API (untuk yang belum ada endpoint)
 export const divisionsAPI = {
   getAll: async () => {
-    return apiRequest<any[]>("/divisions");
+    return apiRequest<any[]>("/api/v1/divisions");
   },
 
   create: async (division: any) => {
@@ -258,7 +258,7 @@ export const divisionsAPI = {
   },
 
   update: async (id: string, updates: any) => {
-    return apiRequest<any>(`/divisions/${id}`, {
+    return apiRequest<any>(`/api/v1/divisions/${id}`, {
       method: "PUT",
       body: JSON.stringify(updates),
     });
@@ -274,7 +274,7 @@ export const divisionsAPI = {
 // Entri Harian API (untuk yang belum ada endpoint)
 export const entriesAPI = {
   getAll: async () => {
-    return await apiRequest<any[]>("/entri-harian");
+    return await apiRequest<any[]>("/api/v1/entri-harian");
   },
 
   getByDate: async (date: string) => {
@@ -282,11 +282,11 @@ export const entriesAPI = {
   },
 
   getByDivision: async (divisionId: string) => {
-    return await apiRequest<any[]>(`/entri-harian/division/${divisionId}`);
+    return await apiRequest<any[]>(`/api/v1/entri-harian/division/${divisionId}`);
   },
 
   getById: async (id: string) => {
-    return await apiRequest<any>(`/entri-harian/${id}`);
+    return await apiRequest<any>(`/api/v1/entri-harian/${id}`);
   },
 
   create: async (entry: CreateEntriHarianRequest) => {
@@ -297,7 +297,7 @@ export const entriesAPI = {
   },
 
   createBatch: async (entries: CreateEntriHarianRequest[]) => {
-    return await apiRequest<any[]>("/entri-harian/batch", {
+    return await apiRequest<any[]>("/api/v1/entri-harian/batch", {
       method: "POST",
       body: JSON.stringify(entries),
     });
@@ -311,7 +311,7 @@ export const entriesAPI = {
   },
 
   delete: async (id: string) => {
-    return await apiRequest(`/entri-harian/${id}`, {
+    return await apiRequest(`/api/v1/entri-harian/${id}`, {
       method: "DELETE",
     });
   },
