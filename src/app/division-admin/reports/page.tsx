@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getPiutangTransaksi, getUtangTransaksi } from "@/lib/data";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -83,14 +84,73 @@ export default function ReportsPage() {
 
       // Load ALL entries from backend
       const allEntries = await getEntriHarian();
-      console.log("All entries from backend:", allEntries.length, allEntries);
+      const allPiutang = await getPiutangTransaksi();
+      const allUtang = await getUtangTransaksi();
+
+      // Mapping piutang agar mirip entri harian
+      const piutangAccount = accountsData.find((acc) =>
+        acc.accountName.toLowerCase().includes("piutang")
+      );
+
+      const mappedPiutang = (allPiutang || []).map((p: any) => ({
+        id: p.id,
+        tanggal: p.tanggal_transaksi || p.tanggalTransaksi || "",
+        accountId: piutangAccount ? piutangAccount.id : "PIUTANG",
+        nilai: p.nominal,
+        description: p.keterangan,
+        transactionType: p.tipe_transaksi || p.tipeTransaksi || "",
+        createdAt:
+          p.created_at ||
+          p.createdAt ||
+          p.tanggal_transaksi ||
+          p.tanggalTransaksi ||
+          "",
+        keterangan: p.keterangan,
+        date: p.tanggal_transaksi || p.tanggalTransaksi || "",
+        createdBy: p.user?.username || "system",
+      }));
+
+      // ✅ NEW: Mapping utang agar mirip entri harian
+      const utangAccount = accountsData.find(
+        (acc) =>
+          acc.accountName.toLowerCase().includes("utang") ||
+          acc.accountName.toLowerCase().includes("hutang")
+      );
+
+      const mappedUtang = (allUtang || []).map((u: any) => ({
+        id: u.id,
+        tanggal: u.tanggal_transaksi || u.tanggalTransaksi || "",
+        accountId: utangAccount ? utangAccount.id : "UTANG",
+        nilai: u.nominal,
+        description: u.keterangan,
+        transactionType: u.tipe_transaksi || u.tipeTransaksi || "",
+        createdAt:
+          u.created_at ||
+          u.createdAt ||
+          u.tanggal_transaksi ||
+          u.tanggalTransaksi ||
+          "",
+        keterangan: u.keterangan,
+        date: u.tanggal_transaksi || u.tanggalTransaksi || "",
+        createdBy: u.user?.username || "system",
+      }));
+
+      // Gabungkan entri harian, piutang, dan utang
+      const allCombinedEntries = [
+        ...allEntries,
+        ...mappedPiutang,
+        ...mappedUtang,
+      ];
 
       // Filter entries by current division's accounts
       const accountIds = accountsData.map((acc) => acc.id);
       console.log("Account IDs for division:", accountIds);
 
-      const divisionEntries = allEntries.filter((entry) => {
-        const belongs = accountIds.includes(entry.accountId);
+      const divisionEntries = allCombinedEntries.filter((entry) => {
+        const belongs =
+          accountIds.includes(entry.accountId) ||
+          entry.accountId === "PIUTANG" ||
+          entry.accountId === "UTANG";
         console.log(
           `Entry ${entry.id} (accountId: ${entry.accountId}) belongs to division:`,
           belongs
@@ -312,9 +372,6 @@ export default function ReportsPage() {
             }
             grouped[key].saldoBersih =
               grouped[key].penerimaan - grouped[key].pengeluaran;
-            console.log(
-              `KEUANGAN - Updated ${key}: penerimaan=${grouped[key].penerimaan}, pengeluaran=${grouped[key].pengeluaran}, saldo=${grouped[key].saldoBersih}`
-            );
             break;
 
           case "PRODUKSI":
@@ -325,9 +382,6 @@ export default function ReportsPage() {
               grouped[key].totalProduksi > 0
                 ? grouped[key].totalHPP / grouped[key].totalProduksi
                 : 0;
-            console.log(
-              `PRODUKSI - Updated ${key}: produksi=${grouped[key].totalProduksi}, hpp=${grouped[key].totalHPP}, hppPerUnit=${grouped[key].hppPerUnit}`
-            );
             break;
 
           case "PEMASARAN":
@@ -453,6 +507,7 @@ export default function ReportsPage() {
   };
 
   // ✅ UPDATED: Division-specific totals
+  type ReportItem = (typeof reportData)[number];
   const getDivisionTotals = () => {
     switch (divisionType) {
       case "KEUANGAN":
@@ -460,7 +515,7 @@ export default function ReportsPage() {
           total1: {
             label: "Total Penerimaan",
             value: reportData.reduce(
-              (sum, item) => sum + (item.penerimaan || 0),
+              (sum, item: ReportItem) => sum + (item.penerimaan || 0),
               0
             ),
             format: "currency",
@@ -468,7 +523,7 @@ export default function ReportsPage() {
           total2: {
             label: "Total Pengeluaran",
             value: reportData.reduce(
-              (sum, item) => sum + (item.pengeluaran || 0),
+              (sum, item: ReportItem) => sum + (item.pengeluaran || 0),
               0
             ),
             format: "currency",
@@ -476,7 +531,7 @@ export default function ReportsPage() {
           total3: {
             label: "Saldo Bersih",
             value: reportData.reduce(
-              (sum, item) => sum + (item.saldoBersih || 0),
+              (sum, item: ReportItem) => sum + (item.saldoBersih || 0),
               0
             ),
             format: "currency",
@@ -708,6 +763,59 @@ export default function ReportsPage() {
     }
   };
 
+  // ✅ Tambahkan fungsi untuk summary piutang
+  const getPiutangSummary = () => {
+    const totalPiutangBaru = entries
+      .filter((entry) => (entry as any).transactionType === "PIUTANG_BARU")
+      .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+    const totalPiutangTertagih = entries
+      .filter((entry) => (entry as any).transactionType === "PIUTANG_TERTAGIH")
+      .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+    const totalPiutangMacet = entries
+      .filter((entry) => (entry as any).transactionType === "PIUTANG_MACET")
+      .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+    const totalSaldoAkhirPiutang = entries
+      .filter((entry) => (entry as any).transactionType === "SALDO_AKHIR")
+      .reduce(
+        (sum, entry) => sum + Number((entry as any).saldoAkhir || entry.nilai),
+        0
+      );
+    return {
+      totalPiutangBaru,
+      totalPiutangTertagih,
+      totalPiutangMacet,
+      totalSaldoAkhirPiutang,
+    };
+  };
+  const piutangSummary = getPiutangSummary();
+
+  // ✅ NEW: Tambahkan fungsi untuk summary utang
+  const getUtangSummary = () => {
+    const totalUtangBaru = entries
+      .filter((entry) => (entry as any).transactionType === "UTANG_BARU")
+      .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+    const totalUtangDibayar = entries
+      .filter((entry) => (entry as any).transactionType === "UTANG_DIBAYAR")
+      .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+    const totalBahanBaku = entries
+      .filter((entry) => (entry as any).kategori === "BAHAN_BAKU")
+      .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+    const totalBank = entries
+      .filter(
+        (entry) =>
+          (entry as any).kategori === "BANK_HM" ||
+          (entry as any).kategori === "BANK_HENRY"
+      )
+      .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+    return {
+      totalUtangBaru,
+      totalUtangDibayar,
+      totalBahanBaku,
+      totalBank,
+    };
+  };
+  const utangSummary = getUtangSummary();
+
   return (
     <ClientErrorBoundary>
       <div className="p-6 space-y-6">
@@ -741,8 +849,6 @@ export default function ReportsPage() {
             </Button>
           </div>
         </div>
-
-        
 
         {/* Report Filters */}
         <Card>
@@ -861,6 +967,312 @@ export default function ReportsPage() {
           </Card>
         </div>
 
+        {/* Tambahkan info penjelas di bawah summary utama */}
+        {divisionType === "KEUANGAN" && (
+          <div className="mt-2 mb-4">
+            <div className="bg-blue-50 border border-blue-200 rounded px-4 py-2 text-xs text-blue-800">
+              <strong>Info:</strong> Total Penerimaan, Pengeluaran, dan Saldo
+              Bersih <b>tidak termasuk transaksi Piutang maupun Utang</b>. Lihat
+              rekap Piutang dan Utang di bagian bawah.
+            </div>
+          </div>
+        )}
+
+        {/* Tambahkan summary piutang khusus untuk KEUANGAN */}
+        {divisionType === "KEUANGAN" && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs text-blue-600 font-semibold mb-1">
+                      Piutang Baru
+                    </span>
+                    <span className="text-2xl font-bold text-blue-800">
+                      {formatCurrency(piutangSummary.totalPiutangBaru)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs text-green-600 font-semibold mb-1">
+                      Piutang Tertagih
+                    </span>
+                    <span className="text-2xl font-bold text-green-800">
+                      {formatCurrency(piutangSummary.totalPiutangTertagih)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs text-orange-600 font-semibold mb-1">
+                      Piutang Macet
+                    </span>
+                    <span className="text-2xl font-bold text-orange-800">
+                      {formatCurrency(piutangSummary.totalPiutangMacet)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs text-purple-600 font-semibold mb-1">
+                      Saldo Akhir Piutang
+                    </span>
+                    <span className="text-2xl font-bold text-purple-800">
+                      {formatCurrency(piutangSummary.totalSaldoAkhirPiutang)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tabel rekap piutang per COA */}
+            <div className="mt-4">
+              <h3 className="text-md font-semibold mb-2 text-gray-700">
+                Rekap Piutang per COA
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs border rounded">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="px-2 py-1 text-left">Kode Akun</th>
+                      <th className="px-2 py-1 text-left">Nama Akun</th>
+                      <th className="px-2 py-1 text-blue-800">Piutang Baru</th>
+                      <th className="px-2 py-1 text-green-800">
+                        Piutang Tertagih
+                      </th>
+                      <th className="px-2 py-1 text-orange-800">
+                        Piutang Macet
+                      </th>
+                      <th className="px-2 py-1 text-purple-800">
+                        Saldo Akhir Piutang
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accounts.map((acc) => {
+                      // Hitung total piutang per COA
+                      const piutangBaru = entries
+                        .filter(
+                          (e) =>
+                            e.accountId === acc.id &&
+                            (e as any).transactionType === "PIUTANG_BARU"
+                        )
+                        .reduce((sum, e) => sum + Number(e.nilai), 0);
+                      const piutangTertagih = entries
+                        .filter(
+                          (e) =>
+                            e.accountId === acc.id &&
+                            (e as any).transactionType === "PIUTANG_TERTAGIH"
+                        )
+                        .reduce((sum, e) => sum + Number(e.nilai), 0);
+                      const piutangMacet = entries
+                        .filter(
+                          (e) =>
+                            e.accountId === acc.id &&
+                            (e as any).transactionType === "PIUTANG_MACET"
+                        )
+                        .reduce((sum, e) => sum + Number(e.nilai), 0);
+                      const saldoAkhir = entries
+                        .filter(
+                          (e) =>
+                            e.accountId === acc.id &&
+                            (e as any).transactionType === "SALDO_AKHIR"
+                        )
+                        .reduce(
+                          (sum, e) =>
+                            sum + Number((e as any).saldoAkhir || e.nilai),
+                          0
+                        );
+                      // Tampilkan hanya jika ada salah satu nilai piutang
+                      if (
+                        piutangBaru === 0 &&
+                        piutangTertagih === 0 &&
+                        piutangMacet === 0 &&
+                        saldoAkhir === 0
+                      )
+                        return null;
+                      return (
+                        <tr key={acc.id} className="border-b">
+                          <td className="px-2 py-1 font-mono text-blue-900">
+                            {acc.accountCode}
+                          </td>
+                          <td className="px-2 py-1 font-medium text-gray-900">
+                            {acc.accountName}
+                          </td>
+                          <td className="px-2 py-1 text-blue-800 font-semibold">
+                            {formatCurrency(piutangBaru)}
+                          </td>
+                          <td className="px-2 py-1 text-green-800 font-semibold">
+                            {formatCurrency(piutangTertagih)}
+                          </td>
+                          <td className="px-2 py-1 text-orange-800 font-semibold">
+                            {formatCurrency(piutangMacet)}
+                          </td>
+                          <td className="px-2 py-1 text-purple-800 font-semibold">
+                            {formatCurrency(saldoAkhir)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Tambahkan summary utang khusus untuk KEUANGAN */}
+        {divisionType === "KEUANGAN" && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs text-red-600 font-semibold mb-1">
+                      Utang Baru
+                    </span>
+                    <span className="text-2xl font-bold text-red-800">
+                      {formatCurrency(utangSummary.totalUtangBaru)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs text-green-600 font-semibold mb-1">
+                      Utang Dibayar
+                    </span>
+                    <span className="text-2xl font-bold text-green-800">
+                      {formatCurrency(utangSummary.totalUtangDibayar)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs text-orange-600 font-semibold mb-1">
+                      Bahan Baku
+                    </span>
+                    <span className="text-2xl font-bold text-orange-800">
+                      {formatCurrency(utangSummary.totalBahanBaku)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs text-purple-600 font-semibold mb-1">
+                      Bank (HM + Henry)
+                    </span>
+                    <span className="text-2xl font-bold text-purple-800">
+                      {formatCurrency(utangSummary.totalBank)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tabel rekap utang per COA */}
+            <div className="mt-4">
+              <h3 className="text-md font-semibold mb-2 text-gray-700">
+                Rekap Utang per COA
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-xs border rounded">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="px-2 py-1 text-left">Kode Akun</th>
+                      <th className="px-2 py-1 text-left">Nama Akun</th>
+                      <th className="px-2 py-1 text-red-800">Utang Baru</th>
+                      <th className="px-2 py-1 text-green-800">
+                        Utang Dibayar
+                      </th>
+                      <th className="px-2 py-1 text-orange-800">Bahan Baku</th>
+                      <th className="px-2 py-1 text-purple-800">
+                        Bank (HM + Henry)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accounts.map((acc) => {
+                      // Hitung total utang per COA
+                      const utangBaru = entries
+                        .filter(
+                          (e) =>
+                            e.accountId === acc.id &&
+                            (e as any).transactionType === "UTANG_BARU"
+                        )
+                        .reduce((sum, e) => sum + Number(e.nilai), 0);
+                      const utangDibayar = entries
+                        .filter(
+                          (e) =>
+                            e.accountId === acc.id &&
+                            (e as any).transactionType === "UTANG_DIBAYAR"
+                        )
+                        .reduce((sum, e) => sum + Number(e.nilai), 0);
+                      const bahanBaku = entries
+                        .filter(
+                          (e) =>
+                            e.accountId === acc.id &&
+                            (e as any).kategori === "BAHAN_BAKU"
+                        )
+                        .reduce((sum, e) => sum + Number(e.nilai), 0);
+                      const bank = entries
+                        .filter(
+                          (e) =>
+                            e.accountId === acc.id &&
+                            ((e as any).kategori === "BANK_HM" ||
+                              (e as any).kategori === "BANK_HENRY")
+                        )
+                        .reduce((sum, e) => sum + Number(e.nilai), 0);
+                      // Tampilkan hanya jika ada salah satu nilai utang
+                      if (
+                        utangBaru === 0 &&
+                        utangDibayar === 0 &&
+                        bahanBaku === 0 &&
+                        bank === 0
+                      )
+                        return null;
+                      return (
+                        <tr key={acc.id} className="border-b">
+                          <td className="px-2 py-1 font-mono text-red-900">
+                            {acc.accountCode}
+                          </td>
+                          <td className="px-2 py-1 font-medium text-gray-900">
+                            {acc.accountName}
+                          </td>
+                          <td className="px-2 py-1 text-red-800 font-semibold">
+                            {formatCurrency(utangBaru)}
+                          </td>
+                          <td className="px-2 py-1 text-green-800 font-semibold">
+                            {formatCurrency(utangDibayar)}
+                          </td>
+                          <td className="px-2 py-1 text-orange-800 font-semibold">
+                            {formatCurrency(bahanBaku)}
+                          </td>
+                          <td className="px-2 py-1 text-purple-800 font-semibold">
+                            {formatCurrency(bank)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Report Table */}
         <Card>
           <CardHeader>
@@ -878,50 +1290,49 @@ export default function ReportsPage() {
                     <TableHead>Kode Akun</TableHead>
                     <TableHead>Nama Akun</TableHead>
                     {/* ✅ CONDITIONAL: Different columns based on division */}
-                    {divisionType === "KEUANGAN" && (
+                    {divisionType === "KEUANGAN" ? (
                       <>
                         <TableHead>Total Penerimaan</TableHead>
                         <TableHead>Total Pengeluaran</TableHead>
                         <TableHead>Saldo Bersih</TableHead>
+                        <TableHead>Jumlah Transaksi</TableHead>
                       </>
-                    )}
-                    {divisionType === "PRODUKSI" && (
+                    ) : divisionType === "PRODUKSI" ? (
                       <>
                         <TableHead>Total Produksi</TableHead>
                         <TableHead>Total HPP</TableHead>
                         <TableHead>HPP per Unit</TableHead>
+                        <TableHead>Jumlah Transaksi</TableHead>
                       </>
-                    )}
-                    {divisionType === "PEMASARAN" && (
+                    ) : divisionType === "PEMASARAN" ? (
                       <>
                         <TableHead>Total Target</TableHead>
                         <TableHead>Total Realisasi</TableHead>
                         <TableHead>Achievement Rate</TableHead>
+                        <TableHead>Jumlah Transaksi</TableHead>
                       </>
-                    )}
-                    {divisionType === "GUDANG" && (
+                    ) : divisionType === "GUDANG" ? (
                       <>
                         <TableHead>Total Pemakaian</TableHead>
                         <TableHead>Stok Awal</TableHead>
                         <TableHead>Stok Akhir</TableHead>
+                        <TableHead>Jumlah Transaksi</TableHead>
                       </>
-                    )}
-                    {divisionType === "HRD" && (
+                    ) : divisionType === "HRD" ? (
                       <>
                         <TableHead>Total Karyawan</TableHead>
                         <TableHead>Kehadiran</TableHead>
                         <TableHead>Tingkat Kehadiran</TableHead>
+                        <TableHead>Jumlah Transaksi</TableHead>
                       </>
-                    )}{" "}
-                    {/* ✅ NEW: HRD columns */}
-                    {divisionType === "GENERAL" && (
+                    ) : (
                       <>
                         <TableHead>Total Debet</TableHead>
                         <TableHead>Total Kredit</TableHead>
                         <TableHead>Saldo</TableHead>
+                        <TableHead>Jumlah Transaksi</TableHead>
                       </>
                     )}
-                    <TableHead>Jumlah Transaksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -936,7 +1347,7 @@ export default function ReportsPage() {
                         </TableCell>
 
                         {/* ✅ CONDITIONAL: Different data based on division */}
-                        {divisionType === "KEUANGAN" && (
+                        {divisionType === "KEUANGAN" ? (
                           <>
                             <TableCell className="text-green-600 font-medium">
                               {formatCurrency(item.penerimaan || 0)}
@@ -969,10 +1380,9 @@ export default function ReportsPage() {
                                   : "Defisit"}
                               </Badge>
                             </TableCell>
+                            <TableCell>{item.transactions}</TableCell>
                           </>
-                        )}
-
-                        {divisionType === "PRODUKSI" && (
+                        ) : divisionType === "PRODUKSI" ? (
                           <>
                             <TableCell className="text-blue-600 font-medium">
                               {(item.totalProduksi || 0).toLocaleString(
@@ -986,10 +1396,9 @@ export default function ReportsPage() {
                             <TableCell className="text-purple-600 font-medium">
                               {formatCurrency(item.hppPerUnit || 0)}
                             </TableCell>
+                            <TableCell>{item.transactions}</TableCell>
                           </>
-                        )}
-
-                        {divisionType === "PEMASARAN" && (
+                        ) : divisionType === "PEMASARAN" ? (
                           <>
                             <TableCell className="text-blue-600 font-medium">
                               {formatCurrency(item.totalTarget || 0)}
@@ -1020,10 +1429,9 @@ export default function ReportsPage() {
                                   : "Belum"}
                               </Badge>
                             </TableCell>
+                            <TableCell>{item.transactions}</TableCell>
                           </>
-                        )}
-
-                        {divisionType === "GUDANG" && (
+                        ) : divisionType === "GUDANG" ? (
                           <>
                             <TableCell className="text-orange-600 font-medium">
                               {(item.totalPemakaian || 0).toLocaleString(
@@ -1062,10 +1470,9 @@ export default function ReportsPage() {
                                 </Badge>
                               </div>
                             </TableCell>
+                            <TableCell>{item.transactions}</TableCell>
                           </>
-                        )}
-
-                        {divisionType === "HRD" && (
+                        ) : divisionType === "HRD" ? (
                           <>
                             <TableCell className="text-blue-600 font-medium">
                               {item.totalKaryawan || 0} orang
@@ -1110,10 +1517,9 @@ export default function ReportsPage() {
                                   : "Poor"}
                               </Badge>
                             </TableCell>
+                            <TableCell>{item.transactions}</TableCell>
                           </>
-                        )}
-
-                        {divisionType === "GENERAL" && (
+                        ) : (
                           <>
                             <TableCell className="text-green-600 font-medium">
                               {formatCurrency(item.debet || 0)}
@@ -1148,10 +1554,9 @@ export default function ReportsPage() {
                                   : "Kredit"}
                               </Badge>
                             </TableCell>
+                            <TableCell>{item.transactions}</TableCell>
                           </>
                         )}
-
-                        <TableCell>{item.transactions}</TableCell>
                       </TableRow>
                     ))
                   ) : (

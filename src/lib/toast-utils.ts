@@ -91,7 +91,7 @@ export const toastError = {
     return toast.error(`❓ ${item} tidak ditemukan`);
   },
 
-  server: () => {
+  server: (p0: string) => {
     if (typeof window === "undefined") return;
     debugToast("ERROR SERVER");
     return toast.error(

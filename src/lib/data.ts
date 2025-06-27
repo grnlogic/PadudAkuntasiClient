@@ -1,5 +1,12 @@
 // Updated data.ts to use API calls instead of localStorage
-import { accountsAPI, divisionsAPI, usersAPI, entriesAPI } from "./api";
+import {
+  piutangAPI,
+  utangAPI,
+  accountsAPI,
+  divisionsAPI,
+  usersAPI,
+  entriesAPI,
+} from "./api";
 import type {
   EntriHarian as ImportedEntriHarian,
   CreateEntriHarianRequest,
@@ -286,6 +293,21 @@ export const generateAccountCode = (type: string): string => {
   return `${prefix}-${timestamp}`;
 };
 
+//piutang GET
+
+export async function getPiutangTransaksi() {
+  const response = await piutangAPI.getAll();
+  if (!response.success) throw new Error("Failed to fetch piutang");
+  return response.data;
+}
+
+// ✅ NEW: Utang GET
+export async function getUtangTransaksi() {
+  const response = await utangAPI.getAll();
+  if (!response.success) throw new Error("Failed to fetch utang");
+  return response.data;
+}
+
 // Entri Harian CRUD - now using API with fallback
 export const getEntriHarian = async (): Promise<EntriHarian[]> => {
   try {
@@ -525,6 +547,7 @@ export const getEntriHarianByDate = async (
           ...(entry.shift && {
             shift: entry.shift,
           }),
+          transactionType: entry.transactionType || entry.tipe_transaksi,
         };
 
         // ✅ DEBUG: Log saldo akhir mapping for getEntriHarianByDate
@@ -576,8 +599,24 @@ export const getEntriHarianByDate = async (
 export const saveEntriHarianBatch = async (
   entries: CreateEntriHarianRequest[]
 ): Promise<EntriHarian[]> => {
+  // ✅ FIXED: Filter out piutang entries - they should go to piutang API
+  const validEntries = entries.filter(
+    (e) => !e.piutangType // Remove piutang entries from regular batch
+  );
+
+  console.log("📊 BATCH FILTERING:", {
+    originalCount: entries.length,
+    filteredCount: validEntries.length,
+    removedPiutang: entries.length - validEntries.length,
+  });
+
+  if (validEntries.length === 0) {
+    console.log("⚠️ No valid entries for regular batch save");
+    return [];
+  }
+
   try {
-    const response = await entriesAPI.createBatch(entries);
+    const response = await entriesAPI.createBatch(validEntries);
 
     if (response.success && response.data) {
       const backendEntries = Array.isArray(response.data)
@@ -592,7 +631,7 @@ export const saveEntriHarianBatch = async (
         tanggal: entry.tanggalLaporan || entry.date || "",
         nilai: Number(entry.nilai) || 0,
         description: entry.description || "",
-        keterangan: entry.keterangan || entry.description || "", // Ensure keterangan is present
+        keterangan: entry.keterangan || entry.description || "",
         createdBy: entry.user?.username || entry.createdBy || "system",
         createdAt: entry.createdAt || new Date().toISOString(),
       }));
@@ -607,7 +646,6 @@ export const saveEntriHarianBatch = async (
     throw error;
   }
 };
-
 export const deleteEntriHarian = async (id: string): Promise<boolean> => {
   try {
     const response = await entriesAPI.delete(id);

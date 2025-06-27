@@ -493,8 +493,8 @@ export default function AccountRackPage() {
 
           {filteredAccounts.length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              Belum ada akun di rak divisi {user?.division?.name}. Tambahkan
-              akun pertama untuk memulai!
+              Belum ada entri  {user?.division?.name}. Tambahkan
+              entri pertama untuk memulai!
             </div>
           )}
         </CardContent>

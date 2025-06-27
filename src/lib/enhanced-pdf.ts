@@ -21,6 +21,15 @@ const formatCurrency = (amount: number): string => {
   }).format(amount);
 };
 
+// Helper untuk menampilkan nilai dengan unit jika account.valueType === "KUANTITAS"
+function getNilaiDisplay(entry: any, accounts: any[]): string {
+  const account = accounts.find((acc) => acc.id === entry.accountId);
+  const isKuantitas = account?.valueType === "KUANTITAS";
+  return isKuantitas
+    ? (entry.nilai || 0).toLocaleString("id-ID") + " pcs"
+    : formatCurrency(entry.nilai || 0);
+}
+
 export function downloadEnhancedPDF(data: PDFReportData) {
   const html = generateEnhancedHTML(data);
 
@@ -205,8 +214,8 @@ function generateEnhancedHTML(data: PDFReportData): string {
     <body>
       <!-- Header -->
       <div class="header">
-        <div class="company-name">PT. PADUDJA YAPUTERA</div>
-        <div class="report-title">LAPORAN HARIAN DIVISI ${data.divisionName.toUpperCase()}</div>
+        <div class="company-name">PT. PADUDJAYA PUTERA</div>
+        <div class="report-title">LAPORAN HARIAN  ${data.divisionName.toUpperCase()}</div>
         <div class="report-info">
           Tanggal: ${new Date(data.date).toLocaleDateString("id-ID", {
             weekday: "long",
@@ -226,7 +235,7 @@ function generateEnhancedHTML(data: PDFReportData): string {
         <p>Laporan ini digenerate secara otomatis pada ${new Date().toLocaleString(
           "id-ID"
         )}</p>
-        <p>Sistem Akuntansi PT. Padudja Yaputera</p>
+        <p>Sistem Akuntansi PT. PADUDJAYA PUTERA</p>
       </div>
     </body>
     </html>
@@ -238,6 +247,120 @@ function generateSummarySection(data: PDFReportData): string {
 
   // KEUANGAN Summary
   if (data.summary) {
+    // Ringkasan transaksi keuangan
+    let piutangSummary = "";
+    let utangSummary = "";
+    if (divisionName.includes("KEUANGAN")) {
+      // Hitung total piutang
+      const totalPiutangBaru = data.entries
+        .filter((entry) => (entry as any).transactionType === "PIUTANG_BARU")
+        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+      const totalPiutangTertagih = data.entries
+        .filter(
+          (entry) => (entry as any).transactionType === "PIUTANG_TERTAGIH"
+        )
+        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+      const totalPiutangMacet = data.entries
+        .filter((entry) => (entry as any).transactionType === "PIUTANG_MACET")
+        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+      const totalSaldoAkhirPiutang = data.entries
+        .filter((entry) => (entry as any).transactionType === "SALDO_AKHIR")
+        .reduce(
+          (sum, entry) =>
+            sum + Number((entry as any).saldoAkhir || entry.nilai),
+          0
+        );
+      piutangSummary = `
+        <div class="summary-title" style="margin-top:24px;">RINGKASAN PIUTANG</div>
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th>Kategori</th>
+              <th style="text-align: right;">Jumlah</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Piutang Baru</td>
+              <td style="text-align: right;">${formatCurrency(
+                totalPiutangBaru
+              )}</td>
+            </tr>
+            <tr>
+              <td>Piutang Tertagih</td>
+              <td style="text-align: right;">${formatCurrency(
+                totalPiutangTertagih
+              )}</td>
+            </tr>
+            <tr>
+              <td>Piutang Macet</td>
+              <td style="text-align: right;">${formatCurrency(
+                totalPiutangMacet
+              )}</td>
+            </tr>
+            <tr>
+              <td>Saldo Akhir Piutang</td>
+              <td style="text-align: right;">${formatCurrency(
+                totalSaldoAkhirPiutang
+              )}</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+
+      // ✅ NEW: Hitung total utang
+      const totalUtangBaru = data.entries
+        .filter((entry) => (entry as any).transactionType === "UTANG_BARU")
+        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+      const totalUtangDibayar = data.entries
+        .filter((entry) => (entry as any).transactionType === "UTANG_DIBAYAR")
+        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+      const totalBahanBaku = data.entries
+        .filter((entry) => (entry as any).kategori === "BAHAN_BAKU")
+        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+      const totalBank = data.entries
+        .filter(
+          (entry) =>
+            (entry as any).kategori === "BANK_HM" ||
+            (entry as any).kategori === "BANK_HENRY"
+        )
+        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+      utangSummary = `
+        <div class="summary-title" style="margin-top:24px;">RINGKASAN UTANG</div>
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th>Kategori</th>
+              <th style="text-align: right;">Jumlah</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Utang Baru</td>
+              <td style="text-align: right;">${formatCurrency(
+                totalUtangBaru
+              )}</td>
+            </tr>
+            <tr>
+              <td>Utang Dibayar</td>
+              <td style="text-align: right;">${formatCurrency(
+                totalUtangDibayar
+              )}</td>
+            </tr>
+            <tr>
+              <td>Bahan Baku</td>
+              <td style="text-align: right;">${formatCurrency(
+                totalBahanBaku
+              )}</td>
+            </tr>
+            <tr>
+              <td>Bank (HM + Henry)</td>
+              <td style="text-align: right;">${formatCurrency(totalBank)}</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+    }
     return `
       <div class="summary-section keuangan">
         <div class="summary-title">RINGKASAN TRANSAKSI KEUANGAN</div>
@@ -275,6 +398,8 @@ function generateSummarySection(data: PDFReportData): string {
             </tr>
           </tbody>
         </table>
+        ${piutangSummary}
+        ${utangSummary}
       </div>
     `;
   }
@@ -590,13 +715,17 @@ function generateDetailsSection(data: PDFReportData): string {
         const shift = (entry as any).shift || "-";
         dataCells = `
         <td style="text-align: center;">${status}</td>
-        <td style="text-align: right;">${absentCount} orang</td>
+        <td style="text-align: righ t;">${absentCount} orang</td>
         <td style="text-align: center;">${shift}</td>
       `;
       } else {
+        // PERBAIKAN: Gunakan getNilaiDisplay untuk format yang dinamis
         dataCells = `
-        <td style="text-align: right;">${formatCurrency(entry.nilai)}</td>
-      `;
+        <td style="text-align: right;">${getNilaiDisplay(
+          entry,
+          data.accounts
+        )}</td>
+        `;
       }
 
       return `

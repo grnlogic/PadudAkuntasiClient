@@ -9,6 +9,8 @@ export interface EntriHarian {
   createdBy: string;
   createdAt: string;
 
+  piutangType?: "PIUTANG_BARU" | "PIUTANG_TERTAGIH" | "PIUTANG_MACET"; // <-- Tambahkan ini jika ingin tracking di FE
+
   // ✅ Specialized fields for different divisions
   transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR";
   targetAmount?: number;
@@ -30,6 +32,8 @@ export interface CreateEntriHarianRequest {
   tanggal: string;
   nilai: number;
   description?: string;
+  piutangType?: "PIUTANG_BARU" | "PIUTANG_TERTAGIH" | "PIUTANG_MACET";
+
   // ✅ Keuangan fields
   transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR";
   saldoAkhir?: number;

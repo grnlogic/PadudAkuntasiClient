@@ -50,6 +50,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getPiutangTransaksi } from "@/lib/data";
 import { Badge } from "@/components/ui/badge"; // ✅ Add this import
 import { getCurrentUser } from "@/lib/auth";
 import {
@@ -57,12 +58,19 @@ import {
   getEntriHarianByDate,
   saveEntriHarianBatch,
   deleteEntriHarian,
+  getUtangTransaksi,
   type Account,
   type EntriHarian,
 } from "@/lib/data";
 import { Label } from "@/components/ui/label";
 import type { CreateEntriHarianRequest } from "@/types/EntriHarian";
 import React from "react";
+import {
+  CreatePiutangRequest,
+  CreateUtangRequest,
+  piutangAPI,
+  utangAPI,
+} from "@/lib/api";
 
 interface JournalRow {
   id: string;
@@ -70,6 +78,12 @@ interface JournalRow {
   keterangan: string;
   nominal: string;
   kuantitas: string;
+
+  kategori?: "KARYAWAN" | "TOKO" | "BAHAN_BAKU";
+  //piutang
+  piutangType?: "PIUTANG_BARU" | "PIUTANG_TERTAGIH" | "PIUTANG_MACET";
+  // ✅ NEW: Utang fields
+  utangKategori?: "BAHAN_BAKU" | "BANK_HM" | "BANK_HENRY";
   // ✅ New fields for specialized divisions
   transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR"; // For Keuangan with 3 options
   targetAmount?: string; // For Pemasaran
@@ -83,6 +97,8 @@ interface JournalRow {
   shift?: "REGULER" | "LEMBUR"; // For HRD - Reguler (7-15) atau Lembur (15-20)
   // ✅ NEW: Keuangan field - Saldo Akhir
   saldoAkhir?: string; // For Keuangan
+  // ✅ NEW: UTANG fields - Updated
+  utangType?: "UTANG_BARU" | "UTANG_DIBAYAR"; // For Keuangan
 }
 
 export default function JournalPage() {
@@ -112,6 +128,7 @@ export default function JournalPage() {
       nominal: "",
       kuantitas: "",
       // ✅ Initialize all optional fields to prevent controlled/uncontrolled warnings
+      piutangType: undefined,
       transactionType: undefined,
       targetAmount: "",
       realisasiAmount: "",
@@ -120,18 +137,33 @@ export default function JournalPage() {
       stokAkhir: "",
       saldoAkhir: "",
       attendanceStatus: undefined,
-      absentCount: "", // ✅ Initialize as empty string, not undefined
+      absentCount: "",
       shift: undefined,
+      utangType: undefined,
+      utangKategori: undefined,
     },
   ]);
+
+  const [isPiutang, setIsPiutang] = useState(false); // Tambahkan state ini
+
+  // State untuk tab jenis transaksi
+  const [selectedTransactionType, setSelectedTransactionType] = useState<
+    "KAS" | "PIUTANG" | "UTANG"
+  >("KAS");
 
   useEffect(() => {
     loadData();
   }, [selectedDate]);
 
   // ✅ NEW: Fungsi untuk menghitung summary keuangan
-  const calculateKeuanganSummary = (entries: EntriHarian[]) => {
-    console.log("🔍 calculateKeuanganSummary called with entries:", entries);
+  const calculateKeuanganSummary = (
+    entries: EntriHarian[],
+    accounts: Account[]
+  ) => {
+    // Dapatkan semua accountId yang BUKAN piutang
+    const piutangAccountIds = accounts
+      .filter((acc) => acc.accountName.toLowerCase().includes("piutang"))
+      .map((acc) => acc.id);
 
     const summary = {
       totalPenerimaan: 0,
@@ -139,41 +171,22 @@ export default function JournalPage() {
       totalSaldoAkhir: 0,
     };
 
-    entries.forEach((entry, index) => {
-      // Cast ke any untuk mengakses field yang mungkin tidak ada di type
-      const entryData = entry as any;
+    // Hanya proses transaksi harian (bukan piutang)
+    const transaksiHarian = entries.filter(
+      (entry: any) => !piutangAccountIds.includes(entry.accountId) // Bukan akun piutang
+    );
 
-      console.log(`🔍 Processing entry ${index}:`, {
-        id: entry.id,
-        transactionType: entryData.transactionType,
-        nilai: entry.nilai,
-        saldoAkhir: entryData.saldoAkhir,
-      });
-
-      if (entryData.transactionType === "PENERIMAAN") {
+    transaksiHarian.forEach((entry: any) => {
+      if (entry.transactionType === "PENERIMAAN") {
         summary.totalPenerimaan += Number(entry.nilai) || 0;
-        console.log(`✅ Added to PENERIMAAN: ${entry.nilai}`);
-      } else if (entryData.transactionType === "PENGELUARAN") {
+      } else if (entry.transactionType === "PENGELUARAN") {
         summary.totalPengeluaran += Number(entry.nilai) || 0;
-        console.log(`✅ Added to PENGELUARAN: ${entry.nilai}`);
-      } else if (entryData.transactionType === "SALDO_AKHIR") {
-        // Untuk SALDO_AKHIR, gunakan field saldoAkhir jika ada, fallback ke nilai
-        const saldoValue =
-          Number(entryData.saldoAkhir) || Number(entry.nilai) || 0;
-        summary.totalSaldoAkhir += saldoValue;
-        console.log(
-          `✅ Added to SALDO_AKHIR: ${saldoValue} (from saldoAkhir: ${entryData.saldoAkhir}, nilai: ${entry.nilai})`
-        );
+      } else if (entry.transactionType === "SALDO_AKHIR") {
+        const saldoValue = Number(entry.saldoAkhir) || Number(entry.nilai) || 0;
+        summary.totalSaldoAkhir = saldoValue; // Ambil saldo akhir terakhir
       }
     });
 
-    // ✅ NEW: Ambil saldo akhir terakhir
-    summary.totalSaldoAkhir = entries
-      .filter((e: any) => e.transactionType === "SALDO_AKHIR")
-      .map((e: any) => Number(e.saldoAkhir) || Number(e.nilai) || 0)
-      .pop() || 0; // Ambil saldo akhir terakhir
-
-    console.log("🔍 Final summary:", summary);
     return summary;
   };
 
@@ -182,30 +195,109 @@ export default function JournalPage() {
       try {
         setLoading(true);
 
-        // ✅ Use promise toast for loading
         const accountsPromise = getAccountsByDivision(user.division.id);
         const entriesPromise = getEntriHarianByDate(selectedDate);
+        const piutangPromise = getPiutangTransaksi();
+        const utangPromise = getUtangTransaksi();
 
-        const [accountsData, entriesData] = await Promise.all([
-          accountsPromise,
-          entriesPromise,
-        ]);
+        const [accountsData, entriesData, piutangData, utangData] =
+          await Promise.all([
+            accountsPromise,
+            entriesPromise,
+            piutangPromise,
+            utangPromise,
+          ]);
+
+        console.log("ISI accountsData:", accountsData);
 
         setAccounts(accountsData);
 
         // Filter entries yang belong to current division
         const accountIds = accountsData.map((acc) => acc.id);
         const divisionEntries = entriesData.filter(
-          (entry: { accountId: string }) => {
-            return accountIds.includes(entry.accountId);
-          }
+          (entry: { accountId: string }) => accountIds.includes(entry.accountId)
         );
 
-        setExistingEntries(divisionEntries);
+        // Ambil akun COA pertama yang mengandung "kas besar", jika tidak ada ambil akun pertama
+        let piutangAccount = accountsData.find((acc) =>
+          acc.accountName.toLowerCase().includes("kas besar")
+        );
+        if (!piutangAccount) {
+          piutangAccount = accountsData[0];
+        }
+
+        console.log("Akun yang dipakai untuk piutang:", piutangAccount);
+
+        if (!piutangAccount || !piutangAccount.id) {
+          alert("Akun piutang tidak ditemukan di COA divisi ini!");
+          return;
+        }
+
+        // Mapping piutang agar mirip entri harian
+        const mappedPiutang = (piutangData || [])
+          .filter((p: any) => {
+            // Filter piutang sesuai tanggal yang dipilih
+            const tgl = p.tanggal_transaksi || p.tanggalTransaksi;
+            return tgl && tgl.startsWith(selectedDate);
+          })
+          .map((p: any) => ({
+            id: p.id,
+            tanggal: p.tanggal_transaksi || p.tanggalTransaksi || "",
+            accountId: piutangAccount.id, // <-- ini kunci!
+            nilai: p.nominal,
+            description: p.keterangan,
+            transactionType: p.tipe_transaksi || p.tipeTransaksi || "",
+            createdAt:
+              p.created_at ||
+              p.createdAt ||
+              p.tanggal_transaksi ||
+              p.tanggalTransaksi ||
+              "",
+            keterangan: p.keterangan,
+            date: p.tanggal_transaksi || p.tanggalTransaksi || "",
+            createdBy: p.user?.username || "system",
+          }));
+
+        // ✅ NEW: Mapping utang agar mirip entri harian
+        const mappedUtang = (utangData || [])
+          .filter((u: any) => {
+            // Filter utang sesuai tanggal yang dipilih
+            const tgl = u.tanggal_transaksi || u.tanggalTransaksi;
+            return tgl && tgl.startsWith(selectedDate);
+          })
+          .map((u: any) => ({
+            id: u.id,
+            tanggal: u.tanggal_transaksi || u.tanggalTransaksi || "",
+            accountId: piutangAccount.id, // <-- gunakan akun yang sama dengan piutang
+            nilai: u.nominal,
+            description: u.keterangan,
+            transactionType: u.tipe_transaksi || u.tipeTransaksi || "",
+            createdAt:
+              u.created_at ||
+              u.createdAt ||
+              u.tanggal_transaksi ||
+              u.tanggalTransaksi ||
+              "",
+            keterangan: u.keterangan,
+            date: u.tanggal_transaksi || u.tanggalTransaksi || "",
+            createdBy: u.user?.username || "system",
+          }));
+
+        // Gabungkan entri harian, piutang, dan utang
+        const combinedEntries = [
+          ...divisionEntries,
+          ...mappedPiutang,
+          ...mappedUtang,
+        ];
+
+        setExistingEntries(combinedEntries);
 
         // ✅ NEW: Hitung summary untuk keuangan
         if (divisionType === "KEUANGAN") {
-          const summary = calculateKeuanganSummary(divisionEntries);
+          const summary = calculateKeuanganSummary(
+            combinedEntries,
+            accountsData
+          );
           setKeuanganSummary(summary);
           console.log("🔍 KEUANGAN SUMMARY:", summary);
         }
@@ -231,6 +323,7 @@ export default function JournalPage() {
       nominal: "",
       kuantitas: "",
       // ✅ Initialize specialized fields to prevent controlled/uncontrolled warnings
+      piutangType: undefined,
       transactionType: undefined,
       targetAmount: "",
       realisasiAmount: "",
@@ -239,8 +332,10 @@ export default function JournalPage() {
       stokAkhir: "",
       saldoAkhir: "",
       attendanceStatus: undefined,
-      absentCount: "", // ✅ Initialize as empty string
+      absentCount: "",
       shift: undefined,
+      utangType: undefined,
+      utangKategori: undefined,
     };
     setJournalRows([...journalRows, newRow]);
   };
@@ -303,56 +398,92 @@ export default function JournalPage() {
   const saveJournalEntries = async () => {
     console.log("🚀 SAVE JOURNAL ENTRIES - START");
 
+    // Update validation logic untuk piutang
     const validRows = journalRows.filter((row) => {
       const account = getSelectedAccount(row.accountId);
-      if (!account) {
-        return false;
-      }
+      if (!account) return false;
 
-      // ✅ ENHANCED DEBUG: Log validation process for pemasaran
-      if (divisionType === "PEMASARAN") {
-        console.log("🎯 PEMASARAN VALIDATION:", {
-          rowId: row.id,
-          accountId: row.accountId,
-          targetAmount: row.targetAmount,
-          realisasiAmount: row.realisasiAmount,
-          hasTargetAmount: !!row.targetAmount,
-          hasRealisasiAmount: !!row.realisasiAmount,
-          hasEither: !!(row.targetAmount || row.realisasiAmount),
-        });
-      } // ✅ ENHANCED: For keuangan, use saldoAkhir if transaction type is SALDO_AKHIR
-      if (divisionType === "KEUANGAN") {
-        // Untuk keuangan, wajib ada transaction type dan nominal
-        const hasKeuanganData =
-          row.transactionType &&
+      // Validasi piutang
+      if (row.piutangType) {
+        return (
+          row.accountId &&
           row.nominal &&
-          Number.parseFloat(row.nominal) > 0;
-        return hasKeuanganData && row.accountId;
+          Number.parseFloat(row.nominal) > 0 &&
+          ["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
+            row.piutangType
+          ) &&
+          selectedDate
+        );
       }
 
-      // ✅ Check for other division-specific data
-      if (divisionType !== "GENERAL") {
-        const hasSpecificData =
-          (divisionType === "PEMASARAN" &&
-            (row.targetAmount || row.realisasiAmount)) ||
-          (divisionType === "BLENDING" && row.kuantitas && row.hppAmount) ||
-          (divisionType === "GUDANG" &&
-            (row.pemakaianAmount || row.stokAkhir)) ||
-          (divisionType === "HRD" && row.attendanceStatus); // ✅ NEW: HRD validation
-
-        console.log("✅ VALIDATION RESULT:", {
-          divisionType,
-          hasSpecificData,
-          accountId: row.accountId,
-        });
-
-        return hasSpecificData && row.accountId;
+      // ✅ NEW: Validasi utang
+      if (row.utangType) {
+        return (
+          row.accountId &&
+          row.nominal &&
+          Number.parseFloat(row.nominal) > 0 &&
+          ["UTANG_BARU", "UTANG_DIBAYAR"].includes(row.utangType) &&
+          selectedDate
+        );
       }
 
-      // For GENERAL division, use existing validation
-      const value =
-        account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
-      return row.accountId && value && Number.parseFloat(value) > 0;
+      if (
+        row.transactionType &&
+        ["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
+          row.transactionType
+        )
+      ) {
+        return (
+          row.accountId &&
+          row.nominal &&
+          Number.parseFloat(row.nominal) > 0 &&
+          ["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
+            row.transactionType
+          ) &&
+          selectedDate
+        );
+      }
+
+      // ✅ NEW: Validasi utang dari transactionType
+      if (
+        row.transactionType &&
+        ["UTANG_BARU", "UTANG_DIBAYAR"].includes(row.transactionType)
+      ) {
+        return (
+          row.accountId &&
+          row.nominal &&
+          Number.parseFloat(row.nominal) > 0 &&
+          ["UTANG_BARU", "UTANG_DIBAYAR"].includes(row.transactionType) &&
+          selectedDate
+        );
+      }
+
+      // **Tambahkan validasi untuk regular entries di bawah ini**
+      if (
+        row.transactionType &&
+        ["PENERIMAAN", "PENGELUARAN", "SALDO_AKHIR"].includes(
+          row.transactionType
+        )
+      ) {
+        return (
+          row.accountId &&
+          row.nominal &&
+          Number.parseFloat(row.nominal) > 0 &&
+          selectedDate
+        );
+      }
+
+      // Atau validasi default untuk GENERAL
+      return (
+        row.accountId &&
+        ((account.valueType === "NOMINAL" &&
+          row.nominal &&
+          Number.parseFloat(row.nominal) > 0) ||
+          (account.valueType === "KUANTITAS" &&
+            row.kuantitas &&
+            Number.parseFloat(row.kuantitas) > 0)) &&
+        selectedDate
+      );
     });
 
     console.log("📊 VALID ROWS COUNT:", validRows.length);
@@ -363,193 +494,369 @@ export default function JournalPage() {
       return;
     }
 
-    // ✅ Enhanced loading state
-    console.log("🔄 Starting save process...");
+    // ✅ CRITICAL FIX: Separate piutang entries from regular entries
+    const piutangEntries = validRows.filter(
+      (row) =>
+        row.piutangType ||
+        (row.transactionType &&
+          ["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
+            row.transactionType
+          ))
+    );
+
+    // ✅ NEW: Separate utang entries
+    const utangEntries = validRows.filter(
+      (row) =>
+        row.utangType ||
+        (row.transactionType &&
+          ["UTANG_BARU", "UTANG_DIBAYAR"].includes(row.transactionType))
+    );
+
+    const regularEntries = validRows.filter(
+      (row) =>
+        !row.piutangType &&
+        !row.utangType &&
+        !(
+          row.transactionType &&
+          [
+            "PIUTANG_BARU",
+            "PIUTANG_TERTAGIH",
+            "PIUTANG_MACET",
+            "UTANG_BARU",
+            "UTANG_DIBAYAR",
+          ].includes(row.transactionType)
+        )
+    );
+
+    console.log("📊 ENTRY SEPARATION:", {
+      totalValid: validRows.length,
+      piutangCount: piutangEntries.length,
+      utangCount: utangEntries.length,
+      regularCount: regularEntries.length,
+      piutangEntries: piutangEntries.map((r) => ({
+        id: r.id,
+        type: r.piutangType || r.transactionType,
+      })),
+      utangEntries: utangEntries.map((r) => ({
+        id: r.id,
+        type: r.utangType || r.transactionType,
+      })),
+      regularEntries: regularEntries.map((r) => ({
+        id: r.id,
+        transactionType: r.transactionType,
+      })),
+    });
+
     setLoading(true);
 
     try {
-      const entriesToSave: CreateEntriHarianRequest[] = validRows.map((row) => {
-        const account = getSelectedAccount(row.accountId)!;
+      const savedResults = [];
 
-        let nilai: number;
-        if (divisionType === "GENERAL") {
-          const value =
-            account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
-          nilai = Number.parseFloat(value);
-        } else {
-          switch (divisionType) {
-            case "PEMASARAN":
-              // ✅ FIXED: Use realisasiAmount as primary nilai, fallback to targetAmount
-              nilai = Number.parseFloat(
-                row.realisasiAmount || row.targetAmount || "0"
-              );
-              console.log("🎯 PEMASARAN NILAI CALCULATION:", {
-                rowId: row.id,
-                realisasiAmount: row.realisasiAmount,
-                targetAmount: row.targetAmount,
-                calculatedNilai: nilai,
-              });
-              break;
-            case "KEUANGAN":
-              // ✅ FIXED: Untuk keuangan selalu gunakan nominal
-              nilai = Number.parseFloat(row.nominal || "0");
-              break;
-            case "BLENDING":
-              nilai = Number.parseFloat(row.kuantitas || "0");
-              break;
-            case "GUDANG":
-              nilai = Number.parseFloat(row.pemakaianAmount || "0");
-              break;
-            case "HRD": // ✅ NEW: HRD logic
-              // For HRD, nilai represents attendance (1 for present, 0 for absent)
-              nilai = row.attendanceStatus === "HADIR" ? 1 : 0;
-              break;
-            default:
-              nilai = 0;
+      // ✅ CRITICAL: Handle piutang entries FIRST and SEPARATELY
+
+      if (piutangEntries.length > 0) {
+        console.log("💰 PROCESSING PIUTANG ENTRIES:", piutangEntries);
+
+        for (const row of piutangEntries) {
+          // ✅ Get piutang type from either field
+          const piutangType = row.piutangType || row.transactionType;
+
+          // ✅ Validate piutang type
+          if (
+            !piutangType ||
+            !["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
+              piutangType
+            )
+          ) {
+            console.error("❌ Invalid piutang type:", piutangType);
+            throw new Error(
+              `VALIDATION_ERROR: Tipe piutang tidak valid: ${piutangType}`
+            );
           }
-        } // ✅ ENHANCED: Set nilai berdasarkan jenis transaksi
-        let entryNilai = Number.parseFloat(row.nominal) || 0;
-        let entrySaldoAkhir: number | undefined = undefined;
 
-        // Jika jenis transaksi adalah SALDO_AKHIR, simpan ke field saldoAkhir
-        if (row.transactionType === "SALDO_AKHIR") {
-          entrySaldoAkhir = entryNilai;
-          entryNilai = 0; // Set nilai ke 0 karena ini bukan transaksi biasa
+          // ✅ Validate nominal
+          const nominal = Number.parseFloat(row.nominal);
+          if (!nominal || nominal <= 0) {
+            console.error("❌ Invalid nominal:", row.nominal);
+            throw new Error(
+              "VALIDATION_ERROR: Nominal piutang harus lebih dari 0"
+            );
+          }
+
+          // ✅ Validate date
+          if (!selectedDate) {
+            console.error("❌ Invalid date:", selectedDate);
+            throw new Error("VALIDATION_ERROR: Tanggal transaksi tidak valid");
+          }
+
+          // GUNAKAN LANGSUNG accountId dari row
+          const accountId = Number(row.accountId);
+
+          if (!accountId) {
+            alert("Akun tidak valid!");
+            return;
+          }
+
+          const piutangData: CreatePiutangRequest = {
+            tanggalTransaksi: selectedDate,
+            tipeTransaksi: piutangType as
+              | "PIUTANG_BARU"
+              | "PIUTANG_TERTAGIH"
+              | "PIUTANG_MACET",
+            kategori: row.kategori || "KARYAWAN",
+            nominal: Number(nominal),
+            keterangan: row.keterangan || "",
+            accountId, // <-- langsung dari input user
+          };
+
+          console.log("📤 Akan mengirim piutang ke backend:", piutangData);
+          const result = await piutangAPI.create(piutangData);
+          console.log("✅ Hasil dari backend:", result);
+          savedResults.push(result);
+          console.log("✅ PIUTANG SAVED SUCCESSFULLY:", result);
         }
-
-        const entry: CreateEntriHarianRequest = {
-          accountId: Number(row.accountId),
-          tanggal: selectedDate,
-          nilai: nilai,
-          description: row.keterangan || "",
-
-          // ✅ ENHANCED DEBUG: Log before creating entry
-          ...(row.transactionType && { transactionType: row.transactionType }),
-          ...(row.targetAmount && {
-            targetAmount: Number.parseFloat(row.targetAmount),
-          }),
-          ...(row.realisasiAmount && {
-            realisasiAmount: Number.parseFloat(row.realisasiAmount),
-          }),
-          ...(row.hppAmount && { hppAmount: Number.parseFloat(row.hppAmount) }),
-          ...(row.pemakaianAmount && {
-            pemakaianAmount: Number.parseFloat(row.pemakaianAmount),
-          }),
-          ...(row.stokAkhir && { stokAkhir: Number.parseFloat(row.stokAkhir) }),
-          // ✅ NEW: HRD fields - Updated
-          ...(row.attendanceStatus && {
-            attendanceStatus: row.attendanceStatus,
-          }),
-          ...(row.absentCount && {
-            absentCount: Number.parseFloat(row.absentCount),
-          }),
-          ...(row.shift && { shift: row.shift }),
-          // ✅ NEW: Keuangan saldo akhir field
-          ...(entrySaldoAkhir && {
-            saldoAkhir: entrySaldoAkhir,
-          }),
-        };
-
-        // ✅ ENHANCED DEBUG: Log what we're about to send
-        if (divisionType === "PEMASARAN") {
-          console.log("🎯 SENDING PEMASARAN ENTRY:", {
-            id: row.id,
-            accountId: entry.accountId,
-            targetAmount: entry.targetAmount,
-            realisasiAmount: entry.realisasiAmount,
-            rawTargetAmount: row.targetAmount,
-            rawRealisasiAmount: row.realisasiAmount,
-            hasTarget: !!entry.targetAmount,
-            hasRealisasi: !!entry.realisasiAmount,
-          });
-        }
-
-        return entry;
-      });
-
-      console.log("📤 SENDING TO BACKEND:", entriesToSave);
-
-      // ✅ Manual save instead of promise toast for better debugging
-      const saved = await saveEntriHarianBatch(entriesToSave);
-
-      console.log("✅ BACKEND RESPONSE:", saved);
-
-      // Force reload data
-      await loadData();
-
-      // Reset form
-      setJournalRows([
-        {
-          id: "row_1",
-          accountId: "",
-          keterangan: "",
-          nominal: "",
-          kuantitas: "",
-          transactionType: undefined,
-          targetAmount: "",
-          realisasiAmount: "",
-          hppAmount: "",
-          pemakaianAmount: "",
-          stokAkhir: "",
-          saldoAkhir: "",
-          attendanceStatus: undefined,
-          absentCount: "",
-          shift: undefined,
-        },
-      ]);
-
-      // ✅ Manual success toast
-      const totalRequested = entriesToSave.length;
-      const totalSaved = saved.length;
-
-      console.log("📊 SAVE SUMMARY:", { totalRequested, totalSaved });
-
-      if (totalSaved === totalRequested) {
-        console.log("✅ All entries saved successfully");
-        toastSuccess.save(totalSaved, `entri ${divisionType}`);
-      } else if (totalSaved > 0) {
-        console.log("⚠️ Partial save");
-        toastWarning.partial(totalSaved, totalRequested);
-      } else {
-        console.log("ℹ️ No changes");
-        toastInfo.noChanges();
       }
+
+      // ✅ NEW: Handle utang entries
+      if (utangEntries.length > 0) {
+        console.log("💳 PROCESSING UTANG ENTRIES:", utangEntries);
+
+        for (const row of utangEntries) {
+          // ✅ Get utang type from either field
+          const utangType = row.utangType || row.transactionType;
+
+          // ✅ Validate utang type
+          if (
+            !utangType ||
+            !["UTANG_BARU", "UTANG_DIBAYAR"].includes(utangType)
+          ) {
+            console.error("❌ Invalid utang type:", utangType);
+            throw new Error(
+              `VALIDATION_ERROR: Tipe utang tidak valid: ${utangType}`
+            );
+          }
+
+          // ✅ Validate nominal
+          const nominal = Number.parseFloat(row.nominal);
+          if (!nominal || nominal <= 0) {
+            console.error("❌ Invalid nominal:", row.nominal);
+            throw new Error(
+              "VALIDATION_ERROR: Nominal utang harus lebih dari 0"
+            );
+          }
+
+          // ✅ Validate date
+          if (!selectedDate) {
+            console.error("❌ Invalid date:", selectedDate);
+            throw new Error("VALIDATION_ERROR: Tanggal transaksi tidak valid");
+          }
+
+          // GUNAKAN LANGSUNG accountId dari row
+          const accountId = Number(row.accountId);
+
+          if (!accountId) {
+            alert("Akun tidak valid!");
+            return;
+          }
+
+          const utangData: CreateUtangRequest = {
+            tanggalTransaksi: selectedDate,
+            tipeTransaksi: utangType as "UTANG_BARU" | "UTANG_DIBAYAR",
+            kategori: row.utangKategori || "BAHAN_BAKU",
+            nominal: Number(nominal),
+            keterangan: row.keterangan || "",
+            accountId, // <-- langsung dari input user
+          };
+
+          console.log("📤 Akan mengirim utang ke backend:", utangData);
+          const result = await utangAPI.create(utangData);
+          console.log("✅ Hasil dari backend:", result);
+          savedResults.push(result);
+          console.log("✅ UTANG SAVED SUCCESSFULLY:", result);
+        }
+      }
+
+      // ✅ CRITICAL: Handle regular entries ONLY if there are any
+      if (regularEntries.length > 0) {
+        console.log("📝 PROCESSING REGULAR ENTRIES:", regularEntries);
+
+        const entriesToSave: CreateEntriHarianRequest[] = regularEntries.map(
+          (row) => {
+            const account = getSelectedAccount(row.accountId)!;
+
+            let nilai: number;
+            if (divisionType === "GENERAL") {
+              const value =
+                account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
+              nilai = Number.parseFloat(value);
+            } else {
+              switch (divisionType) {
+                case "PEMASARAN":
+                  nilai = Number.parseFloat(
+                    row.realisasiAmount || row.targetAmount || "0"
+                  );
+                  break;
+                case "KEUANGAN":
+                  nilai = Number.parseFloat(row.nominal || "0");
+                  break;
+                case "BLENDING":
+                  nilai = Number.parseFloat(row.kuantitas || "0");
+                  break;
+                case "GUDANG":
+                  nilai = Number.parseFloat(row.pemakaianAmount || "0");
+                  break;
+                case "HRD":
+                  nilai = row.attendanceStatus === "HADIR" ? 1 : 0;
+                  break;
+                default:
+                  nilai = 0;
+              }
+            }
+
+            let entryNilai = Number.parseFloat(row.nominal) || 0;
+            let entrySaldoAkhir: number | undefined = undefined;
+
+            if (row.transactionType === "SALDO_AKHIR") {
+              entrySaldoAkhir = entryNilai;
+              entryNilai = 0;
+            }
+
+            const entry: CreateEntriHarianRequest = {
+              accountId: Number(row.accountId),
+              tanggal: selectedDate,
+              nilai: nilai,
+              description: row.keterangan || "",
+
+              ...(row.transactionType && {
+                transactionType: row.transactionType,
+              }),
+              ...(row.targetAmount && {
+                targetAmount: Number.parseFloat(row.targetAmount),
+              }),
+              ...(row.realisasiAmount && {
+                realisasiAmount: Number.parseFloat(row.realisasiAmount),
+              }),
+              ...(row.hppAmount && {
+                hppAmount: Number.parseFloat(row.hppAmount),
+              }),
+              ...(row.pemakaianAmount && {
+                pemakaianAmount: Number.parseFloat(row.pemakaianAmount),
+              }),
+              ...(row.stokAkhir && {
+                stokAkhir: Number.parseFloat(row.stokAkhir),
+              }),
+              ...(row.attendanceStatus && {
+                attendanceStatus: row.attendanceStatus,
+              }),
+              ...(row.absentCount && {
+                absentCount: Number.parseFloat(row.absentCount),
+              }),
+              ...(row.shift && { shift: row.shift }),
+              ...(entrySaldoAkhir && {
+                saldoAkhir: entrySaldoAkhir,
+              }),
+            };
+
+            return entry;
+          }
+        );
+
+        console.log(
+          "📤 SENDING REGULAR ENTRIES TO /api/v1/entri-harian/batch:",
+          entriesToSave
+        );
+
+        try {
+          const regularResult = await saveEntriHarianBatch(entriesToSave);
+          savedResults.push(...regularResult);
+          console.log("✅ REGULAR ENTRIES SAVED SUCCESSFULLY:", regularResult);
+        } catch (regularError) {
+          console.error("❌ REGULAR ENTRIES SAVE ERROR:", regularError);
+          throw regularError; // Re-throw to be caught by main catch block
+        }
+      }
+
+      // ✅ SUCCESS HANDLING: Show success message and reload data
+      if (savedResults.length > 0) {
+        console.log("✅ ALL ENTRIES SAVED SUCCESSFULLY:", savedResults);
+
+        // Show success message
+        const totalSaved = savedResults.length;
+        const piutangCount = piutangEntries.length;
+        const utangCount = utangEntries.length;
+        const regularCount = regularEntries.length;
+
+        let successMessage = `Berhasil menyimpan ${totalSaved} entri`;
+        if (piutangCount > 0) {
+          successMessage += ` (${piutangCount} piutang`;
+        }
+        if (utangCount > 0) {
+          successMessage +=
+            piutangCount > 0
+              ? `, ${utangCount} utang`
+              : ` (${utangCount} utang`;
+        }
+        if (regularCount > 0) {
+          successMessage +=
+            piutangCount > 0 || utangCount > 0
+              ? `, ${regularCount} reguler`
+              : ` (${regularCount} reguler`;
+        }
+        if (piutangCount > 0 || utangCount > 0) {
+          successMessage += ")";
+        }
+
+        toastSuccess.custom(successMessage);
+
+        // Clear form
+        setJournalRows([
+          {
+            id: "1",
+            accountId: "",
+            keterangan: "",
+            nominal: "",
+            kuantitas: "",
+            piutangType: undefined,
+            transactionType: undefined,
+            targetAmount: "",
+            realisasiAmount: "",
+            hppAmount: "",
+            pemakaianAmount: "",
+            stokAkhir: "",
+            saldoAkhir: "",
+            attendanceStatus: undefined,
+            absentCount: "",
+            shift: undefined,
+            utangType: undefined,
+            utangKategori: undefined,
+          },
+        ]);
+
+        // Reload data to show updated entries
+        await loadData();
+      }
+
+      // Rest of success handling...
     } catch (err) {
-      console.error("❌ SAVE ERROR:", err);
+      console.error("❌ SAVE JOURNAL ENTRIES ERROR:", err);
 
+      // Handle different types of errors
       if (err instanceof Error) {
-        const errorMsg = err.message.toLowerCase();
-        console.log("🔍 Error analysis:", errorMsg);
-
-        if (errorMsg.includes("duplicate") || errorMsg.includes("constraint")) {
-          console.log("🔄 Duplicate error detected");
-          toastError.duplicate();
-          setTimeout(() => loadData(), 1000);
-        } else if (
-          errorMsg.includes("validation") ||
-          errorMsg.includes("invalid")
-        ) {
-          console.log("❌ Validation error detected");
-          toastError.validation(err.message);
-        } else if (errorMsg.includes("network") || errorMsg.includes("fetch")) {
-          console.log("🌐 Network error detected");
-          toastError.network();
-        } else if (
-          errorMsg.includes("permission") ||
-          errorMsg.includes("access")
-        ) {
-          console.log("🚫 Permission error detected");
-          toastError.permission();
+        if (err.message.includes("VALIDATION_ERROR")) {
+          toastError.validation(err.message.replace("VALIDATION_ERROR: ", ""));
+        } else if (err.message.includes("NETWORK_ERROR")) {
+          toastError.custom(
+            "Gagal terhubung ke server. Periksa koneksi internet Anda."
+          );
         } else {
-          console.log("⚠️ Server error detected");
-          toastError.server();
+          toastError.custom(
+            err.message || "Terjadi kesalahan saat menyimpan entri"
+          );
         }
       } else {
-        console.log("❓ Unknown error detected");
         toastError.custom("Terjadi kesalahan yang tidak diketahui");
       }
     } finally {
-      console.log("🏁 Save process finished");
       setLoading(false);
     }
   };
@@ -567,10 +874,10 @@ export default function JournalPage() {
   };
 
   // ✅ Helper function to get division type
-  const getDivisionType = () => {
+  const getDivisionType = (): string => {
     const divisionName = user?.division?.name?.toLowerCase();
     if (divisionName?.includes("keuangan")) return "KEUANGAN";
-    if (divisionName?.includes("blending")) return "BLENDING"; // ✅ ADD: Blending division detection
+    if (divisionName?.includes("blending")) return "BLENDING";
     if (
       divisionName?.includes("pemasaran") ||
       divisionName?.includes("marketing")
@@ -582,11 +889,11 @@ export default function JournalPage() {
       divisionName?.includes("hrd") ||
       divisionName?.includes("sumber daya manusia")
     )
-      return "HRD"; // ✅ ADD: HRD division detection
+      return "HRD";
     return "GENERAL";
   };
 
-  const divisionType = getDivisionType();
+  const divisionType: string = getDivisionType();
 
   // ✅ Helper function untuk format currency
   const formatCurrency = (amount: number) => {
@@ -704,8 +1011,8 @@ export default function JournalPage() {
 
     switch (divisionType) {
       case "KEUANGAN":
-        // For cash accounts, show transaction type selector
-        if (selectedAccount.accountName.toLowerCase().includes("kas")) {
+        // Untuk akun kas, tampilkan selector jenis transaksi
+        if (selectedAccount?.accountName.toLowerCase().includes("kas")) {
           return (
             <div className="col-span-12 mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
               <div className="grid grid-cols-3 gap-4">
@@ -713,31 +1020,59 @@ export default function JournalPage() {
                   <Label>Jenis Transaksi</Label>
                   <Select
                     value={row.transactionType || ""}
-                    onValueChange={(
-                      value: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR"
-                    ) => updateRow(row.id, "transactionType", value)}
+                    onValueChange={(value) =>
+                      updateRow(row.id, "transactionType", value)
+                    }
                   >
                     <SelectTrigger className="mt-1">
                       <SelectValue placeholder="Pilih jenis..." />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="PENERIMAAN">
-                        <div className="flex items-center gap-2">
-                          <ArrowUpCircle className="h-4 w-4 text-green-600" />
-                          Penerimaan
-                        </div>
+                        <span className="flex items-center gap-2">
+                          <span className="text-green-600">⬆️</span> Penerimaan
+                        </span>
                       </SelectItem>
                       <SelectItem value="PENGELUARAN">
-                        <div className="flex items-center gap-2">
-                          <ArrowDownCircle className="h-4 w-4 text-red-600" />
-                          Pengeluaran
-                        </div>
+                        <span className="flex items-center gap-2">
+                          <span className="text-red-600">⬇️</span> Pengeluaran
+                        </span>
                       </SelectItem>
                       <SelectItem value="SALDO_AKHIR">
-                        <div className="flex items-center gap-2">
-                          <DollarSign className="h-4 w-4 text-purple-600" />
-                          Saldo Akhir
-                        </div>
+                        <span className="flex items-center gap-2">
+                          <span className="text-purple-600">💰</span> Saldo
+                          Akhir
+                        </span>
+                      </SelectItem>
+                      {/* Tambahkan tipe piutang */}
+                      <SelectItem value="PIUTANG_BARU">
+                        <span className="flex items-center gap-2">
+                          <span className="text-blue-600">👤</span> Piutang Baru
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="PIUTANG_TERTAGIH">
+                        <span className="flex items-center gap-2">
+                          <span className="text-emerald-600">👤</span> Piutang
+                          Tertagih
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="PIUTANG_MACET">
+                        <span className="flex items-center gap-2">
+                          <span className="text-orange-600">👤</span> Piutang
+                          Macet
+                        </span>
+                      </SelectItem>
+                      {/* ✅ NEW: Tambahkan tipe utang */}
+                      <SelectItem value="UTANG_BARU">
+                        <span className="flex items-center gap-2">
+                          <span className="text-red-600">💳</span> Utang Baru
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="UTANG_DIBAYAR">
+                        <span className="flex items-center gap-2">
+                          <span className="text-green-600">💳</span> Utang
+                          Dibayar
+                        </span>
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -746,51 +1081,85 @@ export default function JournalPage() {
                   <Label>Nominal</Label>
                   <Input
                     type="number"
-                    placeholder={
-                      selectedAccount?.valueType === "NOMINAL"
-                        ? "Rp 0"
-                        : "0 unit"
+                    placeholder="Rp 0"
+                    value={row.nominal}
+                    onChange={(e) =>
+                      updateRow(row.id, "nominal", e.target.value)
                     }
-                    value={getInputValue(row)}
-                    onChange={(e) => {
-                      const field =
-                        selectedAccount?.valueType === "NOMINAL"
-                          ? "nominal"
-                          : "kuantitas";
-                      updateRow(row.id, field, e.target.value);
-                    }}
                     className="mt-1"
                     min="0"
-                    step={
-                      selectedAccount?.valueType === "NOMINAL" ? "1000" : "1"
-                    }
+                    step="1000"
                   />
                 </div>
                 <div>
                   <Label>Nilai Tampil</Label>
                   <div className="mt-1 p-2 bg-white rounded border text-sm">
-                    {selectedAccount
-                      ? getInputValue(row)
-                        ? formatCurrency(Number.parseFloat(getInputValue(row)))
-                        : "0"
-                      : "Pilih akun dulu"}
+                    {row.nominal
+                      ? Number(row.nominal).toLocaleString("id-ID", {
+                          style: "currency",
+                          currency: "IDR",
+                        })
+                      : "0"}
                   </div>
                 </div>
               </div>
+              {/* Dropdown kategori piutang hanya muncul jika tipe transaksi piutang dipilih */}
+              {["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
+                row.transactionType || ""
+              ) && (
+                <div className="mt-4">
+                  <Label>Kategori Piutang</Label>
+                  <Select
+                    value={row.kategori || ""}
+                    onValueChange={(value) =>
+                      updateRow(row.id, "kategori", value)
+                    }
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Pilih kategori piutang..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="KARYAWAN">Karyawan</SelectItem>
+                      <SelectItem value="TOKO">Toko</SelectItem>
+                      <SelectItem value="BAHAN_BAKU">Bahan Baku</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {/* ✅ NEW: Dropdown kategori utang hanya muncul jika tipe transaksi utang dipilih */}
+              {["UTANG_BARU", "UTANG_DIBAYAR"].includes(
+                row.transactionType || ""
+              ) && (
+                <div className="mt-4">
+                  <Label>Kategori Utang</Label>
+                  <Select
+                    value={row.utangKategori || ""}
+                    onValueChange={(value) =>
+                      updateRow(row.id, "utangKategori", value)
+                    }
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Pilih kategori utang..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BAHAN_BAKU">Bahan Baku</SelectItem>
+                      <SelectItem value="BANK_HM">Bank HM</SelectItem>
+                      <SelectItem value="BANK_HENRY">Bank Henry</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           );
         }
-        break;
 
-      case "BLENDING":
-        // For blending accounts, show blending + HPP input
+      case "PRODUKSI":
         return (
           <div className="col-span-12 mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
-                  <Package className="inline h-3 w-3 mr-1" />
-                  Hasil Blending
+                  Jumlah Produksi (Unit)
                 </label>
                 <Input
                   type="number"
@@ -801,13 +1170,9 @@ export default function JournalPage() {
                   }
                   className="text-right text-sm"
                 />
-                <div className="text-xs text-gray-500 mt-1">
-                  Unit/Pcs yang diproduksi
-                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
-                  <DollarSign className="inline h-3 w-3 mr-1" />
                   HPP (Harga Pokok Produksi)
                 </label>
                 <Input
@@ -819,14 +1184,45 @@ export default function JournalPage() {
                   }
                   className="text-right text-sm"
                 />
-                <div className="text-xs text-gray-500 mt-1">
-                  Biaya produksi total
-                </div>
               </div>
             </div>
           </div>
         );
-
+      case "BLENDING":
+        return (
+          <div className="col-span-12 mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-green-700 mb-1">
+                  Hasil Blending (Unit)
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0 unit"
+                  value={row.kuantitas}
+                  onChange={(e) =>
+                    updateRow(row.id, "kuantitas", e.target.value)
+                  }
+                  className="text-right text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-green-700 mb-1">
+                  HPP (Harga Pokok Produksi)
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={row.hppAmount}
+                  onChange={(e) =>
+                    updateRow(row.id, "hppAmount", e.target.value)
+                  }
+                  className="text-right text-sm"
+                />
+              </div>
+            </div>
+          </div>
+        );
       case "PEMASARAN":
         // For sales accounts, show target vs realization
         return (
@@ -869,33 +1265,6 @@ export default function JournalPage() {
                 </div>
               </div>
             </div>
-            {/* Performance indicator */}
-            {row.targetAmount && row.realisasiAmount && (
-              <div className="mt-2 p-2 bg-white rounded border">
-                <div className="text-xs text-center">
-                  Performance:{" "}
-                  {Math.round(
-                    (parseFloat(row.realisasiAmount) /
-                      parseFloat(row.targetAmount)) *
-                      100
-                  )}
-                  %
-                  <div
-                    className={`text-xs font-medium ${
-                      parseFloat(row.realisasiAmount) >=
-                      parseFloat(row.targetAmount)
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {parseFloat(row.realisasiAmount) >=
-                    parseFloat(row.targetAmount)
-                      ? "✅ Target Tercapai"
-                      : "⚠️ Belum Mencapai Target"}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         );
 
@@ -944,7 +1313,6 @@ export default function JournalPage() {
           </div>
         );
 
-      // ✅ NEW: HRD specialized input - Updated
       case "HRD":
         // For employee accounts, show attendance status
         return (
@@ -1013,41 +1381,6 @@ export default function JournalPage() {
                 </Select>
               </div>
             </div>
-            {/* Attendance summary */}
-            {row.attendanceStatus && (
-              <div className="mt-2 p-2 bg-white rounded border">
-                <div className="text-xs text-center">
-                  <div
-                    className={`font-medium ${
-                      row.attendanceStatus === "HADIR"
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {row.attendanceStatus === "HADIR"
-                      ? "✅ Karyawan Hadir"
-                      : `❌ Karyawan ${
-                          row.attendanceStatus === "SAKIT"
-                            ? "Sakit"
-                            : row.attendanceStatus === "IZIN"
-                            ? "Izin"
-                            : "Tidak Hadir"
-                        }`}
-                  </div>
-                  {row.absentCount &&
-                    Number.parseFloat(row.absentCount) > 0 && (
-                      <div className="text-red-600 mt-1">
-                        👥 Tidak Hadir: {row.absentCount} orang
-                      </div>
-                    )}
-                  {row.shift === "LEMBUR" && (
-                    <div className="text-blue-600 mt-1">
-                      ⏰ Shift Lembur (15:00-20:00)
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         );
 
@@ -1056,53 +1389,272 @@ export default function JournalPage() {
     }
   };
 
-  // ✅ Debug: Log existing entries to check HRD field mapping
-  useEffect(() => {
-    if (existingEntries.length > 0) {
-      console.log("🔍 EXISTING ENTRIES DEBUG:", existingEntries);
-      existingEntries.forEach((entry, index) => {
-        console.log(`Entry ${index}:`, {
-          id: entry.id,
-          transactionType: (entry as any).transactionType,
-          nilai: entry.nilai,
-          saldoAkhir: (entry as any).saldoAkhir,
-          // ✅ NEW: Debug HRD fields
-          attendanceStatus: (entry as any).attendanceStatus,
-          absentCount: (entry as any).absentCount,
-          shift: (entry as any).shift,
-          // ✅ Check if HRD data exists
-          hasHRDData: !!(
-            (entry as any).attendanceStatus ||
-            (entry as any).absentCount ||
-            (entry as any).shift
-          ),
-          rawEntry: entry,
-        });
-      });
+  // Render tab menu
+  const renderTabMenu = () => (
+    <div className="flex gap-2 mb-4">
+      {["KAS", "PIUTANG", "UTANG"].map((type) => (
+        <button
+          key={type}
+          className={`px-4 py-2 rounded-t font-semibold border-b-2 transition-all ${
+            selectedTransactionType === type
+              ? "border-blue-600 text-blue-700 bg-white"
+              : "border-transparent text-gray-500 bg-gray-100 hover:bg-gray-200"
+          }`}
+          onClick={() => setSelectedTransactionType(type as any)}
+          type="button"
+        >
+          {type.charAt(0) + type.slice(1).toLowerCase()}
+        </button>
+      ))}
+    </div>
+  );
 
-      // ✅ NEW: Special HRD data summary
-      if (divisionType === "HRD") {
-        console.log("🎯 HRD DATA SUMMARY:", {
-          totalEntries: existingEntries.length,
-          hadirCount: existingEntries.filter(
-            (e) => (e as any).attendanceStatus === "HADIR"
-          ).length,
-          totalAbsent: existingEntries.reduce(
-            (sum, e) => sum + (Number((e as any).absentCount) || 0),
-            0
-          ),
-          lemburCount: existingEntries.filter(
-            (e) => (e as any).shift === "LEMBUR"
-          ).length,
-        });
-      }
+  // Render form input sesuai tab
+  const renderTabForm = () => {
+    switch (selectedTransactionType) {
+      case "KAS":
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label>Akun</Label>
+              <Select
+                value={journalRows[0].accountId}
+                onValueChange={(value) =>
+                  updateRow(journalRows[0].id, "accountId", value)
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Pilih akun" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {getAccountDisplay(account.id)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Jenis Transaksi</Label>
+              <Select
+                value={journalRows[0].transactionType || ""}
+                onValueChange={(value) =>
+                  updateRow(journalRows[0].id, "transactionType", value)
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Pilih jenis transaksi" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENERIMAAN">Penerimaan</SelectItem>
+                  <SelectItem value="PENGELUARAN">Pengeluaran</SelectItem>
+                  <SelectItem value="SALDO_AKHIR">Saldo Akhir</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Nominal</Label>
+              <Input
+                type="number"
+                placeholder="Rp 0"
+                value={journalRows[0].nominal}
+                onChange={(e) =>
+                  updateRow(journalRows[0].id, "nominal", e.target.value)
+                }
+                className="mt-1"
+                min="0"
+                step="1000"
+              />
+            </div>
+            <div>
+              <Label>Keterangan</Label>
+              <Input
+                placeholder="Deskripsi"
+                value={journalRows[0].keterangan}
+                onChange={(e) =>
+                  updateRow(journalRows[0].id, "keterangan", e.target.value)
+                }
+                className="mt-1"
+              />
+            </div>
+          </div>
+        );
+      case "PIUTANG":
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label>Akun</Label>
+              <Select
+                value={journalRows[0].accountId}
+                onValueChange={(value) =>
+                  updateRow(journalRows[0].id, "accountId", value)
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Pilih akun" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {getAccountDisplay(account.id)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Tipe Piutang</Label>
+              <Select
+                value={journalRows[0].piutangType || ""}
+                onValueChange={(value) =>
+                  updateRow(journalRows[0].id, "piutangType", value)
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Pilih tipe piutang" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PIUTANG_BARU">Baru</SelectItem>
+                  <SelectItem value="PIUTANG_TERTAGIH">Tertagih</SelectItem>
+                  <SelectItem value="PIUTANG_MACET">Macet</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Kategori Piutang</Label>
+              <Select
+                value={journalRows[0].kategori || ""}
+                onValueChange={(value) =>
+                  updateRow(journalRows[0].id, "kategori", value)
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Pilih kategori piutang" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="KARYAWAN">Karyawan</SelectItem>
+                  <SelectItem value="TOKO">Toko</SelectItem>
+                  <SelectItem value="BAHAN_BAKU">Bahan Baku</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Nominal</Label>
+              <Input
+                type="number"
+                placeholder="Rp 0"
+                value={journalRows[0].nominal}
+                onChange={(e) =>
+                  updateRow(journalRows[0].id, "nominal", e.target.value)
+                }
+                className="mt-1"
+                min="0"
+                step="1000"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label>Keterangan</Label>
+              <Input
+                placeholder="Deskripsi"
+                value={journalRows[0].keterangan}
+                onChange={(e) =>
+                  updateRow(journalRows[0].id, "keterangan", e.target.value)
+                }
+                className="mt-1"
+              />
+            </div>
+          </div>
+        );
+      case "UTANG":
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label>Akun</Label>
+              <Select
+                value={journalRows[0].accountId}
+                onValueChange={(value) =>
+                  updateRow(journalRows[0].id, "accountId", value)
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Pilih akun" />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {getAccountDisplay(account.id)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Tipe Utang</Label>
+              <Select
+                value={journalRows[0].utangType || ""}
+                onValueChange={(value) =>
+                  updateRow(journalRows[0].id, "utangType", value)
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Pilih tipe utang" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UTANG_BARU">Baru</SelectItem>
+                  <SelectItem value="UTANG_DIBAYAR">Dibayar</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Kategori Utang</Label>
+              <Select
+                value={journalRows[0].utangKategori || ""}
+                onValueChange={(value) =>
+                  updateRow(journalRows[0].id, "utangKategori", value)
+                }
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Pilih kategori utang" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BAHAN_BAKU">Bahan Baku</SelectItem>
+                  <SelectItem value="BANK_HM">Bank HM</SelectItem>
+                  <SelectItem value="BANK_HENRY">Bank Henry</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Nominal</Label>
+              <Input
+                type="number"
+                placeholder="Rp 0"
+                value={journalRows[0].nominal}
+                onChange={(e) =>
+                  updateRow(journalRows[0].id, "nominal", e.target.value)
+                }
+                className="mt-1"
+                min="0"
+                step="1000"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label>Keterangan</Label>
+              <Input
+                placeholder="Deskripsi"
+                value={journalRows[0].keterangan}
+                onChange={(e) =>
+                  updateRow(journalRows[0].id, "keterangan", e.target.value)
+                }
+                className="mt-1"
+              />
+            </div>
+          </div>
+        );
+      default:
+        return null;
     }
-  }, [existingEntries, divisionType]);
-
-  // ✅ Debug: Check if backend returns saldoAkhir field
-  useEffect(() => {
-    console.log("🔍 EXISTING ENTRIES:", existingEntries);
-  }, [existingEntries]);
+  };
 
   return (
     <ClientErrorBoundary>
@@ -1186,644 +1738,72 @@ export default function JournalPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DivisionIcon className="h-5 w-5" />
-              Form Input Jurnal {divisionType}
+              Form Input Jurnal{" "}
+              {user?.division?.name?.toUpperCase() || divisionType}
             </CardTitle>
             <CardDescription>
-              {divisionType === "KEUANGAN" &&
-                "Pilih akun kas, tentukan jenis transaksi (Penerimaan/Pengeluaran), dan masukkan nominal"}
-              {divisionType === "BLENDING" &&
-                "Input hasil blending dan HPP dalam satu formulir terintegrasi"}
-              {divisionType === "PEMASARAN" &&
-                "Catat target dan realisasi penjualan untuk monitoring kinerja"}
-              {divisionType === "GUDANG" &&
-                "Catat pemakaian bahan baku dan update stok akhir"}
-              {divisionType === "GENERAL" &&
-                "Pilih akun dari rak divisi, tambahkan keterangan, dan masukkan nilai sesuai tipe akun"}
+              Pilih jenis transaksi di tab, lalu isi form sesuai kebutuhan.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {/* Header - Updated for specialized divisions */}
-              <div className="grid grid-cols-12 gap-4 font-medium text-sm text-gray-600 border-b pb-2">
-                <div className="col-span-2">Tgl Jurnal</div>
-                <div className="col-span-4">Akun</div>
-                <div className="col-span-3">Keterangan</div>
-                <div className="col-span-2">
-                  {divisionType === "GENERAL" ? "Nilai" : "Nilai Dasar"}
-                </div>
-                <div className="col-span-1">Aksi</div>
-              </div>
-
-              {/* Journal Rows */}
-              {journalRows.map((row, index) => {
-                const selectedAccount = getSelectedAccount(row.accountId);
-
-                return (
-                  <div
-                    key={row.id}
-                    className="grid grid-cols-12 gap-4 items-end p-4 border rounded-lg bg-gray-50"
-                  >
-                    {/* SIMPLIFIED: Hanya Akun dan Keterangan di form row putih */}
-
-                    {/* Akun - 6 kolom */}
-                    <div className="col-span-6">
-                      <Label>Akun</Label>
-                      <Select
-                        value={row.accountId}
-                        onValueChange={(value) =>
-                          updateRow(row.id, "accountId", value)
-                        }
-                      >
-                        <SelectTrigger className="mt-1">
-                          <SelectValue placeholder="Pilih akun" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {accounts.map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                              {getAccountDisplay(account.id)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Keterangan - 5 kolom */}
-                    <div className="col-span-5">
-                      <Label>Keterangan</Label>
-                      <Input
-                        placeholder="Deskripsi"
-                        value={row.keterangan}
-                        onChange={(e) =>
-                          updateRow(row.id, "keterangan", e.target.value)
-                        }
-                        className="mt-1"
-                      />
-                    </div>
-
-                    {/* Delete Button - 1 kolom */}
-                    <div className="col-span-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeRow(row.id)}
-                        disabled={journalRows.length === 1}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-
-                    {/* SEMUA FIELD LAINNYA dipindahkan ke bar bawah */}
-                    {renderSpecializedInput(row, selectedAccount)}
-                  </div>
-                );
-              })}
-
-              {/* Action Buttons */}
-              <div className="flex gap-2 pt-4 border-t">
-                <Button
-                  variant="outline"
-                  onClick={addNewRow}
-                  className="bg-gray-50 hover:bg-gray-100"
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Akun</Label>
+                <Select
+                  value={journalRows[0].accountId}
+                  onValueChange={(value) =>
+                    updateRow(journalRows[0].id, "accountId", value)
+                  }
                 >
-                  <Plus className="mr-2 h-4 w-4" />
-                  ADD{" "}
-                  {divisionType === "KEUANGAN"
-                    ? "TRANSAKSI"
-                    : divisionType === "BLENDING"
-                    ? "BLENDING"
-                    : divisionType === "PEMASARAN"
-                    ? "PENJUALAN"
-                    : divisionType === "GUDANG"
-                    ? "INVENTORY"
-                    : "TRANSACTION"}
-                </Button>
-
-                <Button
-                  onClick={saveJournalEntries}
-                  className={`${divisionStyle.bg} ${divisionStyle.hover} text-white`}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                      Menyimpan...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      SAVE {divisionType}
-                    </>
-                  )}
-                </Button>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Pilih akun" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {getAccountDisplay(account.id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+              {/* Form detail muncul jika akun sudah dipilih */}
+              {journalRows[0].accountId &&
+                renderSpecializedInput(
+                  journalRows[0],
+                  getSelectedAccount(journalRows[0].accountId)
+                )}
+            </div>
+            {/* Action Buttons */}
+            <div className="flex gap-2 pt-4 border-t mt-4">
+              <Button
+                variant="outline"
+                onClick={addNewRow}
+                className="bg-gray-50 hover:bg-gray-100"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                ADD TRANSAKSI
+              </Button>
+              <Button
+                onClick={saveJournalEntries}
+                className={`${divisionStyle.bg} ${divisionStyle.hover} text-white`}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                    Menyimpan...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    SAVE {divisionType}
+                  </>
+                )}
+              </Button>
             </div>
           </CardContent>
         </Card>
-
-        {/* ✅ ENHANCED: Summary Cards untuk Semua Divisi */}
-
-        {/* Summary untuk KEUANGAN */}
-        {divisionType === "KEUANGAN" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Ringkasan Transaksi Harian KEUANGAN
-              </CardTitle>
-              <p className="text-sm text-gray-600">
-                Ringkasan transaksi keuangan untuk tanggal{" "}
-                {new Date(selectedDate).toLocaleDateString("id-ID", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Total Penerimaan */}
-                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                  <div className="flex items-center gap-2">
-                    <ArrowUpCircle className="h-5 w-5 text-green-600" />
-                    <h3 className="font-semibold text-green-800">
-                      Total Penerimaan
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-green-900 mt-2">
-                    {formatCurrency(keuanganSummary.totalPenerimaan)}
-                  </p>
-                </div>
-
-                {/* Total Pengeluaran */}
-                <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                  <div className="flex items-center gap-2">
-                    <ArrowDownCircle className="h-5 w-5 text-red-600" />
-                    <h3 className="font-semibold text-red-800">
-                      Total Pengeluaran
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-red-900 mt-2">
-                    {formatCurrency(keuanganSummary.totalPengeluaran)}
-                  </p>
-                </div>
-
-                {/* Total Saldo Akhir */}
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-semibold text-blue-800">
-                      Total Saldo Akhir
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-900 mt-2">
-                    {formatCurrency(keuanganSummary.totalSaldoAkhir)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Net Balance */}
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-800">
-                    Saldo Bersih Harian
-                  </h3>
-                  <p
-                    className={`text-xl font-bold ${
-                      keuanganSummary.totalPenerimaan -
-                        keuanganSummary.totalPengeluaran >=
-                      0
-                        ? "text-green-600"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {formatCurrency(
-                      keuanganSummary.totalPenerimaan -
-                        keuanganSummary.totalPengeluaran
-                    )}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ✅ NEW: Summary untuk PEMASARAN */}
-        {divisionType === "PEMASARAN" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                Ringkasan Performance PEMASARAN
-              </CardTitle>
-              <p className="text-sm text-gray-600">
-                Target vs Realisasi penjualan untuk tanggal{" "}
-                {new Date(selectedDate).toLocaleDateString("id-ID")}
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-semibold text-blue-800">
-                      Total Target
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-900 mt-2">
-                    {formatCurrency(
-                      existingEntries.reduce((sum, entry) => {
-                        const target = (entry as any).targetAmount || 0;
-                        return sum + Number(target);
-                      }, 0)
-                    )}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-green-600" />
-                    <h3 className="font-semibold text-green-800">
-                      Total Realisasi
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-green-900 mt-2">
-                    {formatCurrency(
-                      existingEntries.reduce((sum, entry) => {
-                        const realisasi = (entry as any).realisasiAmount || 0;
-                        return sum + Number(realisasi);
-                      }, 0)
-                    )}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5 text-orange-600" />
-                    <h3 className="font-semibold text-orange-800">
-                      Achievement Rate
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-orange-900 mt-2">
-                    {(() => {
-                      const totalTarget = existingEntries.reduce(
-                        (sum, entry) => {
-                          const target = (entry as any).targetAmount || 0;
-                          return sum + Number(target);
-                        },
-                        0
-                      );
-                      const totalRealisasi = existingEntries.reduce(
-                        (sum, entry) => {
-                          const realisasi = (entry as any).realisasiAmount || 0;
-                          return sum + Number(realisasi);
-                        },
-                        0
-                      );
-                      const rate =
-                        totalTarget > 0
-                          ? (totalRealisasi / totalTarget) * 100
-                          : 0;
-                      return rate.toFixed(1) + "%";
-                    })()}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                  <div className="flex items-center gap-2">
-                    <Warehouse className="h-5 w-5 text-purple-600" />
-                    <h3 className="font-semibold text-purple-800">Status</h3>
-                  </div>
-                  <p className="text-lg font-bold text-purple-900 mt-2">
-                    {(() => {
-                      const totalTarget = existingEntries.reduce(
-                        (sum, entry) => {
-                          const target = (entry as any).targetAmount || 0;
-                          return sum + Number(target);
-                        },
-                        0
-                      );
-                      const totalRealisasi = existingEntries.reduce(
-                        (sum, entry) => {
-                          const realisasi = (entry as any).realisasiAmount || 0;
-                          return sum + Number(realisasi);
-                        },
-                        0
-                      );
-                      const rate =
-                        totalTarget > 0
-                          ? (totalRealisasi / totalTarget) * 100
-                          : 0;
-                      return rate >= 100 ? "Target Tercapai" : "Belum Tercapai";
-                    })()}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ✅ NEW: Summary untuk BLENDING */}
-        {divisionType === "BLENDING" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
-                Ringkasan Blending Harian
-              </CardTitle>
-              <p className="text-sm text-gray-600">
-                Hasil produksi dan HPP untuk tanggal{" "}
-                {new Date(selectedDate).toLocaleDateString("id-ID")}
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-semibold text-blue-800">
-                      Total Produksi
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-900 mt-2">
-                    {existingEntries
-                      .reduce((sum, entry) => {
-                        return sum + Number(entry.nilai);
-                      }, 0)
-                      .toLocaleString("id-ID")}{" "}
-                    unit
-                  </p>
-                </div>
-
-                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5 text-orange-600" />
-                    <h3 className="font-semibold text-orange-800">Total HPP</h3>
-                  </div>
-                  <p className="text-2xl font-bold text-orange-900 mt-2">
-                    {formatCurrency(
-                      existingEntries.reduce((sum, entry) => {
-                        const hpp = (entry as any).hppAmount || 0;
-                        return sum + Number(hpp);
-                      }, 0)
-                    )}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-green-600" />
-                    <h3 className="font-semibold text-green-800">
-                      HPP per Unit
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-green-900 mt-2">
-                    {(() => {
-                      const totalProduksi = existingEntries.reduce(
-                        (sum, entry) => {
-                          return sum + Number(entry.nilai);
-                        },
-                        0
-                      );
-                      const totalHPP = existingEntries.reduce((sum, entry) => {
-                        const hpp = (entry as any).hppAmount || 0;
-                        return sum + Number(hpp);
-                      }, 0);
-                      const hppPerUnit =
-                        totalProduksi > 0 ? totalHPP / totalProduksi : 0;
-                      return formatCurrency(hppPerUnit);
-                    })()}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                  <div className="flex items-center gap-2">
-                    <Warehouse className="h-5 w-5 text-purple-600" />
-                    <h3 className="font-semibold text-purple-800">Efisiensi</h3>
-                  </div>
-                  <p className="text-lg font-bold text-purple-900 mt-2">
-                    {(() => {
-                      const totalProduksi = existingEntries.reduce(
-                        (sum, entry) => {
-                          return sum + Number(entry.nilai);
-                        },
-                        0
-                      );
-                      const totalHPP = existingEntries.reduce((sum, entry) => {
-                        const hpp = (entry as any).hppAmount || 0;
-                        return sum + Number(hpp);
-                      }, 0);
-                      const hppPerUnit =
-                        totalProduksi > 0 ? totalHPP / totalProduksi : 0;
-                      return hppPerUnit < 5000 ? "Efisien" : "Review";
-                    })()}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ✅ NEW: Summary untuk GUDANG */}
-        {divisionType === "GUDANG" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Warehouse className="h-5 w-5" />
-                Ringkasan Inventori Harian
-              </CardTitle>
-              <p className="text-sm text-gray-600">
-                Pemakaian dan stok untuk tanggal{" "}
-                {new Date(selectedDate).toLocaleDateString("id-ID")}
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-semibold text-blue-800">
-                      Total Pemakaian
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-900 mt-2">
-                    {existingEntries
-                      .reduce((sum, entry) => {
-                        const pemakaian = (entry as any).pemakaianAmount || 0;
-                        return sum + Number(pemakaian);
-                      }, 0)
-                      .toLocaleString("id-ID")}{" "}
-                    unit
-                  </p>
-                </div>
-
-                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                  <div className="flex items-center gap-2">
-                    <Warehouse className="h-5 w-5 text-green-600" />
-                    <h3 className="font-semibold text-green-800">
-                      Rata-rata Stok
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-green-900 mt-2">
-                    {(() => {
-                      const validEntries = existingEntries.filter(
-                        (entry) => (entry as any).stokAkhir != null
-                      );
-                      if (validEntries.length === 0) return "0 unit";
-                      const avgStok =
-                        validEntries.reduce((sum, entry) => {
-                          const stok = (entry as any).stokAkhir || 0;
-                          return sum + Number(stok);
-                        }, 0) / validEntries.length;
-                      return avgStok.toLocaleString("id-ID") + " unit";
-                    })()}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5 text-orange-600" />
-                    <h3 className="font-semibold text-orange-800">
-                      Item Stok Rendah
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-orange-900 mt-2">
-                    {
-                      existingEntries.filter((entry) => {
-                        const stok = (entry as any).stokAkhir || 0;
-                        return Number(stok) < 100;
-                      }).length
-                    }{" "}
-                    item
-                  </p>
-                </div>
-
-                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-purple-600" />
-                    <h3 className="font-semibold text-purple-800">
-                      Status Gudang
-                    </h3>
-                  </div>
-                  <p className="text-lg font-bold text-purple-900 mt-2">
-                    {(() => {
-                      const lowStockCount = existingEntries.filter((entry) => {
-                        const stok = (entry as any).stokAkhir || 0;
-                        return Number(stok) < 100;
-                      }).length;
-                      return lowStockCount > 0 ? "Perlu Restock" : "Stok Aman";
-                    })()}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ✅ NEW: Summary untuk HRD */}
-        {divisionType === "HRD" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Ringkasan Kehadiran Harian
-              </CardTitle>
-              <p className="text-sm text-gray-600">
-                Status kehadiran karyawan untuk tanggal{" "}
-                {new Date(selectedDate).toLocaleDateString("id-ID")}
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-green-600" />
-                    <h3 className="font-semibold text-green-800">
-                      Karyawan Hadir
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-green-900 mt-2">
-                    {
-                      existingEntries.filter((entry) => {
-                        const status = (entry as any).attendanceStatus;
-                        return status === "HADIR";
-                      }).length
-                    }{" "}
-                    orang
-                  </p>
-                </div>
-
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-blue-600" />
-                    <h3 className="font-semibold text-blue-800">
-                      Tingkat Kehadiran
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-900 mt-2">
-                    {(() => {
-                      const totalKaryawan = existingEntries.length;
-                      const hadirCount = existingEntries.filter((entry) => {
-                        const status = (entry as any).attendanceStatus;
-                        return status === "HADIR";
-                      }).length;
-                      const rate =
-                        totalKaryawan > 0
-                          ? (hadirCount / totalKaryawan) * 100
-                          : 0;
-                      return rate.toFixed(1) + "%";
-                    })()}
-                  </p>
-                </div>
-
-                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-purple-600" />
-                    <h3 className="font-semibold text-purple-800">
-                      Total Jam Lembur
-                    </h3>
-                  </div>
-                  <p className="text-2xl font-bold text-purple-900 mt-2">
-                    {existingEntries.reduce((sum, entry) => {
-                      const overtime = (entry as any).overtimeHours || 0;
-                      return sum + Number(overtime);
-                    }, 0)}{" "}
-                    jam
-                  </p>
-                </div>
-
-                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                  <div className="flex items-center gap-2">
-                    <Warehouse className="h-5 w-5 text-orange-600" />
-                    <h3 className="font-semibold text-orange-800">
-                      Status Kehadiran
-                    </h3>
-                  </div>
-                  <p className="text-lg font-bold text-orange-900 mt-2">
-                    {(() => {
-                      const totalKaryawan = existingEntries.length;
-                      const hadirCount = existingEntries.filter((entry) => {
-                        const status = (entry as any).attendanceStatus;
-                        return status === "HADIR";
-                      }).length;
-                      const rate =
-                        totalKaryawan > 0
-                          ? (hadirCount / totalKaryawan) * 100
-                          : 0;
-                      return rate >= 90
-                        ? "Excellent"
-                        : rate >= 80
-                        ? "Good"
-                        : "Needs Improvement";
-                    })()}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Existing Entries - Updated Display */}
         {existingEntries.length > 0 && (
@@ -1913,47 +1893,332 @@ export default function JournalPage() {
                   </TableBody>
                 </Table>
               </div>
+            </CardContent>
+          </Card>
+        )}
 
-              {/* Summary - Updated */}
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <div className="text-center">
-                    <p className="text-sm text-blue-600">
-                      Total Nominal (Rupiah)
-                    </p>
-                    <p className="text-xl font-bold text-blue-800">
-                      {formatCurrency(
-                        existingEntries
-                          .filter((entry) => {
-                            const acc = accounts.find(
-                              (a) => a.id === entry.accountId
-                            );
-                            return acc?.valueType === "NOMINAL";
-                          })
-                          .reduce((sum, entry) => sum + entry.nilai, 0)
-                      )}
-                    </p>
+        {/* ✅ NEW: Summary untuk UTANG */}
+        {divisionType === "KEUANGAN" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-red-600">💳</span>
+                Ringkasan Utang
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                Rekap utang untuk tanggal{" "}
+                {new Date(selectedDate).toLocaleDateString("id-ID")}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Total Utang Baru */}
+                <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-600">🆕</span>
+                    <h3 className="font-semibold text-red-800">Utang Baru</h3>
                   </div>
+                  <p className="text-2xl font-bold text-red-900 mt-2">
+                    {formatCurrency(
+                      existingEntries
+                        .filter(
+                          (entry) =>
+                            (entry as any).transactionType === "UTANG_BARU"
+                        )
+                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                    )}
+                  </p>
                 </div>
-
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <div className="text-center">
-                    <p className="text-sm text-green-600">
-                      Total Kuantitas (Unit)
-                    </p>
-                    <p className="text-xl font-bold text-green-800">
-                      {existingEntries
-                        .filter((entry) => {
-                          const acc = accounts.find(
-                            (a) => a.id === entry.accountId
-                          );
-                          return acc?.valueType === "KUANTITAS";
-                        })
-                        .reduce((sum, entry) => sum + entry.nilai, 0)
-                        .toLocaleString("id-ID")}{" "}
-                      unit
-                    </p>
+                {/* Total Utang Dibayar */}
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✅</span>
+                    <h3 className="font-semibold text-green-800">
+                      Utang Dibayar
+                    </h3>
                   </div>
+                  <p className="text-2xl font-bold text-green-900 mt-2">
+                    {formatCurrency(
+                      existingEntries
+                        .filter(
+                          (entry) =>
+                            (entry as any).transactionType === "UTANG_DIBAYAR"
+                        )
+                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                    )}
+                  </p>
+                </div>
+                {/* Total Utang Bahan Baku */}
+                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-orange-600">📦</span>
+                    <h3 className="font-semibold text-orange-800">
+                      Utang Bahan Baku
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-orange-900 mt-2">
+                    {formatCurrency(
+                      existingEntries
+                        .filter(
+                          (entry) =>
+                            (entry as any).transactionType === "UTANG_BARU" ||
+                            (entry as any).transactionType === "UTANG_DIBAYAR"
+                        )
+                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                    )}
+                  </p>
+                </div>
+                {/* Total Utang Bank */}
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-purple-600">🏦</span>
+                    <h3 className="font-semibold text-purple-800">
+                      Utang Bank
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-purple-900 mt-2">
+                    {formatCurrency(
+                      existingEntries
+                        .filter(
+                          (entry) =>
+                            (entry as any).transactionType === "UTANG_BARU" ||
+                            (entry as any).transactionType === "UTANG_DIBAYAR"
+                        )
+                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                    )}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ✅ Ringkasan Kas */}
+        {divisionType === "KEUANGAN" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-blue-600">💰</span>
+                Ringkasan Kas
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                Rekap kas untuk tanggal{" "}
+                {new Date(selectedDate).toLocaleDateString("id-ID")}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Total Penerimaan */}
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">⬆️</span>
+                    <h3 className="font-semibold text-green-800">
+                      Total Penerimaan
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-green-900 mt-2">
+                    {formatCurrency(
+                      existingEntries
+                        .filter(
+                          (entry) =>
+                            (
+                              accounts.find((a) => a.id === entry.accountId)
+                                ?.accountName || ""
+                            )
+                              .toLowerCase()
+                              .includes("kas") &&
+                            (entry as any).transactionType === "PENERIMAAN"
+                        )
+                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                    )}
+                  </p>
+                </div>
+                {/* Total Pengeluaran */}
+                <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-600">⬇️</span>
+                    <h3 className="font-semibold text-red-800">
+                      Total Pengeluaran
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-red-900 mt-2">
+                    {formatCurrency(
+                      existingEntries
+                        .filter(
+                          (entry) =>
+                            (
+                              accounts.find((a) => a.id === entry.accountId)
+                                ?.accountName || ""
+                            )
+                              .toLowerCase()
+                              .includes("kas") &&
+                            (entry as any).transactionType === "PENGELUARAN"
+                        )
+                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                    )}
+                  </p>
+                </div>
+                {/* Saldo Akhir */}
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-blue-600">💰</span>
+                    <h3 className="font-semibold text-blue-800">Saldo Akhir</h3>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-900 mt-2">
+                    {formatCurrency(
+                      (() => {
+                        const saldo = existingEntries
+                          .filter(
+                            (entry) =>
+                              (
+                                accounts.find((a) => a.id === entry.accountId)
+                                  ?.accountName || ""
+                              )
+                                .toLowerCase()
+                                .includes("kas") &&
+                              (entry as any).transactionType === "SALDO_AKHIR"
+                          )
+                          .reduce(
+                            (sum, entry) =>
+                              sum +
+                              (Number((entry as any).saldoAkhir) ||
+                                Number(entry.nilai)),
+                            0
+                          );
+                        return saldo;
+                      })()
+                    )}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ✅ Ringkasan Piutang */}
+        {divisionType === "KEUANGAN" && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-orange-600">💳</span>
+                Ringkasan Piutang
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                Rekap piutang untuk tanggal{" "}
+                {new Date(selectedDate).toLocaleDateString("id-ID")}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* Piutang Baru */}
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-blue-600">🆕</span>
+                    <h3 className="font-semibold text-blue-800">
+                      Piutang Baru
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-900 mt-2">
+                    {formatCurrency(
+                      existingEntries
+                        .filter(
+                          (entry) =>
+                            (
+                              accounts.find((a) => a.id === entry.accountId)
+                                ?.accountName || ""
+                            )
+                              .toLowerCase()
+                              .includes("piutang") &&
+                            (entry as any).transactionType === "PIUTANG_BARU"
+                        )
+                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                    )}
+                  </p>
+                </div>
+                {/* Piutang Tertagih */}
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-green-600">✅</span>
+                    <h3 className="font-semibold text-green-800">
+                      Piutang Tertagih
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-green-900 mt-2">
+                    {formatCurrency(
+                      existingEntries
+                        .filter(
+                          (entry) =>
+                            (
+                              accounts.find((a) => a.id === entry.accountId)
+                                ?.accountName || ""
+                            )
+                              .toLowerCase()
+                              .includes("piutang") &&
+                            (entry as any).transactionType ===
+                              "PIUTANG_TERTAGIH"
+                        )
+                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                    )}
+                  </p>
+                </div>
+                {/* Piutang Macet */}
+                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-orange-600">⚠️</span>
+                    <h3 className="font-semibold text-orange-800">
+                      Piutang Macet
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-orange-900 mt-2">
+                    {formatCurrency(
+                      existingEntries
+                        .filter(
+                          (entry) =>
+                            (
+                              accounts.find((a) => a.id === entry.accountId)
+                                ?.accountName || ""
+                            )
+                              .toLowerCase()
+                              .includes("piutang") &&
+                            (entry as any).transactionType === "PIUTANG_MACET"
+                        )
+                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                    )}
+                  </p>
+                </div>
+                {/* Saldo Akhir Piutang */}
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-purple-600">💰</span>
+                    <h3 className="font-semibold text-purple-800">
+                      Saldo Akhir Piutang
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-purple-900 mt-2">
+                    {formatCurrency(
+                      (() => {
+                        const saldo = existingEntries
+                          .filter(
+                            (entry) =>
+                              (
+                                accounts.find((a) => a.id === entry.accountId)
+                                  ?.accountName || ""
+                              )
+                                .toLowerCase()
+                                .includes("piutang") &&
+                              (entry as any).transactionType === "SALDO_AKHIR"
+                          )
+                          .reduce(
+                            (sum, entry) =>
+                              sum +
+                              (Number((entry as any).saldoAkhir) ||
+                                Number(entry.nilai)),
+                            0
+                          );
+                        return saldo;
+                      })()
+                    )}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -1967,11 +2232,17 @@ export default function JournalPage() {
               <div className="text-center">
                 <BookOpen className="h-12 w-12 text-yellow-600 mx-auto mb-4" />
                 <h3 className="font-semibold text-yellow-900">
-                  Rak Akun Masih Kosong
+                  Belum ada entri hari ini, tambahkan entri hari ini (
+                  {new Date().toLocaleDateString("id-ID", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "2-digit",
+                  })}
+                  )
                 </h3>
                 <p className="text-yellow-800 text-sm mt-2">
-                  Belum ada akun di rak divisi {user?.division?.name}. Silakan
-                  tambahkan akun terlebih dahulu di menu "Rak Akun Divisi".
+                  Belum ada entri di rak {user?.division?.name}. Silakan
+                  tambahkan entri terlebih dahulu.
                 </p>
               </div>
             </CardContent>

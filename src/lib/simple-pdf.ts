@@ -239,6 +239,125 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
             </tbody>
           </table>
         </div>
+
+        <!-- ✅ NEW: Piutang Summary -->
+        <div class="summary-section">
+          <div class="summary-title">RINGKASAN PIUTANG</div>
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>Kategori</th>
+                <th>Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Piutang Baru</td>
+                <td>${formatCurrency(
+                  data.entries
+                    .filter(
+                      (entry) =>
+                        (entry as any).transactionType === "PIUTANG_BARU"
+                    )
+                    .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                )}</td>
+              </tr>
+              <tr>
+                <td>Piutang Tertagih</td>
+                <td>${formatCurrency(
+                  data.entries
+                    .filter(
+                      (entry) =>
+                        (entry as any).transactionType === "PIUTANG_TERTAGIH"
+                    )
+                    .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                )}</td>
+              </tr>
+              <tr>
+                <td>Piutang Macet</td>
+                <td>${formatCurrency(
+                  data.entries
+                    .filter(
+                      (entry) =>
+                        (entry as any).transactionType === "PIUTANG_MACET"
+                    )
+                    .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                )}</td>
+              </tr>
+              <tr>
+                <td>Saldo Akhir Piutang</td>
+                <td>${formatCurrency(
+                  data.entries
+                    .filter(
+                      (entry) =>
+                        (entry as any).transactionType === "SALDO_AKHIR"
+                    )
+                    .reduce(
+                      (sum, entry) =>
+                        sum + Number((entry as any).saldoAkhir || entry.nilai),
+                      0
+                    )
+                )}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ✅ NEW: Utang Summary -->
+        <div class="summary-section">
+          <div class="summary-title">RINGKASAN UTANG</div>
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>Kategori</th>
+                <th>Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Utang Baru</td>
+                <td>${formatCurrency(
+                  data.entries
+                    .filter(
+                      (entry) => (entry as any).transactionType === "UTANG_BARU"
+                    )
+                    .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                )}</td>
+              </tr>
+              <tr>
+                <td>Utang Dibayar</td>
+                <td>${formatCurrency(
+                  data.entries
+                    .filter(
+                      (entry) =>
+                        (entry as any).transactionType === "UTANG_DIBAYAR"
+                    )
+                    .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                )}</td>
+              </tr>
+              <tr>
+                <td>Bahan Baku</td>
+                <td>${formatCurrency(
+                  data.entries
+                    .filter((entry) => (entry as any).kategori === "BAHAN_BAKU")
+                    .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                )}</td>
+              </tr>
+              <tr>
+                <td>Bank (HM + Henry)</td>
+                <td>${formatCurrency(
+                  data.entries
+                    .filter(
+                      (entry) =>
+                        (entry as any).kategori === "BANK_HM" ||
+                        (entry as any).kategori === "BANK_HENRY"
+                    )
+                    .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                )}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         `
             : data.divisionName.includes("PEMASARAN")
             ? `
@@ -557,19 +676,101 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
             <tbody>
               ${data.entries
                 .map((entry, idx) => {
-                  const isSaldoAkhir = entry.transactionType === "SALDO_AKHIR";
+                  const account = data.accounts.find(
+                    (acc) => acc.id === entry.accountId
+                  );
+                  const accountDisplay = account
+                    ? `${account.accountCode} - ${account.accountName}`
+                    : "Akun tidak ditemukan";
+                  const isKuantitas = account?.valueType === "KUANTITAS";
+                  const isSaldoAkhir =
+                    (entry as any).transactionType === "SALDO_AKHIR";
                   const nominalValue = isSaldoAkhir
-                    ? entry.saldoAkhir ?? entry.nilai
+                    ? (entry as any).saldoAkhir ?? entry.nilai
                     : entry.nilai;
+
+                  let additionalCells = "";
+                  if (data.divisionName.includes("KEUANGAN")) {
+                    additionalCells = `
+                      <td>${(entry as any).transactionType || "-"}</td>
+                      <td style="text-align: right;">
+                        ${
+                          isKuantitas
+                            ? nominalValue.toLocaleString("id-ID") + " pcs"
+                            : formatCurrency(nominalValue)
+                        }
+                      </td>
+                    `;
+                  } else if (data.divisionName.includes("PEMASARAN")) {
+                    const target = (entry as any).targetAmount || 0;
+                    const realisasi = (entry as any).realisasiAmount || 0;
+                    const achievement =
+                      target > 0
+                        ? ((realisasi / target) * 100).toFixed(1) + "%"
+                        : "-";
+                    additionalCells = `
+                      <td style="text-align: right;">${formatCurrency(
+                        target
+                      )}</td>
+                      <td style="text-align: right;">${formatCurrency(
+                        realisasi
+                      )}</td>
+                      <td style="text-align: center;">${achievement}</td>
+                    `;
+                  } else if (data.divisionName.includes("PRODUKSI")) {
+                    const produksi = entry.nilai || 0;
+                    const hpp = (entry as any).hppAmount || 0;
+                    const hppPerUnit = produksi > 0 ? hpp / produksi : 0;
+                    additionalCells = `
+                      <td style="text-align: right;">${produksi.toLocaleString(
+                        "id-ID"
+                      )}</td>
+                      <td style="text-align: right;">${formatCurrency(hpp)}</td>
+                      <td style="text-align: right;">${formatCurrency(
+                        hppPerUnit
+                      )}</td>
+                    `;
+                  } else if (data.divisionName.includes("GUDANG")) {
+                    const pemakaian = (entry as any).pemakaianAmount || 0;
+                    const stokAkhir = (entry as any).stokAkhir || 0;
+                    const status =
+                      stokAkhir < 100 ? "Stok Rendah" : "Stok Aman";
+                    additionalCells = `
+                      <td style="text-align: right;">${pemakaian.toLocaleString(
+                        "id-ID"
+                      )}</td>
+                      <td style="text-align: right;">${stokAkhir.toLocaleString(
+                        "id-ID"
+                      )}</td>
+                      <td style="text-align: center;">${status}</td>
+                    `;
+                  } else if (data.divisionName.includes("HRD")) {
+                    const status = (entry as any).attendanceStatus || "-";
+                    const absentCount = (entry as any).absentCount || 0;
+                    const shift = (entry as any).shift || "-";
+                    additionalCells = `
+                      <td style="text-align: center;">${status}</td>
+                      <td style="text-align: center;">${absentCount} orang</td>
+                      <td style="text-align: center;">${shift}</td>
+                    `;
+                  } else {
+                    additionalCells = `
+                      <td style="text-align: right;">
+                        ${
+                          isKuantitas
+                            ? nominalValue.toLocaleString("id-ID") + " pcs"
+                            : formatCurrency(nominalValue)
+                        }
+                      </td>
+                    `;
+                  }
+
                   return `
                     <tr>
                       <td>${idx + 1}</td>
-                      <td>${entry.accountId}</td>
-                      <td>${entry.keterangan || "-"}</td>
-                      <td>${entry.transactionType || "-"}</td>
-                      <td style="text-align: right;">
-                        ${formatCurrency(nominalValue)}
-                      </td>
+                      <td>${accountDisplay}</td>
+                      <td>${entry.keterangan || entry.description || "-"}</td>
+                      ${additionalCells}
                     </tr>
                   `;
                 })

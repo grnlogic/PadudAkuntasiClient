@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
+import Link from "next/link";
 
 export default function NotFound() {
   return (
@@ -9,7 +9,7 @@ export default function NotFound() {
         <div className="mb-8">
           <h1 className="text-9xl font-bold text-gray-300">404</h1>
         </div>
-        
+
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-800 mb-4">
             Halaman Tidak Ditemukan
@@ -23,15 +23,15 @@ export default function NotFound() {
         </div>
 
         <div className="space-y-4">
-          <Link 
+          <Link
             href="/auth/login"
             className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
             Kembali ke Login
           </Link>
-          
+
           <div className="block">
-            <button 
+            <button
               onClick={() => window.history.back()}
               className="text-blue-600 hover:text-blue-700 underline"
             >
@@ -46,4 +46,16 @@ export default function NotFound() {
       </div>
     </div>
   );
+}
+
+export async function getPiutangTransaksi() {
+  const res = await fetch("/api/v1/piutang", {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include", // jika pakai cookie auth
+  });
+  if (!res.ok) throw new Error("Gagal mengambil data piutang");
+  return res.json();
 }

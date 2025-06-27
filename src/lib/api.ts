@@ -1,4 +1,5 @@
 import type { CreateEntriHarianRequest } from "@/types/EntriHarian";
+import { create } from "domain";
 
 // Updated data.ts to use API calls instead of localStorage
 
@@ -28,6 +29,7 @@ interface ApiResponse<T> {
 
 // Request helper function
 // ✅ Enhanced error handling
+// Request helper function
 async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -35,6 +37,16 @@ async function apiRequest<T>(
   try {
     const token =
       typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+
+    // ✅ Log request details for piutang endpoint
+    if (endpoint.includes("/piutang")) {
+      console.log("🔍 API REQUEST DEBUG:", {
+        endpoint,
+        method: options.method,
+        body: options.body,
+        headers: options.headers,
+      });
+    }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: {
@@ -52,48 +64,20 @@ async function apiRequest<T>(
       data = null;
     }
 
+    // ✅ Log response for piutang endpoint
+    if (endpoint.includes("/piutang")) {
+      console.log("🔍 API RESPONSE DEBUG:", {
+        status: response.status,
+        ok: response.ok,
+        data,
+      });
+    }
+
     if (!response.ok) {
-      // ✅ Enhanced error mapping
-      let errorMessage =
-        data?.message || data?.error || `HTTP ${response.status}`;
-
-      switch (response.status) {
-        case 400:
-          if (
-            data?.error === "CONSTRAINT_VIOLATION" ||
-            errorMessage.toLowerCase().includes("duplicate")
-          ) {
-            throw new Error("DUPLICATE_ERROR: Data sudah ada atau duplikat");
-          } else if (errorMessage.toLowerCase().includes("validation")) {
-            throw new Error(`VALIDATION_ERROR: ${errorMessage}`);
-          }
-          throw new Error(`VALIDATION_ERROR: ${errorMessage}`);
-
-        case 401:
-          throw new Error(
-            "PERMISSION_ERROR: Sesi telah berakhir, silakan login ulang"
-          );
-
-        case 403:
-          throw new Error(
-            "PERMISSION_ERROR: Anda tidak memiliki izin untuk operasi ini"
-          );
-
-        case 404:
-          throw new Error("NOT_FOUND_ERROR: Data tidak ditemukan");
-
-        case 409:
-          throw new Error("DUPLICATE_ERROR: Konflik data atau duplikat");
-
-        case 500:
-          throw new Error("SERVER_ERROR: Terjadi masalah pada server");
-
-        default:
-          if (!navigator.onLine) {
-            throw new Error("NETWORK_ERROR: Tidak ada koneksi internet");
-          }
-          throw new Error(`SERVER_ERROR: ${errorMessage}`);
-      }
+      return {
+        success: false,
+        error: data?.message || "An error occurred",
+      };
     }
 
     return {
@@ -102,23 +86,10 @@ async function apiRequest<T>(
       message: data?.message,
     };
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
-
-    // ✅ Categorize errors properly
-    if (
-      errorMessage.includes("Failed to fetch") ||
-      errorMessage.includes("NetworkError")
-    ) {
-      return {
-        success: false,
-        error: "NETWORK_ERROR: Masalah koneksi ke server",
-      };
-    }
-
     return {
       success: false,
-      error: errorMessage,
+      error:
+        error instanceof Error ? error.message : "An unknown error occurred",
     };
   }
 }
@@ -244,6 +215,110 @@ export const usersAPI = {
   },
 };
 
+//piutang API (untuk yang belum ada endpoint)
+export interface CreatePiutangRequest {
+  tanggalTransaksi: string; // format: 'YYYY-MM-DD'
+  tipeTransaksi: "PIUTANG_BARU" | "PIUTANG_TERTAGIH" | "PIUTANG_MACET";
+  kategori: "KARYAWAN" | "TOKO" | "BAHAN_BAKU";
+  nominal: number;
+  keterangan?: string;
+  accountId: number;
+}
+
+//Api Piutang
+export const piutangAPI = {
+  create: async (data: CreatePiutangRequest) => {
+    // ✅ Add validation and logging
+    console.log("🔍 PIUTANG API - Raw data received:", data);
+
+    // ✅ Validate required fields
+    if (!data.tanggalTransaksi) {
+      throw new Error("VALIDATION_ERROR: Tanggal transaksi wajib diisi");
+    }
+    if (!data.tipeTransaksi) {
+      throw new Error("VALIDATION_ERROR: Tipe transaksi wajib diisi");
+    }
+    if (!data.nominal || data.nominal <= 0) {
+      throw new Error("VALIDATION_ERROR: Nominal harus lebih dari 0");
+    }
+    if (!data.accountId || data.accountId <= 0) {
+      throw new Error("VALIDATION_ERROR: Account ID wajib diisi");
+    }
+
+    // ✅ Format data for backend
+    const formattedData = {
+      tanggalTransaksi: data.tanggalTransaksi.slice(0, 10), // pastikan hanya YYYY-MM-DD
+      tipeTransaksi: data.tipeTransaksi, // pastikan UPPERCASE dan sesuai enum Java
+      kategori: data.kategori || "KARYAWAN",
+      nominal: Number(data.nominal),
+      keterangan: data.keterangan || "",
+      accountId: Number(data.accountId),
+    };
+    console.log("📤 PIUTANG API - Formatted data to send:", formattedData);
+
+    return apiRequest<any>("/api/v1/piutang", {
+      method: "POST",
+      body: JSON.stringify(formattedData),
+    });
+  },
+
+  getAll: async () => {
+    return apiRequest<any[]>("/api/v1/piutang");
+  },
+};
+
+// ✅ NEW: Utang API interface and functions
+export interface CreateUtangRequest {
+  tanggalTransaksi: string; // format: 'YYYY-MM-DD'
+  tipeTransaksi: "UTANG_BARU" | "UTANG_DIBAYAR";
+  kategori: "BAHAN_BAKU" | "BANK_HM" | "BANK_HENRY";
+  nominal: number;
+  keterangan?: string;
+  accountId: number;
+}
+
+//Api Utang
+export const utangAPI = {
+  create: async (data: CreateUtangRequest) => {
+    // ✅ Add validation and logging
+    console.log("🔍 UTANG API - Raw data received:", data);
+
+    // ✅ Validate required fields
+    if (!data.tanggalTransaksi) {
+      throw new Error("VALIDATION_ERROR: Tanggal transaksi wajib diisi");
+    }
+    if (!data.tipeTransaksi) {
+      throw new Error("VALIDATION_ERROR: Tipe transaksi wajib diisi");
+    }
+    if (!data.nominal || data.nominal <= 0) {
+      throw new Error("VALIDATION_ERROR: Nominal harus lebih dari 0");
+    }
+    if (!data.accountId || data.accountId <= 0) {
+      throw new Error("VALIDATION_ERROR: Account ID wajib diisi");
+    }
+
+    // ✅ Format data for backend
+    const formattedData = {
+      tanggalTransaksi: data.tanggalTransaksi.slice(0, 10), // pastikan hanya YYYY-MM-DD
+      tipeTransaksi: data.tipeTransaksi, // pastikan UPPERCASE dan sesuai enum Java
+      kategori: data.kategori || "BAHAN_BAKU",
+      nominal: Number(data.nominal),
+      keterangan: data.keterangan || "",
+      accountId: Number(data.accountId),
+    };
+    console.log("📤 UTANG API - Formatted data to send:", formattedData);
+
+    return apiRequest<any>("/api/v1/utang", {
+      method: "POST",
+      body: JSON.stringify(formattedData),
+    });
+  },
+
+  getAll: async () => {
+    return apiRequest<any[]>("/api/v1/utang");
+  },
+};
+
 // Divisions API (untuk yang belum ada endpoint)
 export const divisionsAPI = {
   getAll: async () => {
@@ -282,7 +357,9 @@ export const entriesAPI = {
   },
 
   getByDivision: async (divisionId: string) => {
-    return await apiRequest<any[]>(`/api/v1/entri-harian/division/${divisionId}`);
+    return await apiRequest<any[]>(
+      `/api/v1/entri-harian/division/${divisionId}`
+    );
   },
 
   getById: async (id: string) => {
