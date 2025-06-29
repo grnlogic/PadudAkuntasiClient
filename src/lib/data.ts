@@ -326,22 +326,29 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
 
     if (response.success && response.data && Array.isArray(response.data)) {
       const mappedEntries = response.data.map((entry: any) => {
-        // ✅ CLEAN: Tanpa debug log yang berlebihan
-        const penerimaan = Number(entry.penerimaan || 0);
-        const pengeluaran = Number(entry.pengeluaran || 0);
-
+        // ✅ FIXED: Proper mapping for keuangan division
         let transactionType = "";
-        let nilai = 0;
+        let nilai = Number(entry.nilai || 0);
 
-        if (penerimaan > 0) {
-          transactionType = "PENERIMAAN";
-          nilai = penerimaan;
-        } else if (pengeluaran > 0) {
-          transactionType = "PENGELUARAN";
-          nilai = pengeluaran;
+        // ✅ PRIORITIZE: transaction_type (backend format) over transactionType
+        if (entry.transaction_type) {
+          transactionType = entry.transaction_type;
+        } else if (entry.transactionType) {
+          transactionType = entry.transactionType;
         } else {
-          nilai = Number(entry.nilai || 0);
-          transactionType = nilai >= 0 ? "PENERIMAAN" : "PENGELUARAN";
+          // Fallback logic for old format
+          const penerimaan = Number(entry.penerimaan || 0);
+          const pengeluaran = Number(entry.pengeluaran || 0);
+
+          if (penerimaan > 0) {
+            transactionType = "PENERIMAAN";
+            nilai = penerimaan;
+          } else if (pengeluaran > 0) {
+            transactionType = "PENGELUARAN";
+            nilai = pengeluaran;
+          } else {
+            transactionType = nilai >= 0 ? "PENERIMAAN" : "PENGELUARAN";
+          }
         }
 
         const mappedEntry = {
@@ -355,14 +362,6 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
           createdBy: entry.user?.username || entry.createdBy || "system",
           createdAt: entry.createdAt || new Date().toISOString(),
           transactionType: transactionType,
-
-          // ✅ ENHANCED: Handle multiple possible field names from backend
-          ...(entry.transactionType && {
-            transactionType: entry.transactionType,
-          }),
-          ...(entry.transaction_type && {
-            transaction_type: entry.transaction_type,
-          }),
 
           // ✅ FIXED: Map pemasaran fields with multiple fallbacks
           ...(entry.targetAmount && {
@@ -389,7 +388,7 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
           }),
           ...(entry.stokAkhir && { stokAkhir: Number(entry.stokAkhir) }),
           ...(entry.stok_akhir && { stokAkhir: Number(entry.stok_akhir) }),
-          // ✅ NEW: Map saldo akhir fields with debug
+          // ✅ NEW: Map saldo akhir fields
           ...(entry.saldoAkhir !== undefined && {
             saldoAkhir: Number(entry.saldoAkhir),
           }),
@@ -415,36 +414,15 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
           }),
         };
 
-        // ✅ DEBUG: Log saldo akhir mapping
-        if (entry.saldoAkhir !== undefined || entry.saldo_akhir !== undefined) {
-          console.log("🔍 SALDO_AKHIR MAPPING:", {
+        // ✅ DEBUG: Log mapping for keuangan division
+        if (entry.keuangan_data === true) {
+          console.log("🔍 KEUANGAN MAPPING:", {
             entryId: entry.id,
-            backendSaldoAkhir: entry.saldoAkhir,
-            backendSaldo_akhir: entry.saldo_akhir,
-            mappedSaldoAkhir: mappedEntry.saldoAkhir,
-            transactionType: entry.transactionType || entry.transaction_type,
-          });
-        }
-
-        // ✅ NEW: Debug HRD field mapping
-        if (
-          entry.attendanceStatus ||
-          entry.attendance_status ||
-          entry.absentCount !== undefined ||
-          entry.absent_count !== undefined ||
-          entry.shift
-        ) {
-          console.log("🔍 HRD FIELD MAPPING (getEntriHarian):", {
-            entryId: entry.id,
-            backendAttendanceStatus: entry.attendanceStatus,
-            backend_attendance_status: entry.attendance_status,
-            backendAbsentCount: entry.absentCount,
-            backend_absent_count: entry.absent_count,
-            backendShift: entry.shift,
-            mappedAttendanceStatus: mappedEntry.attendanceStatus,
-            mappedAbsentCount: mappedEntry.absentCount,
-            mappedShift: mappedEntry.shift,
-            fullEntry: entry,
+            backendTransactionType: entry.transaction_type,
+            backendNilai: entry.nilai,
+            mappedTransactionType: mappedEntry.transactionType,
+            mappedNilai: mappedEntry.nilai,
+            accountName: entry.account?.accountName,
           });
         }
 
@@ -469,21 +447,28 @@ export const getEntriHarianByDate = async (
     if (response.success && response.data && Array.isArray(response.data)) {
       const mappedEntries = response.data.map((entry: any) => {
         // ✅ FIXED: Apply same mapping logic as getEntriHarian
-        const penerimaan = Number(entry.penerimaan || 0);
-        const pengeluaran = Number(entry.pengeluaran || 0);
-
         let transactionType = "";
-        let nilai = 0;
+        let nilai = Number(entry.nilai || 0);
 
-        if (penerimaan > 0) {
-          transactionType = "PENERIMAAN";
-          nilai = penerimaan;
-        } else if (pengeluaran > 0) {
-          transactionType = "PENGELUARAN";
-          nilai = pengeluaran;
+        // ✅ PRIORITIZE: transaction_type (backend format) over transactionType
+        if (entry.transaction_type) {
+          transactionType = entry.transaction_type;
+        } else if (entry.transactionType) {
+          transactionType = entry.transactionType;
         } else {
-          nilai = Number(entry.nilai || 0);
-          transactionType = nilai >= 0 ? "PENERIMAAN" : "PENGELUARAN";
+          // Fallback logic for old format
+          const penerimaan = Number(entry.penerimaan || 0);
+          const pengeluaran = Number(entry.pengeluaran || 0);
+
+          if (penerimaan > 0) {
+            transactionType = "PENERIMAAN";
+            nilai = penerimaan;
+          } else if (pengeluaran > 0) {
+            transactionType = "PENGELUARAN";
+            nilai = pengeluaran;
+          } else {
+            transactionType = nilai >= 0 ? "PENERIMAAN" : "PENGELUARAN";
+          }
         }
 
         const mappedEntry = {
@@ -496,14 +481,9 @@ export const getEntriHarianByDate = async (
           description: entry.description || "",
           createdBy: entry.user?.username || entry.createdBy || "system",
           createdAt: entry.createdAt || new Date().toISOString(),
+          transactionType: transactionType,
 
           // ✅ FIXED: Map all specialized fields
-          ...(entry.transactionType && {
-            transactionType: entry.transactionType,
-          }),
-          ...(entry.transaction_type && {
-            transactionType: entry.transaction_type,
-          }),
           ...(entry.targetAmount !== undefined && {
             targetAmount: Number(entry.targetAmount),
           }),
@@ -558,40 +538,17 @@ export const getEntriHarianByDate = async (
           ...(entry.shift && {
             shift: entry.shift,
           }),
-          transactionType: entry.transactionType || entry.tipe_transaksi,
         };
 
-        // ✅ DEBUG: Log saldo akhir mapping for getEntriHarianByDate
-        if (entry.saldoAkhir !== undefined || entry.saldo_akhir !== undefined) {
-          console.log("🔍 getEntriHarianByDate SALDO_AKHIR MAPPING:", {
+        // ✅ DEBUG: Log mapping for keuangan division in getEntriHarianByDate
+        if (entry.keuangan_data === true) {
+          console.log("🔍 getEntriHarianByDate KEUANGAN MAPPING:", {
             entryId: entry.id,
-            backendSaldoAkhir: entry.saldoAkhir,
-            backendSaldo_akhir: entry.saldo_akhir,
-            backendTransactionType: entry.transactionType,
-            mappedSaldoAkhir: mappedEntry.saldoAkhir,
+            backendTransactionType: entry.transaction_type,
+            backendNilai: entry.nilai,
             mappedTransactionType: mappedEntry.transactionType,
-          });
-        }
-
-        // ✅ NEW: Debug HRD field mapping
-        if (
-          entry.attendanceStatus ||
-          entry.attendance_status ||
-          entry.absentCount !== undefined ||
-          entry.absent_count !== undefined ||
-          entry.shift
-        ) {
-          console.log("🔍 HRD FIELD MAPPING:", {
-            entryId: entry.id,
-            backendAttendanceStatus: entry.attendanceStatus,
-            backend_attendance_status: entry.attendance_status,
-            backendAbsentCount: entry.absentCount,
-            backend_absent_count: entry.absent_count,
-            backendShift: entry.shift,
-            mappedAttendanceStatus: mappedEntry.attendanceStatus,
-            mappedAbsentCount: mappedEntry.absentCount,
-            mappedShift: mappedEntry.shift,
-            fullEntry: entry,
+            mappedNilai: mappedEntry.nilai,
+            accountName: entry.account?.accountName,
           });
         }
 

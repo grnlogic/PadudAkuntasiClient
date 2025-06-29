@@ -153,6 +153,14 @@ export default function JournalPage() {
     totalSaldoAkhir: 0,
   });
 
+  // Tambahkan state untuk piutang summary
+  const [piutangSummary, setPiutangSummary] = useState({
+    baru: 0,
+    tertagih: 0,
+    macet: 0,
+    saldoAkhir: 0,
+  });
+
   // Form rows untuk input multiple entries
   const [journalRows, setJournalRows] = useState<JournalRow[]>([
     {
@@ -239,6 +247,7 @@ export default function JournalPage() {
     );
 
     transaksiHarian.forEach((entry: any) => {
+      // ✅ FIXED: Use transactionType from mapped entry
       if (entry.transactionType === "PENERIMAAN") {
         summary.totalPenerimaan += Number(entry.nilai) || 0;
       } else if (entry.transactionType === "PENGELUARAN") {
@@ -247,6 +256,18 @@ export default function JournalPage() {
         const saldoValue = Number(entry.saldoAkhir) || Number(entry.nilai) || 0;
         summary.totalSaldoAkhir = saldoValue; // Ambil saldo akhir terakhir
       }
+    });
+
+    console.log("🔍 KEUANGAN SUMMARY CALCULATION:", {
+      totalEntries: entries.length,
+      transaksiHarianCount: transaksiHarian.length,
+      summary,
+      entries: transaksiHarian.map((e: any) => ({
+        id: e.id,
+        transactionType: e.transactionType,
+        nilai: e.nilai,
+        accountName: accounts.find((a) => a.id === e.accountId)?.accountName,
+      })),
     });
 
     return summary;
@@ -414,6 +435,9 @@ export default function JournalPage() {
           console.log("🔍 KEUANGAN SUMMARY:", summary);
         }
 
+        // SET summary piutang
+        setPiutangSummary(calculatePiutangSummary(piutangData, selectedDate));
+
         // ✅ Only show success for manual refresh
         if (loading) {
           toastSuccess.custom("Data berhasil dimuat ulang");
@@ -504,7 +528,8 @@ export default function JournalPage() {
 
   // ✅ Helper function to get display value for entries
   const getDisplayValue = (entry: EntriHarian) => {
-    if ((entry as any).transactionType === "SALDO_AKHIR") {
+    // ✅ FIXED: Use transactionType from mapped entry
+    if (entry.transactionType === "SALDO_AKHIR") {
       // For SALDO_AKHIR, prioritize saldoAkhir field, fallback to nilai
       return (entry as any).saldoAkhir || entry.nilai || 0;
     }
@@ -2281,6 +2306,28 @@ export default function JournalPage() {
     };
   };
 
+  // Fungsi untuk menghitung summary piutang
+  const calculatePiutangSummary = (piutangData: any[], tanggal: string) => {
+    const hariIni = piutangData.filter((p) => p.tanggal_transaksi === tanggal);
+
+    const baru = hariIni
+      .filter((p) => p.tipe_transaksi === "PIUTANG_BARU")
+      .reduce((sum, p) => sum + Number(p.nominal), 0);
+
+    const tertagih = hariIni
+      .filter((p) => p.tipe_transaksi === "PIUTANG_TERTAGIH")
+      .reduce((sum, p) => sum + Number(p.nominal), 0);
+
+    const macet = hariIni
+      .filter((p) => p.tipe_transaksi === "PIUTANG_MACET")
+      .reduce((sum, p) => sum + Number(p.nominal), 0);
+
+    // Saldo akhir piutang bisa dihitung sesuai kebutuhan, misal total baru - tertagih - macet
+    const saldoAkhir = baru - tertagih - macet;
+
+    return { baru, tertagih, macet, saldoAkhir };
+  };
+
   return (
     <ClientErrorBoundary>
       <div className="p-6 space-y-6">
@@ -2945,7 +2992,7 @@ export default function JournalPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <span className="text-orange-600">💳</span>
+                <span className="text-yellow-600">💳</span>
                 Ringkasan Piutang
               </CardTitle>
               <p className="text-sm text-gray-600">
@@ -2955,7 +3002,6 @@ export default function JournalPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* Piutang Baru */}
                 <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center gap-2">
                     <span className="text-blue-600">🆕</span>
@@ -2964,23 +3010,9 @@ export default function JournalPage() {
                     </h3>
                   </div>
                   <p className="text-2xl font-bold text-blue-900 mt-2">
-                    {formatCurrency(
-                      existingEntries
-                        .filter(
-                          (entry) =>
-                            (
-                              accounts.find((a) => a.id === entry.accountId)
-                                ?.accountName || ""
-                            )
-                              .toLowerCase()
-                              .includes("piutang") &&
-                            (entry as any).transactionType === "PIUTANG_BARU"
-                        )
-                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
-                    )}
+                    {formatCurrency(piutangSummary.baru)}
                   </p>
                 </div>
-                {/* Piutang Tertagih */}
                 <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                   <div className="flex items-center gap-2">
                     <span className="text-green-600">✅</span>
@@ -2989,24 +3021,9 @@ export default function JournalPage() {
                     </h3>
                   </div>
                   <p className="text-2xl font-bold text-green-900 mt-2">
-                    {formatCurrency(
-                      existingEntries
-                        .filter(
-                          (entry) =>
-                            (
-                              accounts.find((a) => a.id === entry.accountId)
-                                ?.accountName || ""
-                            )
-                              .toLowerCase()
-                              .includes("piutang") &&
-                            (entry as any).transactionType ===
-                              "PIUTANG_TERTAGIH"
-                        )
-                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
-                    )}
+                    {formatCurrency(piutangSummary.tertagih)}
                   </p>
                 </div>
-                {/* Piutang Macet */}
                 <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
                   <div className="flex items-center gap-2">
                     <span className="text-orange-600">⚠️</span>
@@ -3015,23 +3032,9 @@ export default function JournalPage() {
                     </h3>
                   </div>
                   <p className="text-2xl font-bold text-orange-900 mt-2">
-                    {formatCurrency(
-                      existingEntries
-                        .filter(
-                          (entry) =>
-                            (
-                              accounts.find((a) => a.id === entry.accountId)
-                                ?.accountName || ""
-                            )
-                              .toLowerCase()
-                              .includes("piutang") &&
-                            (entry as any).transactionType === "PIUTANG_MACET"
-                        )
-                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
-                    )}
+                    {formatCurrency(piutangSummary.macet)}
                   </p>
                 </div>
-                {/* Saldo Akhir Piutang */}
                 <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
                   <div className="flex items-center gap-2">
                     <span className="text-purple-600">💰</span>
@@ -3040,29 +3043,7 @@ export default function JournalPage() {
                     </h3>
                   </div>
                   <p className="text-2xl font-bold text-purple-900 mt-2">
-                    {formatCurrency(
-                      (() => {
-                        const saldo = existingEntries
-                          .filter(
-                            (entry) =>
-                              (
-                                accounts.find((a) => a.id === entry.accountId)
-                                  ?.accountName || ""
-                              )
-                                .toLowerCase()
-                                .includes("piutang") &&
-                              (entry as any).transactionType === "SALDO_AKHIR"
-                          )
-                          .reduce(
-                            (sum, entry) =>
-                              sum +
-                              (Number((entry as any).saldoAkhir) ||
-                                Number(entry.nilai)),
-                            0
-                          );
-                        return saldo;
-                      })()
-                    )}
+                    {formatCurrency(piutangSummary.saldoAkhir)}
                   </p>
                 </div>
               </div>
