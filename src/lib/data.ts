@@ -2,6 +2,7 @@
 import {
   piutangAPI,
   utangAPI,
+  laporanPenjualanSalesAPI,
   accountsAPI,
   divisionsAPI,
   usersAPI,
@@ -11,6 +12,10 @@ import type {
   EntriHarian as ImportedEntriHarian,
   CreateEntriHarianRequest,
 } from "@/types/EntriHarian";
+import type {
+  LaporanPenjualanSales,
+  CreateLaporanPenjualanSalesRequest,
+} from "./api";
 
 // Keep interfaces for type safety
 export interface Account {
@@ -700,4 +705,48 @@ export const updateUser = async (
 export const deleteUser = async (id: string): Promise<boolean> => {
   const response = await usersAPI.delete(id);
   return response.success;
+};
+
+// ✅ NEW: LaporanPenjualanSales CRUD functions
+export const getLaporanPenjualanSales = async (): Promise<
+  LaporanPenjualanSales[]
+> => {
+  try {
+    const response = await laporanPenjualanSalesAPI.getAll();
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return [];
+  } catch (error) {
+    console.error("Error fetching laporan penjualan sales:", error);
+    return [];
+  }
+};
+
+export const saveLaporanPenjualanSales = async (
+  data: CreateLaporanPenjualanSalesRequest
+): Promise<LaporanPenjualanSales> => {
+  try {
+    const response = await laporanPenjualanSalesAPI.create(data);
+    if (!response.success) {
+      throw new Error(
+        response.error || "Failed to create laporan penjualan sales"
+      );
+    }
+    return response.data!;
+  } catch (error: any) {
+    throw error;
+  }
+};
+
+export const deleteLaporanPenjualanSales = async (
+  id: number
+): Promise<boolean> => {
+  try {
+    const response = await laporanPenjualanSalesAPI.delete(id);
+    return response.success;
+  } catch (error) {
+    console.error("Error deleting laporan penjualan sales:", error);
+    return false;
+  }
 };

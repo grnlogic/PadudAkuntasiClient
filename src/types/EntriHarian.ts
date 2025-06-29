@@ -25,6 +25,11 @@ export interface EntriHarian {
   attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
   overtimeHours?: number;
   shift?: "PAGI" | "SIANG" | "MALAM";
+
+  // ✅ NEW: Pemasaran Sales fields
+  salesUserId?: number;
+  returPenjualan?: number;
+  keteranganKendala?: string;
 }
 
 export interface CreateEntriHarianRequest {
@@ -40,13 +45,17 @@ export interface CreateEntriHarianRequest {
   // ✅ Pemasaran fields
   targetAmount?: number;
   realisasiAmount?: number;
+  // ✅ NEW: Pemasaran Sales fields
+  salesUserId?: number;
+  returPenjualan?: number;
+  keteranganKendala?: string;
   // ✅ Produksi fields
   hppAmount?: number;
   // ✅ Gudang fields
   pemakaianAmount?: number;
   stokAkhir?: number;
-  // ✅ NEW: HRD fields - Fixed enum values
+  // ✅ HRD fields
   attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
   absentCount?: number;
-  shift?: "REGULER" | "LEMBUR"; // HRD shift values, different from production shift
+  shift?: "REGULER" | "LEMBUR";
 }

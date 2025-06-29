@@ -267,6 +267,85 @@ export const piutangAPI = {
   },
 };
 
+// ✅ NEW: LaporanPenjualanSales API interface and functions
+export interface CreateLaporanPenjualanSalesRequest {
+  tanggalLaporan: string; // format: 'YYYY-MM-DD'
+  salesUserId: number;
+  targetPenjualan?: number;
+  realisasiPenjualan?: number;
+  returPenjualan?: number;
+  keteranganKendala?: string;
+}
+
+export interface LaporanPenjualanSales {
+  id: number;
+  tanggalLaporan: string;
+  salesperson: {
+    id: number;
+    username: string;
+    division?: {
+      id: number;
+      name: string;
+    };
+  };
+  targetPenjualan?: number;
+  realisasiPenjualan?: number;
+  returPenjualan?: number;
+  keteranganKendala?: string;
+  createdBy: {
+    id: number;
+    username: string;
+  };
+  createdAt: string;
+}
+
+//Api LaporanPenjualanSales
+export const laporanPenjualanSalesAPI = {
+  create: async (data: CreateLaporanPenjualanSalesRequest) => {
+    console.log("🔍 LAPORAN PENJUALAN SALES API - Raw data received:", data);
+
+    // ✅ Validate required fields
+    if (!data.tanggalLaporan) {
+      throw new Error("VALIDATION_ERROR: Tanggal laporan wajib diisi");
+    }
+    if (!data.salesUserId || data.salesUserId <= 0) {
+      throw new Error("VALIDATION_ERROR: Sales User ID wajib diisi");
+    }
+
+    // ✅ Format data for backend
+    const formattedData = {
+      tanggalLaporan: data.tanggalLaporan.slice(0, 10), // pastikan hanya YYYY-MM-DD
+      salesUserId: Number(data.salesUserId),
+      targetPenjualan: data.targetPenjualan
+        ? Number(data.targetPenjualan)
+        : null,
+      realisasiPenjualan: data.realisasiPenjualan
+        ? Number(data.realisasiPenjualan)
+        : null,
+      returPenjualan: data.returPenjualan ? Number(data.returPenjualan) : null,
+      keteranganKendala: data.keteranganKendala || null,
+    };
+    console.log(
+      "📤 LAPORAN PENJUALAN SALES API - Formatted data to send:",
+      formattedData
+    );
+
+    return apiRequest<LaporanPenjualanSales>("/api/v1/laporan-penjualan", {
+      method: "POST",
+      body: JSON.stringify(formattedData),
+    });
+  },
+
+  getAll: async () => {
+    return apiRequest<LaporanPenjualanSales[]>("/api/v1/laporan-penjualan");
+  },
+
+  delete: async (id: number) => {
+    return apiRequest(`/api/v1/laporan-penjualan/${id}`, {
+      method: "DELETE",
+    });
+  },
+};
 // ✅ NEW: Utang API interface and functions
 export interface CreateUtangRequest {
   tanggalTransaksi: string; // format: 'YYYY-MM-DD'
@@ -393,3 +472,49 @@ export const entriesAPI = {
     });
   },
 };
+
+export interface Salesperson {
+  id: number;
+  nama: string;
+  status: string;
+  division?: { id: number; name: string };
+}
+
+const BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+
+function getToken() {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("auth_token");
+  }
+  return null;
+}
+
+// GET all salespeople
+export async function getSalespeople(): Promise<Salesperson[]> {
+  const token = getToken();
+  if (!token) throw new Error("User belum login atau token tidak ditemukan");
+  const res = await fetch(`${BASE_URL}/api/v1/salespeople`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) throw new Error("Gagal mengambil data salesperson");
+  return res.json();
+}
+
+// CREATE salesperson
+export async function createSalesperson(nama: string): Promise<Salesperson> {
+  const token = getToken();
+  if (!token) throw new Error("User belum login atau token tidak ditemukan");
+  const res = await fetch(`${BASE_URL}/api/v1/salespeople`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ nama }),
+  });
+  if (!res.ok) throw new Error("Gagal menambah salesperson");
+  return res.json();
+}

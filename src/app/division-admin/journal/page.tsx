@@ -59,6 +59,10 @@ import {
   saveEntriHarianBatch,
   deleteEntriHarian,
   getUtangTransaksi,
+  getLaporanPenjualanSales,
+  saveLaporanPenjualanSales,
+  deleteLaporanPenjualanSales,
+  getUsers, // ✅ ADD: Import getUsers function
   type Account,
   type EntriHarian,
 } from "@/lib/data";
@@ -71,6 +75,11 @@ import {
   piutangAPI,
   utangAPI,
 } from "@/lib/api";
+import type {
+  LaporanPenjualanSales,
+  CreateLaporanPenjualanSalesRequest,
+} from "@/lib/api";
+import { getSalespeople, createSalesperson, type Salesperson } from "@/lib/api";
 
 interface JournalRow {
   id: string;
@@ -99,6 +108,11 @@ interface JournalRow {
   saldoAkhir?: string; // For Keuangan
   // ✅ NEW: UTANG fields - Updated
   utangType?: "UTANG_BARU" | "UTANG_DIBAYAR"; // For Keuangan
+
+  // ✅ NEW: Pemasaran Sales fields
+  salesUserId?: string;
+  returPenjualan?: string;
+  keteranganKendala?: string;
 }
 
 export default function JournalPage() {
@@ -141,6 +155,10 @@ export default function JournalPage() {
       shift: undefined,
       utangType: undefined,
       utangKategori: undefined,
+      // ✅ NEW: Initialize pemasaran sales fields
+      salesUserId: "",
+      returPenjualan: "",
+      keteranganKendala: "",
     },
   ]);
 
@@ -150,6 +168,14 @@ export default function JournalPage() {
   const [selectedTransactionType, setSelectedTransactionType] = useState<
     "KAS" | "PIUTANG" | "UTANG"
   >("KAS");
+
+  // ✅ NEW: State untuk laporan penjualan sales
+  const [laporanPenjualanSales, setLaporanPenjualanSales] = useState<
+    LaporanPenjualanSales[]
+  >([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
+  const [newSalespersonName, setNewSalespersonName] = useState("");
 
   useEffect(() => {
     loadData();
@@ -200,17 +226,44 @@ export default function JournalPage() {
         const piutangPromise = getPiutangTransaksi();
         const utangPromise = getUtangTransaksi();
 
-        const [accountsData, entriesData, piutangData, utangData] =
-          await Promise.all([
-            accountsPromise,
-            entriesPromise,
-            piutangPromise,
-            utangPromise,
-          ]);
+        // ✅ NEW: Load laporan penjualan sales untuk divisi pemasaran
+        const laporanPromise =
+          divisionType === "PEMASARAN"
+            ? getLaporanPenjualanSales()
+            : Promise.resolve([]);
+        const usersPromise =
+          divisionType === "PEMASARAN" ? getUsers() : Promise.resolve([]);
+        const salespeoplePromise =
+          divisionType === "PEMASARAN" ? getSalespeople() : Promise.resolve([]);
+
+        const [
+          accountsData,
+          entriesData,
+          piutangData,
+          utangData,
+          laporanData,
+          usersData,
+          salespeopleData,
+        ] = await Promise.all([
+          accountsPromise,
+          entriesPromise,
+          piutangPromise,
+          utangPromise,
+          laporanPromise,
+          usersPromise,
+          salespeoplePromise,
+        ]);
 
         console.log("ISI accountsData:", accountsData);
 
         setAccounts(accountsData);
+        setUsers(usersData);
+        setSalespeople(salespeopleData);
+
+        // ✅ NEW: Set laporan penjualan sales
+        if (divisionType === "PEMASARAN") {
+          setLaporanPenjualanSales(laporanData);
+        }
 
         // Filter entries yang belong to current division
         const accountIds = accountsData.map((acc) => acc.id);
@@ -233,61 +286,62 @@ export default function JournalPage() {
           return;
         }
 
-        // Mapping piutang agar mirip entri harian
-        const mappedPiutang = (piutangData || [])
-          .filter((p: any) => {
-            // Filter piutang sesuai tanggal yang dipilih
-            const tgl = p.tanggal_transaksi || p.tanggalTransaksi;
-            return tgl && tgl.startsWith(selectedDate);
-          })
-          .map((p: any) => ({
-            id: p.id,
-            tanggal: p.tanggal_transaksi || p.tanggalTransaksi || "",
-            accountId: piutangAccount.id, // <-- ini kunci!
-            nilai: p.nominal,
-            description: p.keterangan,
-            transactionType: p.tipe_transaksi || p.tipeTransaksi || "",
-            createdAt:
-              p.created_at ||
-              p.createdAt ||
-              p.tanggal_transaksi ||
-              p.tanggalTransaksi ||
-              "",
-            keterangan: p.keterangan,
-            date: p.tanggal_transaksi || p.tanggalTransaksi || "",
-            createdBy: p.user?.username || "system",
-          }));
+        // Mapping piutang/utang HANYA untuk divisi KEUANGAN
+        let mappedPiutang: any[] = [];
+        let mappedUtang: any[] = [];
+        if (divisionType === "KEUANGAN") {
+          mappedPiutang = (piutangData || [])
+            .filter((p: any) => {
+              const tgl = p.tanggal_transaksi || p.tanggalTransaksi;
+              return tgl && tgl.startsWith(selectedDate);
+            })
+            .map((p: any) => ({
+              id: p.id,
+              tanggal: p.tanggal_transaksi || p.tanggalTransaksi || "",
+              accountId: piutangAccount.id,
+              nilai: p.nominal,
+              description: p.keterangan,
+              transactionType: p.tipe_transaksi || p.tipeTransaksi || "",
+              createdAt:
+                p.created_at ||
+                p.createdAt ||
+                p.tanggal_transaksi ||
+                p.tanggalTransaksi ||
+                "",
+              keterangan: p.keterangan,
+              date: p.tanggal_transaksi || p.tanggalTransaksi || "",
+              createdBy: p.user?.username || "system",
+            }));
 
-        // ✅ NEW: Mapping utang agar mirip entri harian
-        const mappedUtang = (utangData || [])
-          .filter((u: any) => {
-            // Filter utang sesuai tanggal yang dipilih
-            const tgl = u.tanggal_transaksi || u.tanggalTransaksi;
-            return tgl && tgl.startsWith(selectedDate);
-          })
-          .map((u: any) => ({
-            id: u.id,
-            tanggal: u.tanggal_transaksi || u.tanggalTransaksi || "",
-            accountId: piutangAccount.id, // <-- gunakan akun yang sama dengan piutang
-            nilai: u.nominal,
-            description: u.keterangan,
-            transactionType: u.tipe_transaksi || u.tipeTransaksi || "",
-            createdAt:
-              u.created_at ||
-              u.createdAt ||
-              u.tanggal_transaksi ||
-              u.tanggalTransaksi ||
-              "",
-            keterangan: u.keterangan,
-            date: u.tanggal_transaksi || u.tanggalTransaksi || "",
-            createdBy: u.user?.username || "system",
-          }));
+          mappedUtang = (utangData || [])
+            .filter((u: any) => {
+              const tgl = u.tanggal_transaksi || u.tanggalTransaksi;
+              return tgl && tgl.startsWith(selectedDate);
+            })
+            .map((u: any) => ({
+              id: u.id,
+              tanggal: u.tanggal_transaksi || u.tanggalTransaksi || "",
+              accountId: piutangAccount.id,
+              nilai: u.nominal,
+              description: u.keterangan,
+              transactionType: u.tipe_transaksi || u.tipeTransaksi || "",
+              createdAt:
+                u.created_at ||
+                u.createdAt ||
+                u.tanggal_transaksi ||
+                u.tanggalTransaksi ||
+                "",
+              keterangan: u.keterangan,
+              date: u.tanggal_transaksi || u.tanggalTransaksi || "",
+              createdBy: u.user?.username || "system",
+            }));
+        }
 
         // Gabungkan entri harian, piutang, dan utang
         const combinedEntries = [
           ...divisionEntries,
-          ...mappedPiutang,
-          ...mappedUtang,
+          ...(divisionType === "KEUANGAN" ? mappedPiutang : []),
+          ...(divisionType === "KEUANGAN" ? mappedUtang : []),
         ];
 
         setExistingEntries(combinedEntries);
@@ -322,7 +376,6 @@ export default function JournalPage() {
       keterangan: "",
       nominal: "",
       kuantitas: "",
-      // ✅ Initialize specialized fields to prevent controlled/uncontrolled warnings
       piutangType: undefined,
       transactionType: undefined,
       targetAmount: "",
@@ -336,6 +389,10 @@ export default function JournalPage() {
       shift: undefined,
       utangType: undefined,
       utangKategori: undefined,
+      // ✅ NEW: Initialize pemasaran sales fields
+      salesUserId: "",
+      returPenjualan: "",
+      keteranganKendala: "",
     };
     setJournalRows([...journalRows, newRow]);
   };
@@ -403,62 +460,50 @@ export default function JournalPage() {
       const account = getSelectedAccount(row.accountId);
       if (!account) return false;
 
-      // Validasi piutang
-      if (row.piutangType) {
-        return (
-          row.accountId &&
-          row.nominal &&
-          Number.parseFloat(row.nominal) > 0 &&
-          ["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
-            row.piutangType
-          ) &&
-          selectedDate
-        );
+      // Validasi khusus PEMASARAN
+      if (divisionType === "PEMASARAN") {
+        // Salesperson wajib, dan minimal salah satu target/realisasi/retur terisi
+        if (
+          row.salesUserId &&
+          (row.targetAmount || row.realisasiAmount || row.returPenjualan)
+        ) {
+          return true;
+        }
       }
 
-      // ✅ NEW: Validasi utang
-      if (row.utangType) {
-        return (
-          row.accountId &&
-          row.nominal &&
-          Number.parseFloat(row.nominal) > 0 &&
-          ["UTANG_BARU", "UTANG_DIBAYAR"].includes(row.utangType) &&
-          selectedDate
-        );
-      }
-
+      // Validasi piutang HANYA untuk KEUANGAN
       if (
-        row.transactionType &&
-        ["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
-          row.transactionType
-        )
+        divisionType === "KEUANGAN" &&
+        (row.piutangType ||
+          (row.transactionType &&
+            ["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
+              row.transactionType
+            )))
       ) {
         return (
           row.accountId &&
           row.nominal &&
           Number.parseFloat(row.nominal) > 0 &&
-          ["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
-            row.transactionType
-          ) &&
           selectedDate
         );
       }
 
-      // ✅ NEW: Validasi utang dari transactionType
+      // Validasi utang HANYA untuk KEUANGAN
       if (
-        row.transactionType &&
-        ["UTANG_BARU", "UTANG_DIBAYAR"].includes(row.transactionType)
+        divisionType === "KEUANGAN" &&
+        (row.utangType ||
+          (row.transactionType &&
+            ["UTANG_BARU", "UTANG_DIBAYAR"].includes(row.transactionType)))
       ) {
         return (
           row.accountId &&
           row.nominal &&
           Number.parseFloat(row.nominal) > 0 &&
-          ["UTANG_BARU", "UTANG_DIBAYAR"].includes(row.transactionType) &&
           selectedDate
         );
       }
 
-      // **Tambahkan validasi untuk regular entries di bawah ini**
+      // Validasi regular entries
       if (
         row.transactionType &&
         ["PENERIMAAN", "PENGELUARAN", "SALDO_AKHIR"].includes(
@@ -473,7 +518,7 @@ export default function JournalPage() {
         );
       }
 
-      // Atau validasi default untuk GENERAL
+      // Validasi default untuk GENERAL
       return (
         row.accountId &&
         ((account.valueType === "NOMINAL" &&
@@ -495,37 +540,50 @@ export default function JournalPage() {
     }
 
     // ✅ CRITICAL FIX: Separate piutang entries from regular entries
-    const piutangEntries = validRows.filter(
-      (row) =>
-        row.piutangType ||
-        (row.transactionType &&
-          ["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
-            row.transactionType
-          ))
-    );
+    const piutangEntries =
+      divisionType === "KEUANGAN"
+        ? validRows.filter(
+            (row) =>
+              row.piutangType ||
+              (row.transactionType &&
+                ["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
+                  row.transactionType
+                ))
+          )
+        : [];
 
     // ✅ NEW: Separate utang entries
-    const utangEntries = validRows.filter(
-      (row) =>
-        row.utangType ||
-        (row.transactionType &&
-          ["UTANG_BARU", "UTANG_DIBAYAR"].includes(row.transactionType))
-    );
+    const utangEntries =
+      divisionType === "KEUANGAN"
+        ? validRows.filter(
+            (row) =>
+              row.utangType ||
+              (row.transactionType &&
+                ["UTANG_BARU", "UTANG_DIBAYAR"].includes(row.transactionType))
+          )
+        : [];
 
     const regularEntries = validRows.filter(
       (row) =>
-        !row.piutangType &&
-        !row.utangType &&
-        !(
-          row.transactionType &&
-          [
-            "PIUTANG_BARU",
-            "PIUTANG_TERTAGIH",
-            "PIUTANG_MACET",
-            "UTANG_BARU",
-            "UTANG_DIBAYAR",
-          ].includes(row.transactionType)
-        )
+        (divisionType !== "KEUANGAN" ||
+          (!row.piutangType &&
+            !row.utangType &&
+            !(
+              row.transactionType &&
+              [
+                "PIUTANG_BARU",
+                "PIUTANG_TERTAGIH",
+                "PIUTANG_MACET",
+                "UTANG_BARU",
+                "UTANG_DIBAYAR",
+              ].includes(row.transactionType)
+            ))) &&
+        (divisionType !== "PEMASARAN" || !row.salesUserId)
+    );
+
+    // Tambahkan ini:
+    const pemasaranSalesEntries = validRows.filter(
+      (row) => row.salesUserId && divisionType === "PEMASARAN"
     );
 
     console.log("📊 ENTRY SEPARATION:", {
@@ -533,6 +591,7 @@ export default function JournalPage() {
       piutangCount: piutangEntries.length,
       utangCount: utangEntries.length,
       regularCount: regularEntries.length,
+      pemasaranSalesCount: pemasaranSalesEntries.length,
       piutangEntries: piutangEntries.map((r) => ({
         id: r.id,
         type: r.piutangType || r.transactionType,
@@ -544,6 +603,10 @@ export default function JournalPage() {
       regularEntries: regularEntries.map((r) => ({
         id: r.id,
         transactionType: r.transactionType,
+      })),
+      pemasaranSalesEntries: pemasaranSalesEntries.map((r) => ({
+        id: r.id,
+        salesUserId: r.salesUserId,
       })),
     });
 
@@ -776,33 +839,73 @@ export default function JournalPage() {
         }
       }
 
+      // ✅ NEW: Handle pemasaran sales entries separately
+      if (pemasaranSalesEntries.length > 0 && divisionType === "PEMASARAN") {
+        console.log(
+          " PROCESSING PEMASARAN SALES ENTRIES:",
+          pemasaranSalesEntries
+        );
+
+        for (const row of pemasaranSalesEntries) {
+          const salesData: CreateLaporanPenjualanSalesRequest = {
+            tanggalLaporan: selectedDate,
+            salesUserId: Number(row.salesUserId),
+            targetPenjualan: row.targetAmount
+              ? Number(row.targetAmount)
+              : undefined,
+            realisasiPenjualan: row.realisasiAmount
+              ? Number(row.realisasiAmount)
+              : undefined,
+            returPenjualan: row.returPenjualan
+              ? Number(row.returPenjualan)
+              : undefined,
+            keteranganKendala: row.keteranganKendala || undefined,
+          };
+
+          console.log(
+            "📤 Akan mengirim laporan penjualan sales ke backend:",
+            salesData
+          );
+          const result = await saveLaporanPenjualanSales(salesData);
+          console.log("✅ Hasil dari backend:", result);
+          savedResults.push(result);
+          console.log("✅ LAPORAN PENJUALAN SALES SAVED SUCCESSFULLY:", result);
+        }
+      }
+
       // ✅ SUCCESS HANDLING: Show success message and reload data
       if (savedResults.length > 0) {
         console.log("✅ ALL ENTRIES SAVED SUCCESSFULLY:", savedResults);
 
-        // Show success message
         const totalSaved = savedResults.length;
+        const pemasaranCount = pemasaranSalesEntries.length;
         const piutangCount = piutangEntries.length;
         const utangCount = utangEntries.length;
         const regularCount = regularEntries.length;
 
         let successMessage = `Berhasil menyimpan ${totalSaved} entri`;
+        if (pemasaranCount > 0) {
+          successMessage += ` (${pemasaranCount} laporan sales`;
+        }
         if (piutangCount > 0) {
-          successMessage += ` (${piutangCount} piutang`;
+          successMessage +=
+            pemasaranCount > 0
+              ? `, ${piutangCount} piutang`
+              : ` (${piutangCount} piutang`;
         }
         if (utangCount > 0) {
           successMessage +=
-            piutangCount > 0
+            pemasaranCount > 0 || piutangCount > 0
               ? `, ${utangCount} utang`
               : ` (${utangCount} utang`;
         }
         if (regularCount > 0) {
           successMessage +=
-            piutangCount > 0 || utangCount > 0
+            pemasaranCount > 0 || piutangCount > 0 || utangCount > 0
               ? `, ${regularCount} reguler`
               : ` (${regularCount} reguler`;
         }
-        if (piutangCount > 0 || utangCount > 0) {
+        if (pemasaranCount > 0 || piutangCount > 0 || utangCount > 0) {
           successMessage += ")";
         }
 
@@ -829,6 +932,9 @@ export default function JournalPage() {
             shift: undefined,
             utangType: undefined,
             utangKategori: undefined,
+            salesUserId: "",
+            returPenjualan: "",
+            keteranganKendala: "",
           },
         ]);
 
@@ -870,6 +976,21 @@ export default function JournalPage() {
       loadData();
     } catch (error) {
       toastError.custom("Gagal menghapus entri");
+    }
+  };
+
+  // ✅ NEW: Function to delete laporan penjualan sales
+  const removeLaporanPenjualanSales = async (id: number) => {
+    if (!confirm("Hapus laporan penjualan sales ini?")) return;
+
+    try {
+      await toastPromise.delete(
+        deleteLaporanPenjualanSales(id),
+        "laporan penjualan sales"
+      );
+      loadData();
+    } catch (error) {
+      toastError.custom("Gagal menghapus laporan penjualan sales");
     }
   };
 
@@ -1224,15 +1345,33 @@ export default function JournalPage() {
           </div>
         );
       case "PEMASARAN":
-        // For sales accounts, show target vs realization
         return (
           <div className="col-span-12 mt-2 p-3 bg-orange-50 rounded-lg border border-orange-200">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Salesperson */}
               <div>
-                <label className="block text-xs font-medium text-orange-700 mb-1">
-                  <TrendingUp className="inline h-3 w-3 mr-1" />
-                  Target Penjualan
-                </label>
+                <Label>Salesperson</Label>
+                <Select
+                  value={row.salesUserId || ""}
+                  onValueChange={(value) =>
+                    updateRow(row.id, "salesUserId", value)
+                  }
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Pilih salesperson..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {salespeople.map((sp) => (
+                      <SelectItem key={sp.id} value={sp.id.toString()}>
+                        {sp.nama}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Target Penjualan */}
+              <div>
+                <Label>Target Penjualan</Label>
                 <Input
                   type="number"
                   placeholder="0"
@@ -1240,17 +1379,13 @@ export default function JournalPage() {
                   onChange={(e) =>
                     updateRow(row.id, "targetAmount", e.target.value)
                   }
-                  className="text-right text-sm"
+                  className="mt-1"
+                  min="0"
                 />
-                <div className="text-xs text-gray-500 mt-1">
-                  Target yang harus dicapai
-                </div>
               </div>
+              {/* Realisasi Penjualan */}
               <div>
-                <label className="block text-xs font-medium text-orange-700 mb-1">
-                  <DollarSign className="inline h-3 w-3 mr-1" />
-                  Realisasi Penjualan
-                </label>
+                <Label>Realisasi Penjualan</Label>
                 <Input
                   type="number"
                   placeholder="0"
@@ -1258,11 +1393,35 @@ export default function JournalPage() {
                   onChange={(e) =>
                     updateRow(row.id, "realisasiAmount", e.target.value)
                   }
-                  className="text-right text-sm"
+                  className="mt-1"
+                  min="0"
                 />
-                <div className="text-xs text-gray-500 mt-1">
-                  Penjualan aktual hari ini
-                </div>
+              </div>
+              {/* Retur/Potongan */}
+              <div>
+                <Label>Retur/Potongan</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={row.returPenjualan}
+                  onChange={(e) =>
+                    updateRow(row.id, "returPenjualan", e.target.value)
+                  }
+                  className="mt-1"
+                  min="0"
+                />
+              </div>
+              {/* Kendala Penjualan */}
+              <div className="md:col-span-2">
+                <Label>Kendala Penjualan</Label>
+                <textarea
+                  placeholder="Tuliskan kendala penjualan hari ini..."
+                  value={row.keteranganKendala}
+                  onChange={(e) =>
+                    updateRow(row.id, "keteranganKendala", e.target.value)
+                  }
+                  className="mt-1 w-full border rounded p-2 min-h-[60px]"
+                />
               </div>
             </div>
           </div>
@@ -1742,11 +1901,13 @@ export default function JournalPage() {
               {user?.division?.name?.toUpperCase() || divisionType}
             </CardTitle>
             <CardDescription>
-              Pilih jenis transaksi di tab, lalu isi form sesuai kebutuhan.
+              {divisionType === "PEMASARAN"
+                ? "Pilih akun penjualan untuk laporan sales, atau akun lain untuk entri umum."
+                : "Pilih jenis transaksi di tab, lalu isi form sesuai kebutuhan."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
               <div>
                 <Label>Akun</Label>
                 <Select
@@ -1767,13 +1928,39 @@ export default function JournalPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {/* Form detail muncul jika akun sudah dipilih */}
-              {journalRows[0].accountId &&
-                renderSpecializedInput(
-                  journalRows[0],
-                  getSelectedAccount(journalRows[0].accountId)
-                )}
+              {/* Tambah Salesperson Baru KHUSUS PEMASARAN */}
+              {divisionType === "PEMASARAN" && (
+                <div className="mb-2 flex flex-col gap-1">
+                  <Label>Tambah Salesperson Baru</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={newSalespersonName}
+                      onChange={(e) => setNewSalespersonName(e.target.value)}
+                      placeholder="Nama salesperson baru"
+                    />
+                    <Button
+                      onClick={async () => {
+                        if (!newSalespersonName.trim()) return;
+                        const newSales = await createSalesperson(
+                          newSalespersonName.trim()
+                        );
+                        setSalespeople([...salespeople, newSales]);
+                        setNewSalespersonName("");
+                      }}
+                      className="bg-purple-600 hover:bg-purple-700 text-white"
+                    >
+                      Tambah
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
+            {/* Form detail muncul jika akun sudah dipilih */}
+            {journalRows[0].accountId &&
+              renderSpecializedInput(
+                journalRows[0],
+                getSelectedAccount(journalRows[0].accountId)
+              )}
             {/* Action Buttons */}
             <div className="flex gap-2 pt-4 border-t mt-4">
               <Button
@@ -1804,6 +1991,88 @@ export default function JournalPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* ✅ NEW: Laporan Penjualan Sales Display untuk Pemasaran */}
+        {divisionType === "PEMASARAN" && laporanPenjualanSales.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-orange-600">📊</span>
+                Laporan Penjualan Sales -{" "}
+                {new Date(selectedDate).toLocaleDateString("id-ID")}
+              </CardTitle>
+              <CardDescription>
+                {laporanPenjualanSales.length} laporan sales tercatat untuk
+                tanggal ini
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Waktu</TableHead>
+                      <TableHead>Sales Person</TableHead>
+                      <TableHead>Target</TableHead>
+                      <TableHead>Realisasi</TableHead>
+                      <TableHead>Retur</TableHead>
+                      <TableHead>Kendala</TableHead>
+                      <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {laporanPenjualanSales.map((laporan) => (
+                      <TableRow key={laporan.id}>
+                        <TableCell className="text-sm text-gray-500">
+                          {new Date(laporan.createdAt).toLocaleTimeString(
+                            "id-ID",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {laporan.salesperson.username}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {laporan.targetPenjualan
+                            ? formatCurrency(laporan.targetPenjualan)
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {laporan.realisasiPenjualan
+                            ? formatCurrency(laporan.realisasiPenjualan)
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {laporan.returPenjualan
+                            ? formatCurrency(laporan.returPenjualan)
+                            : "-"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {laporan.keteranganKendala || "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              removeLaporanPenjualanSales(laporan.id)
+                            }
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Existing Entries - Updated Display */}
         {existingEntries.length > 0 && (
