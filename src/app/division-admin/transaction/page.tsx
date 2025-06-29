@@ -82,70 +82,72 @@ export default function TransactionPage() {
       setAccounts(accountsData);
 
       const allEntries = await getEntriHarian();
-      const piutangEntries = await getPiutangTransaksi();
-      const utangEntries = await getUtangTransaksi();
-
-      // Misal cari akun COA piutang
-      const piutangAccount = accountsData.find((acc) =>
-        acc.accountName.toLowerCase().includes("piutang")
-      );
-      // Mapping
-      const mappedPiutang =
-        piutangEntries?.map((p: any) => ({
-          id: p.id,
-          tanggal: p.tanggal_transaksi || p.tanggalTransaksi || "",
-          accountId: piutangAccount ? piutangAccount.id : "PIUTANG",
-          nilai: p.nominal,
-          description: p.keterangan,
-          transactionType: p.tipe_transaksi || p.tipeTransaksi || "",
-          createdAt:
-            p.created_at ||
-            p.createdAt ||
-            p.tanggal_transaksi ||
-            p.tanggalTransaksi ||
-            "",
-          keterangan: p.keterangan,
-          date: p.tanggal_transaksi || p.tanggalTransaksi || "",
-          createdBy: p.user?.username || "system",
-        })) || [];
-
-      // ✅ NEW: Mapping utang
-      const utangAccount = accountsData.find(
-        (acc) =>
-          acc.accountName.toLowerCase().includes("utang") ||
-          acc.accountName.toLowerCase().includes("hutang")
-      );
-      const mappedUtang =
-        utangEntries?.map((u: any) => ({
-          id: u.id,
-          tanggal: u.tanggal_transaksi || u.tanggalTransaksi || "",
-          accountId: utangAccount ? utangAccount.id : "UTANG",
-          nilai: u.nominal,
-          description: u.keterangan,
-          transactionType: u.tipe_transaksi || u.tipeTransaksi || "",
-          kategori: u.kategori || "",
-          createdAt:
-            u.created_at ||
-            u.createdAt ||
-            u.tanggal_transaksi ||
-            u.tanggalTransaksi ||
-            "",
-          keterangan: u.keterangan,
-          date: u.tanggal_transaksi || u.tanggalTransaksi || "",
-          createdBy: u.user?.username || "system",
-        })) || [];
-
-      const accountIds = accountsData.map((acc) => acc.id);
-      const divisionEntries = allEntries.filter((entry) =>
-        accountIds.includes(entry.accountId)
+      let divisionEntries = allEntries.filter((entry) =>
+        accountsData.map((acc) => acc.id).includes(entry.accountId)
       );
 
-      // Gabungkan entri harian, piutang, dan utang
-      const combinedEntries = [
-        ...divisionEntries,
-        ...mappedPiutang,
-        ...mappedUtang,
-      ] as EntriHarian[];
+      let combinedEntries: EntriHarian[] = divisionEntries;
+
+      // Hanya untuk KEUANGAN, mapping piutang dan utang
+      if (divisionType === "KEUANGAN") {
+        const piutangEntries = await getPiutangTransaksi();
+        const utangEntries = await getUtangTransaksi();
+
+        // Mapping piutang
+        const piutangAccount = accountsData.find((acc) =>
+          acc.accountName.toLowerCase().includes("piutang")
+        );
+        const mappedPiutang =
+          piutangEntries?.map((p: any) => ({
+            id: p.id,
+            tanggal: p.tanggal_transaksi || p.tanggalTransaksi || "",
+            accountId: piutangAccount ? piutangAccount.id : "PIUTANG",
+            nilai: p.nominal,
+            description: p.keterangan,
+            transactionType: p.tipe_transaksi || p.tipeTransaksi || "",
+            createdAt:
+              p.created_at ||
+              p.createdAt ||
+              p.tanggal_transaksi ||
+              p.tanggalTransaksi ||
+              "",
+            keterangan: p.keterangan,
+            date: p.tanggal_transaksi || p.tanggalTransaksi || "",
+            createdBy: p.user?.username || "system",
+          })) || [];
+
+        // Mapping utang
+        const utangAccount = accountsData.find(
+          (acc) =>
+            acc.accountName.toLowerCase().includes("utang") ||
+            acc.accountName.toLowerCase().includes("hutang")
+        );
+        const mappedUtang =
+          utangEntries?.map((u: any) => ({
+            id: u.id,
+            tanggal: u.tanggal_transaksi || u.tanggalTransaksi || "",
+            accountId: utangAccount ? utangAccount.id : "UTANG",
+            nilai: u.nominal,
+            description: u.keterangan,
+            transactionType: u.tipe_transaksi || u.tipeTransaksi || "",
+            kategori: u.kategori || "",
+            createdAt:
+              u.created_at ||
+              u.createdAt ||
+              u.tanggal_transaksi ||
+              u.tanggalTransaksi ||
+              "",
+            keterangan: u.keterangan,
+            date: u.tanggal_transaksi || u.tanggalTransaksi || "",
+            createdBy: u.user?.username || "system",
+          })) || [];
+
+        combinedEntries = [
+          ...divisionEntries,
+          ...mappedPiutang,
+          ...mappedUtang,
+        ];
+      }
 
       setEntries(combinedEntries);
     } catch (error) {
@@ -1113,188 +1115,197 @@ export default function TransactionPage() {
           </Card>
         </div>
 
-        {/* Card Ringkasan Piutang */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <span className="text-blue-600">💳</span>
-              Ringkasan Piutang
-            </CardTitle>
-            <p className="text-sm text-gray-600">
-              Rekap piutang untuk semua transaksi
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Total Piutang Baru */}
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="flex items-center gap-2">
-                  <span className="text-blue-600">🆕</span>
-                  <h3 className="font-semibold text-blue-800">Piutang Baru</h3>
-                </div>
-                <p className="text-2xl font-bold text-blue-900 mt-2">
-                  {formatCurrency(
-                    entries
-                      .filter(
-                        (entry) =>
-                          (entry as any).transactionType === "PIUTANG_BARU"
-                      )
-                      .reduce((sum, entry) => sum + Number(entry.nilai), 0)
-                  )}
+        {/* Card Ringkasan Piutang & Utang hanya untuk KEUANGAN */}
+        {divisionType === "KEUANGAN" && (
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-blue-600">💳</span>
+                  Ringkasan Piutang
+                </CardTitle>
+                <p className="text-sm text-gray-600">
+                  Rekap piutang untuk semua transaksi
                 </p>
-              </div>
-              {/* Total Piutang Tertagih */}
-              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                <div className="flex items-center gap-2">
-                  <span className="text-green-600">✅</span>
-                  <h3 className="font-semibold text-green-800">
-                    Piutang Tertagih
-                  </h3>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {/* Total Piutang Baru */}
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-600">🆕</span>
+                      <h3 className="font-semibold text-blue-800">
+                        Piutang Baru
+                      </h3>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-900 mt-2">
+                      {formatCurrency(
+                        entries
+                          .filter(
+                            (entry) =>
+                              (entry as any).transactionType === "PIUTANG_BARU"
+                          )
+                          .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                      )}
+                    </p>
+                  </div>
+                  {/* Total Piutang Tertagih */}
+                  <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600">✅</span>
+                      <h3 className="font-semibold text-green-800">
+                        Piutang Tertagih
+                      </h3>
+                    </div>
+                    <p className="text-2xl font-bold text-green-900 mt-2">
+                      {formatCurrency(
+                        entries
+                          .filter(
+                            (entry) =>
+                              (entry as any).transactionType ===
+                              "PIUTANG_TERTAGIH"
+                          )
+                          .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                      )}
+                    </p>
+                  </div>
+                  {/* Total Piutang Macet */}
+                  <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-orange-600">⚠️</span>
+                      <h3 className="font-semibold text-orange-800">
+                        Piutang Macet
+                      </h3>
+                    </div>
+                    <p className="text-2xl font-bold text-orange-900 mt-2">
+                      {formatCurrency(
+                        entries
+                          .filter(
+                            (entry) =>
+                              (entry as any).transactionType === "PIUTANG_MACET"
+                          )
+                          .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                      )}
+                    </p>
+                  </div>
+                  {/* Saldo Akhir Piutang */}
+                  <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-purple-600">💰</span>
+                      <h3 className="font-semibold text-purple-800">
+                        Saldo Akhir Piutang
+                      </h3>
+                    </div>
+                    <p className="text-2xl font-bold text-purple-900 mt-2">
+                      {formatCurrency(
+                        entries
+                          .filter((entry) =>
+                            [
+                              "PIUTANG_BARU",
+                              "PIUTANG_TERTAGIH",
+                              "PIUTANG_MACET",
+                            ].includes((entry as any).transactionType)
+                          )
+                          .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                      )}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-2xl font-bold text-green-900 mt-2">
-                  {formatCurrency(
-                    entries
-                      .filter(
-                        (entry) =>
-                          (entry as any).transactionType === "PIUTANG_TERTAGIH"
-                      )
-                      .reduce((sum, entry) => sum + Number(entry.nilai), 0)
-                  )}
-                </p>
-              </div>
-              {/* Total Piutang Macet */}
-              <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                <div className="flex items-center gap-2">
-                  <span className="text-orange-600">⚠️</span>
-                  <h3 className="font-semibold text-orange-800">
-                    Piutang Macet
-                  </h3>
-                </div>
-                <p className="text-2xl font-bold text-orange-900 mt-2">
-                  {formatCurrency(
-                    entries
-                      .filter(
-                        (entry) =>
-                          (entry as any).transactionType === "PIUTANG_MACET"
-                      )
-                      .reduce((sum, entry) => sum + Number(entry.nilai), 0)
-                  )}
-                </p>
-              </div>
-              {/* Saldo Akhir Piutang */}
-              <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                <div className="flex items-center gap-2">
-                  <span className="text-purple-600">💰</span>
-                  <h3 className="font-semibold text-purple-800">
-                    Saldo Akhir Piutang
-                  </h3>
-                </div>
-                <p className="text-2xl font-bold text-purple-900 mt-2">
-                  {formatCurrency(
-                    entries
-                      .filter((entry) =>
-                        [
-                          "PIUTANG_BARU",
-                          "PIUTANG_TERTAGIH",
-                          "PIUTANG_MACET",
-                        ].includes((entry as any).transactionType)
-                      )
-                      .reduce((sum, entry) => sum + Number(entry.nilai), 0)
-                  )}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        {/* Card Ringkasan Utang */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <span className="text-red-600">💳</span>
-              Ringkasan Utang
-            </CardTitle>
-            <p className="text-sm text-gray-600">
-              Rekap utang untuk semua transaksi
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Total Utang Baru */}
-              <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                <div className="flex items-center gap-2">
-                  <span className="text-red-600">🆕</span>
-                  <h3 className="font-semibold text-red-800">Utang Baru</h3>
-                </div>
-                <p className="text-2xl font-bold text-red-900 mt-2">
-                  {formatCurrency(
-                    entries
-                      .filter(
-                        (entry) =>
-                          (entry as any).transactionType === "UTANG_BARU"
-                      )
-                      .reduce((sum, entry) => sum + Number(entry.nilai), 0)
-                  )}
+            {/* Card Ringkasan Utang */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-red-600">💳</span>
+                  Ringkasan Utang
+                </CardTitle>
+                <p className="text-sm text-gray-600">
+                  Rekap utang untuk semua transaksi
                 </p>
-              </div>
-              {/* Total Utang Dibayar */}
-              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                <div className="flex items-center gap-2">
-                  <span className="text-green-600">✅</span>
-                  <h3 className="font-semibold text-green-800">
-                    Utang Dibayar
-                  </h3>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {/* Total Utang Baru */}
+                  <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-red-600">🆕</span>
+                      <h3 className="font-semibold text-red-800">Utang Baru</h3>
+                    </div>
+                    <p className="text-2xl font-bold text-red-900 mt-2">
+                      {formatCurrency(
+                        entries
+                          .filter(
+                            (entry) =>
+                              (entry as any).transactionType === "UTANG_BARU"
+                          )
+                          .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                      )}
+                    </p>
+                  </div>
+                  {/* Total Utang Dibayar */}
+                  <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600">✅</span>
+                      <h3 className="font-semibold text-green-800">
+                        Utang Dibayar
+                      </h3>
+                    </div>
+                    <p className="text-2xl font-bold text-green-900 mt-2">
+                      {formatCurrency(
+                        entries
+                          .filter(
+                            (entry) =>
+                              (entry as any).transactionType === "UTANG_DIBAYAR"
+                          )
+                          .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                      )}
+                    </p>
+                  </div>
+                  {/* Total Bahan Baku */}
+                  <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-orange-600">📦</span>
+                      <h3 className="font-semibold text-orange-800">
+                        Bahan Baku
+                      </h3>
+                    </div>
+                    <p className="text-2xl font-bold text-orange-900 mt-2">
+                      {formatCurrency(
+                        entries
+                          .filter(
+                            (entry) => (entry as any).kategori === "BAHAN_BAKU"
+                          )
+                          .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                      )}
+                    </p>
+                  </div>
+                  {/* Total Bank */}
+                  <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-purple-600">🏦</span>
+                      <h3 className="font-semibold text-purple-800">
+                        Bank (HM + Henry)
+                      </h3>
+                    </div>
+                    <p className="text-2xl font-bold text-purple-900 mt-2">
+                      {formatCurrency(
+                        entries
+                          .filter((entry) =>
+                            ["BANK_HM", "BANK_HENRY"].includes(
+                              (entry as any).kategori
+                            )
+                          )
+                          .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                      )}
+                    </p>
+                  </div>
                 </div>
-                <p className="text-2xl font-bold text-green-900 mt-2">
-                  {formatCurrency(
-                    entries
-                      .filter(
-                        (entry) =>
-                          (entry as any).transactionType === "UTANG_DIBAYAR"
-                      )
-                      .reduce((sum, entry) => sum + Number(entry.nilai), 0)
-                  )}
-                </p>
-              </div>
-              {/* Total Bahan Baku */}
-              <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                <div className="flex items-center gap-2">
-                  <span className="text-orange-600">📦</span>
-                  <h3 className="font-semibold text-orange-800">Bahan Baku</h3>
-                </div>
-                <p className="text-2xl font-bold text-orange-900 mt-2">
-                  {formatCurrency(
-                    entries
-                      .filter(
-                        (entry) => (entry as any).kategori === "BAHAN_BAKU"
-                      )
-                      .reduce((sum, entry) => sum + Number(entry.nilai), 0)
-                  )}
-                </p>
-              </div>
-              {/* Total Bank */}
-              <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                <div className="flex items-center gap-2">
-                  <span className="text-purple-600">🏦</span>
-                  <h3 className="font-semibold text-purple-800">
-                    Bank (HM + Henry)
-                  </h3>
-                </div>
-                <p className="text-2xl font-bold text-purple-900 mt-2">
-                  {formatCurrency(
-                    entries
-                      .filter((entry) =>
-                        ["BANK_HM", "BANK_HENRY"].includes(
-                          (entry as any).kategori
-                        )
-                      )
-                      .reduce((sum, entry) => sum + Number(entry.nilai), 0)
-                  )}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </>
+        )}
 
         {/* Transactions Table - ENHANCED */}
         <Card>
