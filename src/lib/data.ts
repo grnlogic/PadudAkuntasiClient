@@ -3,6 +3,8 @@ import {
   piutangAPI,
   utangAPI,
   laporanPenjualanSalesAPI,
+  laporanProduksiAPI,
+  laporanGudangAPI,
   accountsAPI,
   divisionsAPI,
   usersAPI,
@@ -15,6 +17,10 @@ import type {
 import type {
   LaporanPenjualanSales,
   CreateLaporanPenjualanSalesRequest,
+  LaporanProduksiHarian,
+  CreateLaporanProduksiRequest,
+  LaporanGudangHarian,
+  CreateLaporanGudangRequest,
 } from "./api";
 
 // Keep interfaces for type safety
@@ -747,6 +753,84 @@ export const deleteLaporanPenjualanSales = async (
     return response.success;
   } catch (error) {
     console.error("Error deleting laporan penjualan sales:", error);
+    return false;
+  }
+};
+
+// ✅ NEW: LaporanProduksi CRUD functions
+export const getLaporanProduksi = async (): Promise<
+  LaporanProduksiHarian[]
+> => {
+  try {
+    const response = await laporanProduksiAPI.getAll();
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return [];
+  } catch (error) {
+    console.error("Error fetching laporan produksi:", error);
+    return [];
+  }
+};
+
+export const saveLaporanProduksi = async (
+  data: CreateLaporanProduksiRequest
+): Promise<LaporanProduksiHarian> => {
+  try {
+    const response = await laporanProduksiAPI.create(data);
+    if (!response.success) {
+      throw new Error(response.error || "Failed to create laporan produksi");
+    }
+    return response.data!;
+  } catch (error: any) {
+    throw error;
+  }
+};
+
+export const deleteLaporanProduksi = async (id: number): Promise<boolean> => {
+  try {
+    const response = await laporanProduksiAPI.delete(id);
+    return response.success;
+  } catch (error) {
+    console.error("Error deleting laporan produksi:", error);
+    return false;
+  }
+};
+
+// ✅ NEW: LaporanGudang CRUD functions
+export const getLaporanGudang = async (): Promise<LaporanGudangHarian[]> => {
+  try {
+    const response = await laporanGudangAPI.getAll();
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return [];
+  } catch (error) {
+    console.error("Error fetching laporan gudang:", error);
+    return [];
+  }
+};
+
+export const saveLaporanGudang = async (
+  data: CreateLaporanGudangRequest
+): Promise<LaporanGudangHarian> => {
+  try {
+    const response = await laporanGudangAPI.create(data);
+    if (!response.success) {
+      throw new Error(response.error || "Failed to create laporan gudang");
+    }
+    return response.data!;
+  } catch (error: any) {
+    throw error;
+  }
+};
+
+export const deleteLaporanGudang = async (id: number): Promise<boolean> => {
+  try {
+    const response = await laporanGudangAPI.delete(id);
+    return response.success;
+  } catch (error) {
+    console.error("Error deleting laporan gudang:", error);
     return false;
   }
 };

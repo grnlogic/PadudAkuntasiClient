@@ -62,6 +62,12 @@ import {
   getLaporanPenjualanSales,
   saveLaporanPenjualanSales,
   deleteLaporanPenjualanSales,
+  getLaporanProduksi, // ✅ ADD: Import laporan produksi
+  saveLaporanProduksi, // ✅ ADD: Import laporan produksi
+  deleteLaporanProduksi, // ✅ ADD: Import laporan produksi
+  getLaporanGudang, // ✅ ADD: Import laporan gudang
+  saveLaporanGudang, // ✅ ADD: Import laporan gudang
+  deleteLaporanGudang, // ✅ ADD: Import laporan gudang
   getUsers, // ✅ ADD: Import getUsers function
   type Account,
   type EntriHarian,
@@ -78,6 +84,10 @@ import {
 import type {
   LaporanPenjualanSales,
   CreateLaporanPenjualanSalesRequest,
+  LaporanProduksiHarian, // ✅ ADD: Import laporan produksi types
+  CreateLaporanProduksiRequest,
+  LaporanGudangHarian, // ✅ ADD: Import laporan gudang types
+  CreateLaporanGudangRequest,
 } from "@/lib/api";
 import { getSalespeople, createSalesperson, type Salesperson } from "@/lib/api";
 
@@ -113,6 +123,16 @@ interface JournalRow {
   salesUserId?: string;
   returPenjualan?: string;
   keteranganKendala?: string;
+
+  // ✅ NEW: Produksi fields
+  hasilProduksi?: string;
+  barangGagal?: string;
+  stockBarangJadi?: string;
+  hpBarangJadi?: string;
+  // ✅ NEW: Gudang fields for BLENDING
+  stokAwal?: string;
+  pemakaian?: string;
+  kondisiGudang?: string;
 }
 
 export default function JournalPage() {
@@ -159,6 +179,14 @@ export default function JournalPage() {
       salesUserId: "",
       returPenjualan: "",
       keteranganKendala: "",
+      hasilProduksi: "",
+      barangGagal: "",
+      stockBarangJadi: "",
+      hpBarangJadi: "",
+      // ✅ NEW: Initialize gudang fields
+      stokAwal: "",
+      pemakaian: "",
+      kondisiGudang: "",
     },
   ]);
 
@@ -176,6 +204,14 @@ export default function JournalPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
   const [newSalespersonName, setNewSalespersonName] = useState("");
+
+  // ✅ NEW: State untuk laporan produksi
+  const [laporanProduksi, setLaporanProduksi] = useState<
+    LaporanProduksiHarian[]
+  >([]);
+
+  // ✅ NEW: State untuk laporan gudang
+  const [laporanGudang, setLaporanGudang] = useState<LaporanGudangHarian[]>([]);
 
   useEffect(() => {
     loadData();
@@ -226,7 +262,15 @@ export default function JournalPage() {
         const piutangPromise = getPiutangTransaksi();
         const utangPromise = getUtangTransaksi();
 
-        // ✅ NEW: Load laporan penjualan sales untuk divisi pemasaran
+        // ✅ NEW: Load laporan gudang untuk divisi BLENDING
+        const laporanGudangPromise =
+          divisionType === "BLENDING"
+            ? getLaporanGudang()
+            : Promise.resolve([]);
+        const laporanProduksiPromise =
+          divisionType === "PRODUKSI"
+            ? getLaporanProduksi()
+            : Promise.resolve([]);
         const laporanPromise =
           divisionType === "PEMASARAN"
             ? getLaporanPenjualanSales()
@@ -241,6 +285,8 @@ export default function JournalPage() {
           entriesData,
           piutangData,
           utangData,
+          laporanGudangData, // ✅ ADD: Laporan gudang data
+          laporanProduksiData,
           laporanData,
           usersData,
           salespeopleData,
@@ -249,6 +295,8 @@ export default function JournalPage() {
           entriesPromise,
           piutangPromise,
           utangPromise,
+          laporanGudangPromise, // ✅ ADD: Laporan gudang promise
+          laporanProduksiPromise,
           laporanPromise,
           usersPromise,
           salespeoplePromise,
@@ -263,6 +311,16 @@ export default function JournalPage() {
         // ✅ NEW: Set laporan penjualan sales
         if (divisionType === "PEMASARAN") {
           setLaporanPenjualanSales(laporanData);
+        }
+
+        // ✅ NEW: Set laporan produksi
+        if (divisionType === "PRODUKSI") {
+          setLaporanProduksi(laporanProduksiData);
+        }
+
+        // ✅ NEW: Set laporan gudang
+        if (divisionType === "BLENDING") {
+          setLaporanGudang(laporanGudangData);
         }
 
         // Filter entries yang belong to current division
@@ -393,6 +451,14 @@ export default function JournalPage() {
       salesUserId: "",
       returPenjualan: "",
       keteranganKendala: "",
+      hasilProduksi: "",
+      barangGagal: "",
+      stockBarangJadi: "",
+      hpBarangJadi: "",
+      // ✅ NEW: Initialize gudang fields
+      stokAwal: "",
+      pemakaian: "",
+      kondisiGudang: "",
     };
     setJournalRows([...journalRows, newRow]);
   };
@@ -466,6 +532,34 @@ export default function JournalPage() {
         if (
           row.salesUserId &&
           (row.targetAmount || row.realisasiAmount || row.returPenjualan)
+        ) {
+          return true;
+        }
+      }
+
+      // ✅ NEW: Validasi khusus PRODUKSI
+      if (divisionType === "PRODUKSI") {
+        // Minimal salah satu field produksi terisi
+        if (
+          row.hasilProduksi ||
+          row.barangGagal ||
+          row.stockBarangJadi ||
+          row.hpBarangJadi ||
+          row.keteranganKendala
+        ) {
+          return true;
+        }
+      }
+
+      // ✅ NEW: Validasi khusus BLENDING
+      if (divisionType === "BLENDING") {
+        // Minimal salah satu field gudang terisi
+        if (
+          row.stokAwal ||
+          row.pemakaian ||
+          row.stokAkhir ||
+          row.kondisiGudang ||
+          row.hppAmount
         ) {
           return true;
         }
@@ -586,12 +680,30 @@ export default function JournalPage() {
       (row) => row.salesUserId && divisionType === "PEMASARAN"
     );
 
+    // ✅ NEW: Separate produksi entries
+    const produksiEntries = validRows.filter(
+      (row) =>
+        divisionType === "PRODUKSI" &&
+        (row.hasilProduksi ||
+          row.barangGagal ||
+          row.stockBarangJadi ||
+          row.hpBarangJadi)
+    );
+
+    // ✅ NEW: Separate gudang entries for BLENDING
+    const gudangEntries = validRows.filter(
+      (row) =>
+        divisionType === "BLENDING" &&
+        (row.stokAwal || row.pemakaian || row.stokAkhir || row.kondisiGudang)
+    );
+
     console.log("📊 ENTRY SEPARATION:", {
       totalValid: validRows.length,
       piutangCount: piutangEntries.length,
       utangCount: utangEntries.length,
       regularCount: regularEntries.length,
       pemasaranSalesCount: pemasaranSalesEntries.length,
+      produksiCount: produksiEntries.length, // ✅ ADD: Produksi count
       piutangEntries: piutangEntries.map((r) => ({
         id: r.id,
         type: r.piutangType || r.transactionType,
@@ -873,6 +985,63 @@ export default function JournalPage() {
         }
       }
 
+      // ✅ NEW: Handle produksi entries separately
+      if (produksiEntries.length > 0 && divisionType === "PRODUKSI") {
+        console.log(" PROCESSING PRODUKSI ENTRIES:", produksiEntries);
+
+        for (const row of produksiEntries) {
+          const produksiData: CreateLaporanProduksiRequest = {
+            tanggalLaporan: selectedDate,
+            accountId: Number(row.accountId),
+            hasilProduksi: row.hasilProduksi
+              ? Number(row.hasilProduksi)
+              : undefined,
+            barangGagal: row.barangGagal ? Number(row.barangGagal) : undefined,
+            stockBarangJadi: row.stockBarangJadi
+              ? Number(row.stockBarangJadi)
+              : undefined,
+            hpBarangJadi: row.hpBarangJadi
+              ? Number(row.hpBarangJadi)
+              : undefined,
+            keteranganKendala: row.keteranganKendala || undefined,
+          };
+
+          console.log(
+            "📤 Akan mengirim laporan produksi ke backend:",
+            produksiData
+          );
+          const result = await saveLaporanProduksi(produksiData);
+          console.log("✅ Hasil dari backend:", result);
+          savedResults.push(result);
+          console.log("✅ LAPORAN PRODUKSI SAVED SUCCESSFULLY:", result);
+        }
+      }
+
+      // ✅ NEW: Handle gudang entries separately
+      if (gudangEntries.length > 0 && divisionType === "BLENDING") {
+        console.log("📦 PROCESSING GUDANG ENTRIES:", gudangEntries);
+
+        for (const row of gudangEntries) {
+          const gudangData: CreateLaporanGudangRequest = {
+            tanggalLaporan: selectedDate,
+            accountId: Number(row.accountId),
+            stokAwal: row.stokAwal ? Number(row.stokAwal) : undefined,
+            pemakaian: row.pemakaian ? Number(row.pemakaian) : undefined,
+            stokAkhir: row.stokAkhir ? Number(row.stokAkhir) : undefined,
+            kondisiGudang: row.kondisiGudang || undefined,
+          };
+
+          console.log(
+            "📤 Akan mengirim laporan gudang ke backend:",
+            gudangData
+          );
+          const result = await saveLaporanGudang(gudangData);
+          console.log("✅ Hasil dari backend:", result);
+          savedResults.push(result);
+          console.log("✅ LAPORAN GUDANG SAVED SUCCESSFULLY:", result);
+        }
+      }
+
       // ✅ SUCCESS HANDLING: Show success message and reload data
       if (savedResults.length > 0) {
         console.log("✅ ALL ENTRIES SAVED SUCCESSFULLY:", savedResults);
@@ -882,6 +1051,8 @@ export default function JournalPage() {
         const piutangCount = piutangEntries.length;
         const utangCount = utangEntries.length;
         const regularCount = regularEntries.length;
+        const produksiCount = produksiEntries.length;
+        const gudangCount = gudangEntries.length; // ✅ ADD: Gudang count
 
         let successMessage = `Berhasil menyimpan ${totalSaved} entri`;
         if (pemasaranCount > 0) {
@@ -905,7 +1076,34 @@ export default function JournalPage() {
               ? `, ${regularCount} reguler`
               : ` (${regularCount} reguler`;
         }
-        if (pemasaranCount > 0 || piutangCount > 0 || utangCount > 0) {
+        if (produksiCount > 0) {
+          successMessage +=
+            pemasaranCount > 0 ||
+            piutangCount > 0 ||
+            utangCount > 0 ||
+            regularCount > 0
+              ? `, ${produksiCount} produksi`
+              : ` (${produksiCount} produksi`;
+        }
+        if (gudangCount > 0) {
+          // ✅ ADD: Gudang success message
+          successMessage +=
+            pemasaranCount > 0 ||
+            piutangCount > 0 ||
+            utangCount > 0 ||
+            regularCount > 0 ||
+            produksiCount > 0
+              ? `, ${gudangCount} gudang`
+              : ` (${gudangCount} gudang`;
+        }
+        if (
+          pemasaranCount > 0 ||
+          piutangCount > 0 ||
+          utangCount > 0 ||
+          regularCount > 0 ||
+          produksiCount > 0 ||
+          gudangCount > 0
+        ) {
           successMessage += ")";
         }
 
@@ -935,6 +1133,14 @@ export default function JournalPage() {
             salesUserId: "",
             returPenjualan: "",
             keteranganKendala: "",
+            hasilProduksi: "",
+            barangGagal: "",
+            stockBarangJadi: "",
+            hpBarangJadi: "",
+            // ✅ NEW: Initialize gudang fields
+            stokAwal: "",
+            pemakaian: "",
+            kondisiGudang: "",
           },
         ]);
 
@@ -994,9 +1200,34 @@ export default function JournalPage() {
     }
   };
 
+  // ✅ NEW: Function to delete laporan produksi
+  const removeLaporanProduksi = async (id: number) => {
+    if (!confirm("Hapus laporan produksi ini?")) return;
+
+    try {
+      await toastPromise.delete(deleteLaporanProduksi(id), "laporan produksi");
+      loadData();
+    } catch (error) {
+      toastError.custom("Gagal menghapus laporan produksi");
+    }
+  };
+
+  // ✅ NEW: Function to delete laporan gudang
+  const removeLaporanGudang = async (id: number) => {
+    if (!confirm("Hapus laporan gudang ini?")) return;
+
+    try {
+      await toastPromise.delete(deleteLaporanGudang(id), "laporan gudang");
+      loadData();
+    } catch (error) {
+      toastError.custom("Gagal menghapus laporan gudang");
+    }
+  };
+
   // ✅ Helper function to get division type
   const getDivisionType = (): string => {
     const divisionName = user?.division?.name?.toLowerCase();
+    if (divisionName?.includes("produksi")) return "PRODUKSI";
     if (divisionName?.includes("keuangan")) return "KEUANGAN";
     if (divisionName?.includes("blending")) return "BLENDING";
     if (
@@ -1277,54 +1508,130 @@ export default function JournalPage() {
       case "PRODUKSI":
         return (
           <div className="col-span-12 mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
-                  Jumlah Produksi (Unit)
+                  🏭 Hasil Produksi (Unit)
                 </label>
                 <Input
                   type="number"
                   placeholder="0 unit"
-                  value={row.kuantitas}
+                  value={row.hasilProduksi}
                   onChange={(e) =>
-                    updateRow(row.id, "kuantitas", e.target.value)
+                    updateRow(row.id, "hasilProduksi", e.target.value)
                   }
                   className="text-right text-sm"
+                  min="0"
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
-                  HPP (Harga Pokok Produksi)
+                  ❌ Barang Gagal (Unit)
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0 unit"
+                  value={row.barangGagal}
+                  onChange={(e) =>
+                    updateRow(row.id, "barangGagal", e.target.value)
+                  }
+                  className="text-right text-sm"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-green-700 mb-1">
+                  📦 Stock Barang Jadi (Unit)
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0 unit"
+                  value={row.stockBarangJadi}
+                  onChange={(e) =>
+                    updateRow(row.id, "stockBarangJadi", e.target.value)
+                  }
+                  className="text-right text-sm"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-green-700 mb-1">
+                  Harga Pokok Barang Jadi (Rp)
                 </label>
                 <Input
                   type="number"
                   placeholder="0"
-                  value={row.hppAmount}
+                  value={row.hpBarangJadi}
                   onChange={(e) =>
-                    updateRow(row.id, "hppAmount", e.target.value)
+                    updateRow(row.id, "hpBarangJadi", e.target.value)
                   }
                   className="text-right text-sm"
+                  min="0"
+                  step="1000"
                 />
               </div>
+            </div>
+            {/* Kendala Produksi */}
+            <div className="mt-4">
+              <Label>Kendala Produksi</Label>
+              <textarea
+                placeholder="Tuliskan kendala produksi hari ini..."
+                value={row.keteranganKendala}
+                onChange={(e) =>
+                  updateRow(row.id, "keteranganKendala", e.target.value)
+                }
+                className="mt-1 w-full border rounded p-2 min-h-[60px]"
+              />
             </div>
           </div>
         );
       case "BLENDING":
         return (
           <div className="col-span-12 mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
-                  Hasil Blending (Unit)
+                  📦 Stok Awal
                 </label>
                 <Input
                   type="number"
                   placeholder="0 unit"
-                  value={row.kuantitas}
+                  value={row.stokAwal}
                   onChange={(e) =>
-                    updateRow(row.id, "kuantitas", e.target.value)
+                    updateRow(row.id, "stokAwal", e.target.value)
                   }
                   className="text-right text-sm"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-green-700 mb-1">
+                  🔄 Pemakaian
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0 unit"
+                  value={row.pemakaian}
+                  onChange={(e) =>
+                    updateRow(row.id, "pemakaian", e.target.value)
+                  }
+                  className="text-right text-sm"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-green-700 mb-1">
+                  📦 Stok Akhir
+                </label>
+                <Input
+                  type="number"
+                  placeholder="0 unit"
+                  value={row.stokAkhir}
+                  onChange={(e) =>
+                    updateRow(row.id, "stokAkhir", e.target.value)
+                  }
+                  className="text-right text-sm"
+                  min="0"
                 />
               </div>
               <div>
@@ -1339,8 +1646,22 @@ export default function JournalPage() {
                     updateRow(row.id, "hppAmount", e.target.value)
                   }
                   className="text-right text-sm"
+                  min="0"
+                  step="1000"
                 />
               </div>
+            </div>
+            {/* Kondisi Gudang */}
+            <div className="mt-4">
+              <Label>Kondisi Gudang</Label>
+              <textarea
+                placeholder="Tuliskan kondisi gudang hari ini..."
+                value={row.kondisiGudang}
+                onChange={(e) =>
+                  updateRow(row.id, "kondisiGudang", e.target.value)
+                }
+                className="mt-1 w-full border rounded p-2 min-h-[60px]"
+              />
             </div>
           </div>
         );
@@ -1815,6 +2136,71 @@ export default function JournalPage() {
     }
   };
 
+  const getPemasaranSummary = () => {
+    let totalTarget = 0;
+    let totalRealisasi = 0;
+    let totalRetur = 0;
+
+    laporanPenjualanSales.forEach((laporan) => {
+      totalTarget += laporan.target_penjualan || 0;
+      totalRealisasi += laporan.realisasi_penjualan || 0;
+      totalRetur += laporan.retur_penjualan || 0;
+    });
+
+    return {
+      totalTarget,
+      totalRealisasi,
+      totalRetur,
+      jumlahSales: laporanPenjualanSales.length,
+    };
+  };
+
+  // ✅ NEW: Get produksi summary
+  const getProduksiSummary = () => {
+    let totalHasilProduksi = 0;
+    let totalBarangGagal = 0;
+    let totalStockBarangJadi = 0;
+    let totalHpBarangJadi = 0;
+
+    laporanProduksi.forEach((laporan) => {
+      // Mapping field dari backend ke FE
+      totalHasilProduksi +=
+        laporan.hasilProduksi || laporan.hasil_produksi || 0;
+      totalBarangGagal += laporan.barangGagal || laporan.barang_gagal || 0;
+      totalStockBarangJadi +=
+        laporan.stockBarangJadi || laporan.stock_barang_jadi || 0;
+      totalHpBarangJadi += laporan.hpBarangJadi || laporan.hp_barang_jadi || 0;
+    });
+
+    return {
+      totalHasilProduksi,
+      totalBarangGagal,
+      totalStockBarangJadi,
+      totalHpBarangJadi,
+      jumlahLaporan: laporanProduksi.length,
+    };
+  };
+
+  // ✅ NEW: Get gudang summary
+  const getGudangSummary = () => {
+    let totalStokAwal = 0;
+    let totalPemakaian = 0;
+    let totalStokAkhir = 0;
+
+    laporanGudang.forEach((laporan) => {
+      totalStokAwal += laporan.stokAwal || 0;
+      totalPemakaian += laporan.pemakaian || 0;
+      totalStokAkhir += laporan.stokAkhir || 0;
+    });
+
+    return {
+      totalStokAwal,
+      totalPemakaian,
+      totalStokAkhir,
+      jumlahLaporan: laporanGudang.length,
+    };
+  };
+
   return (
     <ClientErrorBoundary>
       <div className="p-6 space-y-6">
@@ -1907,263 +2293,373 @@ export default function JournalPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-              <div>
-                <Label>Akun</Label>
-                <Select
-                  value={journalRows[0].accountId}
-                  onValueChange={(value) =>
-                    updateRow(journalRows[0].id, "accountId", value)
-                  }
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Pilih akun" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {getAccountDisplay(account.id)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {/* Tambah Salesperson Baru KHUSUS PEMASARAN */}
-              {divisionType === "PEMASARAN" && (
-                <div className="mb-2 flex flex-col gap-1">
-                  <Label>Tambah Salesperson Baru</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={newSalespersonName}
-                      onChange={(e) => setNewSalespersonName(e.target.value)}
-                      placeholder="Nama salesperson baru"
-                    />
-                    <Button
-                      onClick={async () => {
-                        if (!newSalespersonName.trim()) return;
-                        const newSales = await createSalesperson(
-                          newSalespersonName.trim()
-                        );
-                        setSalespeople([...salespeople, newSales]);
-                        setNewSalespersonName("");
-                      }}
-                      className="bg-purple-600 hover:bg-purple-700 text-white"
-                    >
-                      Tambah
-                    </Button>
-                  </div>
+            {/* Tampilkan tab menu dan form input KHUSUS KEUANGAN */}
+            {divisionType === "KEUANGAN" ? (
+              <>
+                {renderTabMenu()}
+                {renderTabForm()}
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-4 border-t mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={addNewRow}
+                    className="bg-gray-50 hover:bg-gray-100"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    ADD TRANSAKSI
+                  </Button>
+                  <Button
+                    onClick={saveJournalEntries}
+                    className={`${divisionStyle.bg} ${divisionStyle.hover} text-white`}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                        Menyimpan...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        SAVE {divisionType}
+                      </>
+                    )}
+                  </Button>
                 </div>
-              )}
-            </div>
-            {/* Form detail muncul jika akun sudah dipilih */}
-            {journalRows[0].accountId &&
-              renderSpecializedInput(
-                journalRows[0],
-                getSelectedAccount(journalRows[0].accountId)
-              )}
-            {/* Action Buttons */}
-            <div className="flex gap-2 pt-4 border-t mt-4">
-              <Button
-                variant="outline"
-                onClick={addNewRow}
-                className="bg-gray-50 hover:bg-gray-100"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                ADD TRANSAKSI
-              </Button>
-              <Button
-                onClick={saveJournalEntries}
-                className={`${divisionStyle.bg} ${divisionStyle.hover} text-white`}
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                    Menyimpan...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    SAVE {divisionType}
-                  </>
-                )}
-              </Button>
-            </div>
+              </>
+            ) : (
+              // Untuk divisi lain, tetap render form lama
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                  <div>
+                    <Label>Akun</Label>
+                    <Select
+                      value={journalRows[0].accountId}
+                      onValueChange={(value) =>
+                        updateRow(journalRows[0].id, "accountId", value)
+                      }
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Pilih akun" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {getAccountDisplay(account.id)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Tambah Salesperson Baru KHUSUS PEMASARAN */}
+                  {divisionType === "PEMASARAN" && (
+                    <div className="mb-2 flex flex-col gap-1">
+                      <Label>Tambah Salesperson Baru</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={newSalespersonName}
+                          onChange={(e) =>
+                            setNewSalespersonName(e.target.value)
+                          }
+                          placeholder="Nama salesperson baru"
+                        />
+                        <Button
+                          onClick={async () => {
+                            if (!newSalespersonName.trim()) return;
+                            const newSales = await createSalesperson(
+                              newSalespersonName.trim()
+                            );
+                            setSalespeople([...salespeople, newSales]);
+                            setNewSalespersonName("");
+                          }}
+                          className="bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          Tambah
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {/* Form detail muncul jika akun sudah dipilih */}
+                {journalRows[0].accountId &&
+                  renderSpecializedInput(
+                    journalRows[0],
+                    getSelectedAccount(journalRows[0].accountId)
+                  )}
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-4 border-t mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={addNewRow}
+                    className="bg-gray-50 hover:bg-gray-100"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    ADD TRANSAKSI
+                  </Button>
+                  <Button
+                    onClick={saveJournalEntries}
+                    className={`${divisionStyle.bg} ${divisionStyle.hover} text-white`}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                        Menyimpan...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        SAVE {divisionType}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
         {/* ✅ NEW: Laporan Penjualan Sales Display untuk Pemasaran */}
         {divisionType === "PEMASARAN" && laporanPenjualanSales.length > 0 && (
-          <Card>
+          <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <span className="text-orange-600">📊</span>
-                Laporan Penjualan Sales -{" "}
-                {new Date(selectedDate).toLocaleDateString("id-ID")}
+                <span className="text-orange-600">📈</span>
+                Ringkasan Penjualan Hari Ini
               </CardTitle>
               <CardDescription>
-                {laporanPenjualanSales.length} laporan sales tercatat untuk
-                tanggal ini
+                Kontrol target, realisasi, dan retur penjualan seluruh sales
+                hari ini.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Waktu</TableHead>
-                      <TableHead>Sales Person</TableHead>
-                      <TableHead>Target</TableHead>
-                      <TableHead>Realisasi</TableHead>
-                      <TableHead>Retur</TableHead>
-                      <TableHead>Kendala</TableHead>
-                      <TableHead className="text-right">Aksi</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {laporanPenjualanSales.map((laporan) => (
-                      <TableRow key={laporan.id}>
-                        <TableCell className="text-sm text-gray-500">
-                          {new Date(laporan.createdAt).toLocaleTimeString(
-                            "id-ID",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }
-                          )}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {laporan.salesperson.username}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {laporan.targetPenjualan
-                            ? formatCurrency(laporan.targetPenjualan)
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {laporan.realisasiPenjualan
-                            ? formatCurrency(laporan.realisasiPenjualan)
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {laporan.returPenjualan
-                            ? formatCurrency(laporan.returPenjualan)
-                            : "-"}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {laporan.keteranganKendala || "-"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              removeLaporanPenjualanSales(laporan.id)
-                            }
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              {(() => {
+                const summary = getPemasaranSummary();
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="font-semibold text-blue-800">
+                        Total Target
+                      </div>
+                      <div className="text-2xl font-bold text-blue-900 mt-2">
+                        {formatCurrency(summary.totalTarget)}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="font-semibold text-green-800">
+                        Total Realisasi
+                      </div>
+                      <div className="text-2xl font-bold text-green-900 mt-2">
+                        {formatCurrency(summary.totalRealisasi)}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                      <div className="font-semibold text-orange-800">
+                        Total Retur
+                      </div>
+                      <div className="text-2xl font-bold text-orange-900 mt-2">
+                        {formatCurrency(summary.totalRetur)}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                      <div className="font-semibold text-purple-800">
+                        Jumlah Sales
+                      </div>
+                      <div className="text-2xl font-bold text-purple-900 mt-2">
+                        {summary.jumlahSales}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ✅ NEW: Laporan Produksi Display untuk Produksi */}
+        {divisionType === "PRODUKSI" && laporanProduksi.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-green-600">🏭</span>
+                Ringkasan Produksi Hari Ini
+              </CardTitle>
+              <CardDescription>
+                Kontrol hasil produksi, barang gagal, stock, dan HPP hari ini.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const summary = getProduksiSummary();
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="font-semibold text-green-800">
+                        Total Hasil Produksi
+                      </div>
+                      <div className="text-2xl font-bold text-green-900 mt-2">
+                        {summary.totalHasilProduksi.toLocaleString()} Unit
+                      </div>
+                    </div>
+                    <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                      <div className="font-semibold text-red-800">
+                        Total Barang Gagal
+                      </div>
+                      <div className="text-2xl font-bold text-red-900 mt-2">
+                        {summary.totalBarangGagal.toLocaleString()} Unit
+                      </div>
+                    </div>
+                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="font-semibold text-blue-800">
+                        Total Stock Barang Jadi
+                      </div>
+                      <div className="text-2xl font-bold text-blue-900 mt-2">
+                        {summary.totalStockBarangJadi.toLocaleString()} Unit
+                      </div>
+                    </div>
+                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                      <div className="font-semibold text-purple-800">
+                        Total HPP Barang Jadi
+                      </div>
+                      <div className="text-2xl font-bold text-purple-900 mt-2">
+                        {formatCurrency(summary.totalHpBarangJadi)}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                      <div className="font-semibold text-orange-800">
+                        Jumlah Laporan
+                      </div>
+                      <div className="text-2xl font-bold text-orange-900 mt-2">
+                        {summary.jumlahLaporan}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         )}
 
         {/* Existing Entries - Updated Display */}
-        {existingEntries.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                Entri Tersimpan -{" "}
-                {new Date(selectedDate).toLocaleDateString("id-ID")}
-              </CardTitle>
-              <CardDescription>
-                {existingEntries.length} entri tercatat untuk divisi{" "}
-                {user?.division?.name}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Waktu</TableHead>
-                      <TableHead>Kode Akun</TableHead>
-                      <TableHead>Nama Akun</TableHead>
-                      <TableHead>Tipe</TableHead>
-                      <TableHead>Keterangan</TableHead>
-                      <TableHead>Nilai</TableHead>
-                      <TableHead className="text-right">Aksi</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {existingEntries.map((entry) => {
-                      const account = accounts.find(
-                        (acc) => acc.id === entry.accountId
-                      );
-                      return (
-                        <TableRow key={entry.id}>
-                          <TableCell className="text-sm text-gray-500">
-                            {new Date(entry.createdAt).toLocaleTimeString(
-                              "id-ID",
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )}
-                          </TableCell>
-                          <TableCell className="font-mono text-blue-600">
-                            {account?.accountCode}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {account?.accountName}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              className={
-                                account?.valueType === "NOMINAL"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-green-100 text-green-800"
-                              }
-                            >
-                              {account?.valueType === "NOMINAL"
-                                ? "💰 Rp"
-                                : "📦 Unit"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {entry.description || "-"}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {formatDisplayValue(
-                              entry.nilai.toString(),
-                              account?.valueType || "NOMINAL",
-                              entry
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeExistingEntry(entry.id)}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
+        {divisionType === "BLENDING" ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Waktu</TableHead>
+                <TableHead>Kode Akun</TableHead>
+                <TableHead>Nama Akun</TableHead>
+                <TableHead>Tipe</TableHead>
+                <TableHead>Stok Awal</TableHead>
+                <TableHead>Pemakaian</TableHead>
+                <TableHead>Stok Akhir</TableHead>
+                <TableHead>Kondisi Gudang</TableHead>
+                <TableHead className="text-right">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {laporanGudang.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell className="text-sm text-gray-500">
+                    {new Date(entry.createdAt).toLocaleTimeString("id-ID", {
+                      hour: "2-digit",
+                      minute: "2-digit",
                     })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+                  </TableCell>
+                  <TableCell className="font-mono text-blue-600">
+                    {entry.account?.accountCode}
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {entry.account?.accountName}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className="bg-green-100 text-green-800">Unit</Badge>
+                  </TableCell>
+                  <TableCell>{entry.stokAwal ?? "-"}</TableCell>
+                  <TableCell>{entry.pemakaian ?? "-"}</TableCell>
+                  <TableCell>{entry.stokAkhir ?? "-"}</TableCell>
+                  <TableCell>{entry.kondisiGudang ?? "-"}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeLaporanGudang(entry.id)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Waktu</TableHead>
+                <TableHead>Kode Akun</TableHead>
+                <TableHead>Nama Akun</TableHead>
+                <TableHead>Tipe</TableHead>
+                <TableHead>Keterangan</TableHead>
+                <TableHead>Nilai</TableHead>
+                <TableHead className="text-right">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {existingEntries.map((entry) => {
+                const account = accounts.find(
+                  (acc) => acc.id === entry.accountId
+                );
+                return (
+                  <TableRow key={entry.id}>
+                    <TableCell className="text-sm text-gray-500">
+                      {new Date(entry.createdAt).toLocaleTimeString("id-ID", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </TableCell>
+                    <TableCell className="font-mono text-blue-600">
+                      {account?.accountCode}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {account?.accountName}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={
+                          account?.valueType === "NOMINAL"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-green-100 text-green-800"
+                        }
+                      >
+                        {account?.valueType === "NOMINAL" ? "💰 Rp" : "📦 Unit"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {entry.description || "-"}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {formatDisplayValue(
+                        entry.nilai.toString(),
+                        account?.valueType || "NOMINAL",
+                        entry
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeExistingEntry(entry.id)}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         )}
 
         {/* ✅ NEW: Summary untuk UTANG */}
@@ -2490,6 +2986,62 @@ export default function JournalPage() {
                   </p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* ✅ NEW: Laporan Gudang Display untuk BLENDING */}
+        {divisionType === "BLENDING" && laporanGudang.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-green-600">📦</span>
+                Ringkasan Gudang Hari Ini
+              </CardTitle>
+              <CardDescription>
+                Kontrol stok awal, pemakaian, dan stok akhir gudang hari ini.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const summary = getGudangSummary();
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="font-semibold text-blue-800">
+                        Total Stok Awal
+                      </div>
+                      <div className="text-2xl font-bold text-blue-900 mt-2">
+                        {summary.totalStokAwal.toLocaleString()} Unit
+                      </div>
+                    </div>
+                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                      <div className="font-semibold text-orange-800">
+                        Total Pemakaian
+                      </div>
+                      <div className="text-2xl font-bold text-orange-900 mt-2">
+                        {summary.totalPemakaian.toLocaleString()} Unit
+                      </div>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="font-semibold text-green-800">
+                        Total Stok Akhir
+                      </div>
+                      <div className="text-2xl font-bold text-green-900 mt-2">
+                        {summary.totalStokAkhir.toLocaleString()} Unit
+                      </div>
+                    </div>
+                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                      <div className="font-semibold text-purple-800">
+                        Jumlah Laporan
+                      </div>
+                      <div className="text-2xl font-bold text-purple-900 mt-2">
+                        {summary.jumlahLaporan}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         )}

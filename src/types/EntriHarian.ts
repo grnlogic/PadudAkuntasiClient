@@ -30,6 +30,17 @@ export interface EntriHarian {
   salesUserId?: number;
   returPenjualan?: number;
   keteranganKendala?: string;
+
+  // ✅ NEW: Produksi fields
+  hasilProduksi?: number;
+  barangGagal?: number;
+  stockBarangJadi?: number;
+  hpBarangJadi?: number;
+
+  // ✅ NEW: Gudang fields for BLENDING
+  stokAwal?: number;
+  pemakaian?: number;
+  kondisiGudang?: string;
 }
 
 export interface CreateEntriHarianRequest {
@@ -51,6 +62,10 @@ export interface CreateEntriHarianRequest {
   keteranganKendala?: string;
   // ✅ Produksi fields
   hppAmount?: number;
+  hasilProduksi?: number;
+  barangGagal?: number;
+  stockBarangJadi?: number;
+  hpBarangJadi?: number;
   // ✅ Gudang fields
   pemakaianAmount?: number;
   stokAkhir?: number;
@@ -58,4 +73,8 @@ export interface CreateEntriHarianRequest {
   attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
   absentCount?: number;
   shift?: "REGULER" | "LEMBUR";
+  // ✅ NEW: Gudang fields for BLENDING
+  stokAwal?: number;
+  pemakaian?: number;
+  kondisiGudang?: string;
 }

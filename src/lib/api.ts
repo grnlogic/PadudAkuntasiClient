@@ -278,6 +278,7 @@ export interface CreateLaporanPenjualanSalesRequest {
 }
 
 export interface LaporanPenjualanSales {
+  [x: string]: number;
   id: number;
   tanggalLaporan: string;
   salesperson: {
@@ -518,3 +519,174 @@ export async function createSalesperson(nama: string): Promise<Salesperson> {
   if (!res.ok) throw new Error("Gagal menambah salesperson");
   return res.json();
 }
+
+// ✅ NEW: LaporanProduksi API interface and functions
+export interface CreateLaporanProduksiRequest {
+  tanggalLaporan: string; // format: 'YYYY-MM-DD'
+  accountId: number;
+  hasilProduksi?: number;
+  barangGagal?: number;
+  stockBarangJadi?: number;
+  hpBarangJadi?: number;
+  keteranganKendala?: string;
+}
+
+export interface LaporanProduksiHarian {
+  id: number;
+  tanggalLaporan: string;
+  account: {
+    id: number;
+    division: {
+      id: number;
+      name: string;
+    };
+    accountCode: string;
+    accountName: string;
+    valueType: string;
+  };
+  hasilProduksi?: number;
+  barangGagal?: number;
+  stockBarangJadi?: number;
+  hpBarangJadi?: number;
+  keteranganKendala?: string;
+  createdBy: {
+    id: number;
+    username: string;
+    role: string;
+    division: {
+      id: number;
+      name: string;
+    };
+  };
+  createdAt: string;
+}
+
+//Api LaporanProduksi
+export const laporanProduksiAPI = {
+  create: async (data: CreateLaporanProduksiRequest) => {
+    console.log("🔍 LAPORAN PRODUKSI API - Raw data received:", data);
+
+    // ✅ Validate required fields
+    if (!data.tanggalLaporan) {
+      throw new Error("VALIDATION_ERROR: Tanggal laporan wajib diisi");
+    }
+    if (!data.accountId || data.accountId <= 0) {
+      throw new Error("VALIDATION_ERROR: Account ID wajib diisi");
+    }
+
+    // ✅ Format data for backend
+    const formattedData = {
+      tanggalLaporan: data.tanggalLaporan.slice(0, 10), // pastikan hanya YYYY-MM-DD
+      accountId: Number(data.accountId),
+      hasilProduksi: data.hasilProduksi ? Number(data.hasilProduksi) : null,
+      barangGagal: data.barangGagal ? Number(data.barangGagal) : null,
+      stockBarangJadi: data.stockBarangJadi
+        ? Number(data.stockBarangJadi)
+        : null,
+      hpBarangJadi: data.hpBarangJadi ? Number(data.hpBarangJadi) : null,
+      keteranganKendala: data.keteranganKendala || null,
+    };
+    console.log(
+      "📤 LAPORAN PRODUKSI API - Formatted data to send:",
+      formattedData
+    );
+
+    return apiRequest<LaporanProduksiHarian>("/api/v1/laporan-produksi", {
+      method: "POST",
+      body: JSON.stringify(formattedData),
+    });
+  },
+
+  getAll: async () => {
+    return apiRequest<LaporanProduksiHarian[]>("/api/v1/laporan-produksi");
+  },
+
+  delete: async (id: number) => {
+    return apiRequest(`/api/v1/laporan-produksi/${id}`, {
+      method: "DELETE",
+    });
+  },
+};
+
+// ✅ NEW: LaporanGudang API interface and functions
+export interface CreateLaporanGudangRequest {
+  tanggalLaporan: string; // format: 'YYYY-MM-DD'
+  accountId: number;
+  stokAwal?: number;
+  pemakaian?: number;
+  stokAkhir?: number;
+  kondisiGudang?: string;
+}
+
+export interface LaporanGudangHarian {
+  id: number;
+  tanggalLaporan: string;
+  account: {
+    id: number;
+    division: {
+      id: number;
+      name: string;
+    };
+    accountCode: string;
+    accountName: string;
+    valueType: string;
+  };
+  stokAwal?: number;
+  pemakaian?: number;
+  stokAkhir?: number;
+  kondisiGudang?: string;
+  createdBy: {
+    id: number;
+    username: string;
+    role: string;
+    division: {
+      id: number;
+      name: string;
+    };
+  };
+  createdAt: string;
+}
+
+//Api LaporanGudang
+export const laporanGudangAPI = {
+  create: async (data: CreateLaporanGudangRequest) => {
+    console.log("🔍 LAPORAN GUDANG API - Raw data received:", data);
+
+    // ✅ Validate required fields
+    if (!data.tanggalLaporan) {
+      throw new Error("VALIDATION_ERROR: Tanggal laporan wajib diisi");
+    }
+    if (!data.accountId || data.accountId <= 0) {
+      throw new Error("VALIDATION_ERROR: Account ID wajib diisi");
+    }
+
+    // ✅ Format data for backend
+    const formattedData = {
+      tanggalLaporan: data.tanggalLaporan.slice(0, 10), // pastikan hanya YYYY-MM-DD
+      accountId: Number(data.accountId),
+      stokAwal: data.stokAwal ? Number(data.stokAwal) : null,
+      pemakaian: data.pemakaian ? Number(data.pemakaian) : null,
+      stokAkhir: data.stokAkhir ? Number(data.stokAkhir) : null,
+      kondisiGudang: data.kondisiGudang || null,
+    };
+    console.log(
+      "📤 LAPORAN GUDANG API - Formatted data to send:",
+      formattedData
+    );
+
+    return apiRequest<LaporanGudangHarian>("/api/v1/laporan-gudang", {
+      method: "POST",
+      body: JSON.stringify(formattedData),
+    });
+  },
+
+  getAll: async () => {
+    return apiRequest<LaporanGudangHarian[]>("/api/v1/laporan-gudang");
+  },
+
+  delete: async (id: number) => {
+    return apiRequest(`/api/v1/laporan-gudang/${id}`, {
+      method: "DELETE",
+    });
+  },
+};
