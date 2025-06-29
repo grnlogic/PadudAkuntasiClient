@@ -849,7 +849,7 @@ export default function JournalPage() {
         for (const row of pemasaranSalesEntries) {
           const salesData: CreateLaporanPenjualanSalesRequest = {
             tanggalLaporan: selectedDate,
-            salesUserId: Number(row.salesUserId),
+            salespersonId: Number(row.salesUserId),
             targetPenjualan: row.targetAmount
               ? Number(row.targetAmount)
               : undefined,

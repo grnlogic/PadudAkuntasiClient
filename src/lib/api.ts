@@ -270,7 +270,7 @@ export const piutangAPI = {
 // ✅ NEW: LaporanPenjualanSales API interface and functions
 export interface CreateLaporanPenjualanSalesRequest {
   tanggalLaporan: string; // format: 'YYYY-MM-DD'
-  salesUserId: number;
+  salespersonId: number;
   targetPenjualan?: number;
   realisasiPenjualan?: number;
   returPenjualan?: number;
@@ -308,14 +308,14 @@ export const laporanPenjualanSalesAPI = {
     if (!data.tanggalLaporan) {
       throw new Error("VALIDATION_ERROR: Tanggal laporan wajib diisi");
     }
-    if (!data.salesUserId || data.salesUserId <= 0) {
-      throw new Error("VALIDATION_ERROR: Sales User ID wajib diisi");
+    if (!data.salespersonId || data.salespersonId <= 0) {
+      throw new Error("VALIDATION_ERROR: Salesperson ID wajib diisi");
     }
 
     // ✅ Format data for backend
     const formattedData = {
       tanggalLaporan: data.tanggalLaporan.slice(0, 10), // pastikan hanya YYYY-MM-DD
-      salesUserId: Number(data.salesUserId),
+      salespersonId: Number(data.salespersonId),
       targetPenjualan: data.targetPenjualan
         ? Number(data.targetPenjualan)
         : null,
