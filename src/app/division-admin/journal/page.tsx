@@ -484,7 +484,11 @@ export default function JournalPage() {
   const getAccountDisplay = (accountId: string) => {
     const account = accounts.find((acc) => acc.id === accountId);
     if (!account) return "Akun tidak ditemukan";
-    return `${account.accountCode} - ${account.accountName}`;
+
+    // ✅ ADD: Keterangan berdasarkan valueType
+    const keterangan =
+      account.valueType === "NOMINAL" ? "💰 Nominal" : "📦 Kuantitas";
+    return `${account.accountCode} - ${account.accountName} (${keterangan})`;
   };
 
   const getSelectedAccount = (accountId: string) => {
@@ -532,6 +536,19 @@ export default function JournalPage() {
         if (
           row.salesUserId &&
           (row.targetAmount || row.realisasiAmount || row.returPenjualan)
+        ) {
+          return true;
+        }
+      }
+
+      // ✅ NEW: Validasi khusus HRD
+      if (divisionType === "HRD") {
+        // Minimal salah satu field HRD terisi
+        if (
+          row.attendanceStatus ||
+          row.absentCount ||
+          row.shift ||
+          row.keteranganKendala
         ) {
           return true;
         }
@@ -672,12 +689,20 @@ export default function JournalPage() {
                 "UTANG_DIBAYAR",
               ].includes(row.transactionType)
             ))) &&
-        (divisionType !== "PEMASARAN" || !row.salesUserId)
+        (divisionType !== "PEMASARAN" || !row.salesUserId) &&
+        (divisionType !== "HRD" || !row.attendanceStatus) // ✅ ADD: Exclude HRD entries
     );
 
     // Tambahkan ini:
     const pemasaranSalesEntries = validRows.filter(
       (row) => row.salesUserId && divisionType === "PEMASARAN"
+    );
+
+    // ✅ NEW: Separate HRD entries
+    const hrdEntries = validRows.filter(
+      (row) =>
+        divisionType === "HRD" &&
+        (row.attendanceStatus || row.absentCount || row.shift)
     );
 
     // ✅ NEW: Separate produksi entries
@@ -703,7 +728,9 @@ export default function JournalPage() {
       utangCount: utangEntries.length,
       regularCount: regularEntries.length,
       pemasaranSalesCount: pemasaranSalesEntries.length,
-      produksiCount: produksiEntries.length, // ✅ ADD: Produksi count
+      hrdCount: hrdEntries.length, // ✅ ADD: HRD count
+      produksiCount: produksiEntries.length,
+      gudangCount: gudangEntries.length, // ✅ ADD: Gudang count
       piutangEntries: piutangEntries.map((r) => ({
         id: r.id,
         type: r.piutangType || r.transactionType,
@@ -719,6 +746,13 @@ export default function JournalPage() {
       pemasaranSalesEntries: pemasaranSalesEntries.map((r) => ({
         id: r.id,
         salesUserId: r.salesUserId,
+      })),
+      hrdEntries: hrdEntries.map((r) => ({
+        // ✅ ADD: HRD entries logging
+        id: r.id,
+        attendanceStatus: r.attendanceStatus,
+        absentCount: r.absentCount,
+        shift: r.shift,
       })),
     });
 
@@ -1042,6 +1076,29 @@ export default function JournalPage() {
         }
       }
 
+      // ✅ NEW: Handle HRD entries separately
+      if (hrdEntries.length > 0 && divisionType === "HRD") {
+        console.log("👥 PROCESSING HRD ENTRIES:", hrdEntries);
+
+        for (const row of hrdEntries) {
+          const hrdData: CreateEntriHarianRequest = {
+            accountId: Number(row.accountId),
+            tanggal: selectedDate,
+            nilai: row.attendanceStatus === "HADIR" ? 1 : 0,
+            description: row.keteranganKendala || "",
+            attendanceStatus: row.attendanceStatus,
+            absentCount: row.absentCount ? Number(row.absentCount) : undefined,
+            shift: row.shift,
+          };
+
+          console.log("📤 Akan mengirim laporan HRD ke backend:", hrdData);
+          const result = await saveEntriHarianBatch([hrdData]);
+          console.log("✅ Hasil dari backend:", result);
+          savedResults.push(...result);
+          console.log("✅ LAPORAN HRD SAVED SUCCESSFULLY:", result);
+        }
+      }
+
       // ✅ SUCCESS HANDLING: Show success message and reload data
       if (savedResults.length > 0) {
         console.log("✅ ALL ENTRIES SAVED SUCCESSFULLY:", savedResults);
@@ -1051,8 +1108,9 @@ export default function JournalPage() {
         const piutangCount = piutangEntries.length;
         const utangCount = utangEntries.length;
         const regularCount = regularEntries.length;
+        const hrdCount = hrdEntries.length; // ✅ ADD: HRD count
         const produksiCount = produksiEntries.length;
-        const gudangCount = gudangEntries.length; // ✅ ADD: Gudang count
+        const gudangCount = gudangEntries.length;
 
         let successMessage = `Berhasil menyimpan ${totalSaved} entri`;
         if (pemasaranCount > 0) {
@@ -1076,22 +1134,33 @@ export default function JournalPage() {
               ? `, ${regularCount} reguler`
               : ` (${regularCount} reguler`;
         }
-        if (produksiCount > 0) {
+        if (hrdCount > 0) {
+          // ✅ ADD: HRD success message
           successMessage +=
             pemasaranCount > 0 ||
             piutangCount > 0 ||
             utangCount > 0 ||
             regularCount > 0
-              ? `, ${produksiCount} produksi`
-              : ` (${produksiCount} produksi`;
+              ? `, ${hrdCount} HRD`
+              : ` (${hrdCount} HRD`;
         }
-        if (gudangCount > 0) {
-          // ✅ ADD: Gudang success message
+        if (produksiCount > 0) {
           successMessage +=
             pemasaranCount > 0 ||
             piutangCount > 0 ||
             utangCount > 0 ||
             regularCount > 0 ||
+            hrdCount > 0
+              ? `, ${produksiCount} produksi`
+              : ` (${produksiCount} produksi`;
+        }
+        if (gudangCount > 0) {
+          successMessage +=
+            pemasaranCount > 0 ||
+            piutangCount > 0 ||
+            utangCount > 0 ||
+            regularCount > 0 ||
+            hrdCount > 0 ||
             produksiCount > 0
               ? `, ${gudangCount} gudang`
               : ` (${gudangCount} gudang`;
@@ -1101,6 +1170,7 @@ export default function JournalPage() {
           piutangCount > 0 ||
           utangCount > 0 ||
           regularCount > 0 ||
+          hrdCount > 0 ||
           produksiCount > 0 ||
           gudangCount > 0
         ) {
@@ -1861,6 +1931,18 @@ export default function JournalPage() {
                 </Select>
               </div>
             </div>
+            {/* ✅ ADD: Keterangan Kendala HRD */}
+            <div className="mt-4">
+              <Label>Keterangan Kendala</Label>
+              <textarea
+                placeholder="Tuliskan keterangan kendala kehadiran hari ini..."
+                value={row.keteranganKendala}
+                onChange={(e) =>
+                  updateRow(row.id, "keteranganKendala", e.target.value)
+                }
+                className="mt-1 w-full border rounded p-2 min-h-[60px]"
+              />
+            </div>
           </div>
         );
 
@@ -2163,13 +2245,11 @@ export default function JournalPage() {
     let totalHpBarangJadi = 0;
 
     laporanProduksi.forEach((laporan) => {
-      // Mapping field dari backend ke FE
-      totalHasilProduksi +=
-        laporan.hasilProduksi || laporan.hasil_produksi || 0;
-      totalBarangGagal += laporan.barangGagal || laporan.barang_gagal || 0;
-      totalStockBarangJadi +=
-        laporan.stockBarangJadi || laporan.stock_barang_jadi || 0;
-      totalHpBarangJadi += laporan.hpBarangJadi || laporan.hp_barang_jadi || 0;
+      // ✅ FIX: Use correct property names
+      totalHasilProduksi += laporan.hasilProduksi || 0;
+      totalBarangGagal += laporan.barangGagal || 0;
+      totalStockBarangJadi += laporan.stockBarangJadi || 0;
+      totalHpBarangJadi += laporan.hpBarangJadi || 0;
     });
 
     return {
