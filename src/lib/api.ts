@@ -38,8 +38,6 @@ async function apiRequest<T>(
     const token =
       typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
-    
-
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: {
         "Content-Type": "application/json",
@@ -55,8 +53,6 @@ async function apiRequest<T>(
     } catch {
       data = null;
     }
-
-   
 
     if (!response.ok) {
       return {
@@ -630,6 +626,19 @@ export interface LaporanGudangHarian {
     };
   };
   createdAt: string;
+  stok_awal?: number;
+  stok_akhir?: number;
+  kondisi_gudang?: string;
+  created_by?: {
+    id: number;
+    username: string;
+    role: string;
+    division: {
+      id: number;
+      name: string;
+    };
+  };
+  created_at?: string;
 }
 
 //Api LaporanGudang

@@ -759,7 +759,65 @@ export const getLaporanGudang = async (): Promise<LaporanGudangHarian[]> => {
   try {
     const response = await laporanGudangAPI.getAll();
     if (response.success && response.data) {
-      return response.data;
+      // ✅ FIXED: Proper mapping for backend data format
+      const mappedData = response.data.map((laporan: any) => ({
+        id: laporan.id,
+        tanggalLaporan: laporan.tanggal_laporan || laporan.tanggalLaporan,
+        account: {
+          id: laporan.account?.id,
+          division: {
+            id: laporan.account?.division?.id,
+            name: laporan.account?.division?.name,
+          },
+          accountCode:
+            laporan.account?.accountCode || laporan.account?.account_code,
+          accountName:
+            laporan.account?.accountName || laporan.account?.account_name,
+          valueType: laporan.account?.valueType || laporan.account?.value_type,
+        },
+        // ✅ FIXED: Support both camelCase and snake_case field names
+        stokAwal: laporan.stokAwal ?? laporan.stok_awal,
+        pemakaian: laporan.pemakaian,
+        stokAkhir: laporan.stokAkhir ?? laporan.stok_akhir,
+        kondisiGudang: laporan.kondisiGudang ?? laporan.kondisi_gudang,
+        createdBy: {
+          id: laporan.createdBy?.id ?? laporan.created_by?.id,
+          username: laporan.createdBy?.username ?? laporan.created_by?.username,
+          role: laporan.createdBy?.role ?? laporan.created_by?.role,
+          division: {
+            id:
+              laporan.createdBy?.division?.id ??
+              laporan.created_by?.division?.id,
+            name:
+              laporan.createdBy?.division?.name ??
+              laporan.created_by?.division?.name,
+          },
+        },
+        createdAt: laporan.createdAt ?? laporan.created_at,
+      }));
+
+      console.log("🔍 LAPORAN GUDANG MAPPING:", {
+        originalCount: response.data.length,
+        mappedCount: mappedData.length,
+        sampleMapping: mappedData[0]
+          ? {
+              original: {
+                id: response.data[0].id,
+                stok_awal: response.data[0].stok_awal,
+                stok_akhir: response.data[0].stok_akhir,
+                kondisi_gudang: response.data[0].kondisi_gudang,
+              },
+              mapped: {
+                id: mappedData[0].id,
+                stokAwal: mappedData[0].stokAwal,
+                stokAkhir: mappedData[0].stokAkhir,
+                kondisiGudang: mappedData[0].kondisiGudang,
+              },
+            }
+          : null,
+      });
+
+      return mappedData;
     }
     return [];
   } catch (error) {

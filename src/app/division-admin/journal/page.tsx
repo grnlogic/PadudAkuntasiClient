@@ -343,6 +343,7 @@ export default function JournalPage() {
         // ✅ NEW: Set laporan produksi
         if (divisionType === "PRODUKSI") {
           setLaporanProduksi(laporanProduksiData);
+          console.log("ISI laporanProduksi:", laporanProduksiData);
         }
 
         // ✅ NEW: Set laporan gudang
@@ -2276,11 +2277,13 @@ export default function JournalPage() {
     let totalHpBarangJadi = 0;
 
     laporanProduksi.forEach((laporan) => {
-      // ✅ FIX: Use correct property names
-      totalHasilProduksi += laporan.hasilProduksi || 0;
-      totalBarangGagal += laporan.barangGagal || 0;
-      totalStockBarangJadi += laporan.stockBarangJadi || 0;
-      totalHpBarangJadi += laporan.hpBarangJadi || 0;
+      // Cek dua-duanya, agar support data hasil mapping dan data mentah
+      totalHasilProduksi +=
+        laporan.hasilProduksi ?? laporan.hasil_produksi ?? 0;
+      totalBarangGagal += laporan.barangGagal ?? laporan.barang_gagal ?? 0;
+      totalStockBarangJadi +=
+        laporan.stockBarangJadi ?? laporan.stock_barang_jadi ?? 0;
+      totalHpBarangJadi += laporan.hpBarangJadi ?? laporan.hp_barang_jadi ?? 0;
     });
 
     return {
@@ -2299,6 +2302,7 @@ export default function JournalPage() {
     let totalStokAkhir = 0;
 
     laporanGudang.forEach((laporan) => {
+      // ✅ FIXED: Use proper field names
       totalStokAwal += laporan.stokAwal || 0;
       totalPemakaian += laporan.pemakaian || 0;
       totalStokAkhir += laporan.stokAkhir || 0;
@@ -2332,6 +2336,60 @@ export default function JournalPage() {
     const saldoAkhir = baru - tertagih - macet;
 
     return { baru, tertagih, macet, saldoAkhir };
+  };
+
+  // ✅ NEW: Get HRD summary
+  const getHRDSummary = () => {
+    let totalKaryawan = 0;
+    let hadirCount = 0;
+    let tidakHadirCount = 0;
+    let sakitCount = 0;
+    let izinCount = 0;
+    let totalAbsentCount = 0;
+    let lemburCount = 0;
+
+    existingEntries.forEach((entry) => {
+      // ✅ Check if this is HRD data
+      if ((entry as any).attendanceStatus || (entry as any).absentCount || (entry as any).shift) {
+        totalKaryawan += 1;
+        
+        const attendanceStatus = (entry as any).attendanceStatus;
+        const absentCount = (entry as any).absentCount || 0;
+        const shift = (entry as any).shift;
+
+        if (attendanceStatus === "HADIR") {
+          hadirCount += 1;
+        } else if (attendanceStatus === "TIDAK_HADIR") {
+          tidakHadirCount += 1;
+        } else if (attendanceStatus === "SAKIT") {
+          sakitCount += 1;
+        } else if (attendanceStatus === "IZIN") {
+          izinCount += 1;
+        }
+
+        totalAbsentCount += absentCount;
+
+        if (shift === "LEMBUR") {
+          lemburCount += 1;
+        }
+      }
+    });
+
+    const attendanceRate = totalKaryawan > 0 ? (hadirCount / totalKaryawan) * 100 : 0;
+
+    return {
+      totalKaryawan,
+      hadirCount,
+      tidakHadirCount,
+      sakitCount,
+      izinCount,
+      totalAbsentCount,
+      lemburCount,
+      attendanceRate,
+      jumlahLaporan: existingEntries.filter(entry => 
+        (entry as any).attendanceStatus || (entry as any).absentCount || (entry as any).shift
+      ).length,
+    };
   };
 
   return (
@@ -2609,6 +2667,63 @@ export default function JournalPage() {
           </Card>
         )}
 
+        {/* ✅ NEW: Summary Card untuk PRODUKSI */}
+        {divisionType === "PRODUKSI" && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-green-600">🏭</span>
+                Ringkasan Produksi Hari Ini
+              </CardTitle>
+              <CardDescription>
+                Kontrol hasil produksi, barang gagal, dan stok barang jadi hari
+                ini.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const summary = getProduksiSummary();
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="font-semibold text-green-800">
+                        Total Hasil Produksi
+                      </div>
+                      <div className="text-2xl font-bold text-green-900 mt-2">
+                        {summary.totalHasilProduksi.toLocaleString()} Unit
+                      </div>
+                    </div>
+                    <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                      <div className="font-semibold text-red-800">
+                        Total Barang Gagal
+                      </div>
+                      <div className="text-2xl font-bold text-red-900 mt-2">
+                        {summary.totalBarangGagal.toLocaleString()} Unit
+                      </div>
+                    </div>
+                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="font-semibold text-blue-800">
+                        Stock Barang Jadi
+                      </div>
+                      <div className="text-2xl font-bold text-blue-900 mt-2">
+                        {summary.totalStockBarangJadi.toLocaleString()} Unit
+                      </div>
+                    </div>
+                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                      <div className="font-semibold text-purple-800">
+                        Harga Pokok Barang Jadi
+                      </div>
+                      <div className="text-2xl font-bold text-purple-900 mt-2">
+                        {formatCurrency(summary.totalHpBarangJadi)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        )}
+
         {/* === TABEL DETAIL === */}
         {divisionType === "PEMASARAN" ? (
           // TABEL KHUSUS PENJUALAN SALES
@@ -2668,6 +2783,132 @@ export default function JournalPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => removeLaporanPenjualanSales(laporan.id)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : divisionType === "PRODUKSI" ? (
+          // ✅ NEW: TABEL KHUSUS PRODUKSI
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Waktu</TableHead>
+                <TableHead>Kode Akun</TableHead>
+                <TableHead>Nama Akun</TableHead>
+                <TableHead>Hasil Produksi</TableHead>
+                <TableHead>Barang Gagal</TableHead>
+                <TableHead>Stock Barang Jadi</TableHead>
+                <TableHead>Harga Pokok</TableHead>
+                <TableHead>Kendala</TableHead>
+                <TableHead className="text-right">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {laporanProduksi.map((laporan) => (
+                <TableRow key={laporan.id}>
+                  <TableCell className="text-sm text-gray-500">
+                    {laporan.createdAt
+                      ? new Date(laporan.createdAt).toLocaleTimeString(
+                          "id-ID",
+                          {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }
+                        )
+                      : "-"}
+                  </TableCell>
+                  <TableCell className="font-mono text-blue-600">
+                    {laporan.account?.accountCode || "-"}
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {laporan.account?.accountName || "-"}
+                  </TableCell>
+                  <TableCell>
+                    {(laporan.hasilProduksi || 0).toLocaleString()} Unit
+                  </TableCell>
+                  <TableCell>
+                    {(laporan.barangGagal || 0).toLocaleString()} Unit
+                  </TableCell>
+                  <TableCell>
+                    {(laporan.stockBarangJadi || 0).toLocaleString()} Unit
+                  </TableCell>
+                  <TableCell>
+                    {formatCurrency(laporan.hpBarangJadi || 0)}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {laporan.keteranganKendala || "-"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeLaporanProduksi(laporan.id)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : divisionType === "BLENDING" ? (
+          // ✅ NEW: TABEL KHUSUS BLENDING
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Waktu</TableHead>
+                <TableHead>Kode Akun</TableHead>
+                <TableHead>Nama Akun</TableHead>
+                <TableHead>Stok Awal</TableHead>
+                <TableHead>Pemakaian</TableHead>
+                <TableHead>Stok Akhir</TableHead>
+                <TableHead>Kondisi Gudang</TableHead>
+                <TableHead className="text-right">Aksi</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {laporanGudang.map((laporan) => (
+                <TableRow key={laporan.id}>
+                  <TableCell className="text-sm text-gray-500">
+                    {laporan.createdAt
+                      ? new Date(laporan.createdAt).toLocaleTimeString(
+                          "id-ID",
+                          {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }
+                        )
+                      : "-"}
+                  </TableCell>
+                  <TableCell className="font-mono text-blue-600">
+                    {laporan.account?.accountCode || "-"}
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    {laporan.account?.accountName || "-"}
+                  </TableCell>
+                  <TableCell>
+                    {(laporan.stokAwal || 0).toLocaleString()} Unit
+                  </TableCell>
+                  <TableCell>
+                    {(laporan.pemakaian || 0).toLocaleString()} Unit
+                  </TableCell>
+                  <TableCell>
+                    {(laporan.stokAkhir || 0).toLocaleString()} Unit
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {laporan.kondisiGudang || "-"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => removeLaporanGudang(laporan.id)}
                       className="text-red-600 hover:text-red-700"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -3057,7 +3298,30 @@ export default function JournalPage() {
           </Card>
         )}
 
-        {/* ✅ NEW: Laporan Gudang Display untuk BLENDING */}
+        {/* Info untuk akun kosong */}
+        {accounts.length === 0 && (
+          <Card className="bg-yellow-50 border-yellow-200">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <BookOpen className="h-12 w-12 text-yellow-600 mx-auto mb-4" />
+                <h3 className="font-semibold text-yellow-900">
+                  Belum ada entri hari ini, tambahkan entri hari ini (
+                  {new Date().toLocaleDateString("id-ID", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "2-digit",
+                  })}
+                  )
+                </h3>
+                <p className="text-yellow-800 text-sm mt-2">
+                  Belum ada entri di rak {user?.division?.name}. Silakan
+                  tambahkan entri terlebih dahulu.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {divisionType === "BLENDING" && laporanGudang.length > 0 && (
           <Card className="mb-6">
             <CardHeader>
@@ -3113,26 +3377,72 @@ export default function JournalPage() {
           </Card>
         )}
 
-        {/* Info untuk akun kosong */}
-        {accounts.length === 0 && (
-          <Card className="bg-yellow-50 border-yellow-200">
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <BookOpen className="h-12 w-12 text-yellow-600 mx-auto mb-4" />
-                <h3 className="font-semibold text-yellow-900">
-                  Belum ada entri hari ini, tambahkan entri hari ini (
-                  {new Date().toLocaleDateString("id-ID", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "2-digit",
-                  })}
-                  )
-                </h3>
-                <p className="text-yellow-800 text-sm mt-2">
-                  Belum ada entri di rak {user?.division?.name}. Silakan
-                  tambahkan entri terlebih dahulu.
-                </p>
-              </div>
+        {/* ✅ NEW: Summary Card untuk HRD - Add this after the PRODUKSI summary card */}
+        {divisionType === "HRD" && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-indigo-600">👥</span>
+                Ringkasan Kehadiran Hari Ini
+              </CardTitle>
+              <CardDescription>
+                Kontrol kehadiran karyawan, tingkat kehadiran, dan shift lembur
+                hari ini.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {(() => {
+                const summary = getHRDSummary();
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="font-semibold text-blue-800">
+                        Total Karyawan
+                      </div>
+                      <div className="text-2xl font-bold text-blue-900 mt-2">
+                        {summary.totalKaryawan} orang
+                      </div>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                      <div className="font-semibold text-green-800">
+                        Tingkat Kehadiran
+                      </div>
+                      <div className="text-2xl font-bold text-green-900 mt-2">
+                        {summary.attendanceRate.toFixed(1)}%
+                      </div>
+                      <div className="text-sm text-green-700 mt-1">
+                        Hadir: {summary.hadirCount} | Tidak: {summary.tidakHadirCount + summary.sakitCount + summary.izinCount}
+                      </div>
+                    </div>
+                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                      <div className="font-semibold text-purple-800">
+                        Shift Lembur
+                      </div>
+                      <div className="text-2xl font-bold text-purple-900 mt-2">
+                        {summary.lemburCount} orang
+                      </div>
+                      <div className="text-sm text-purple-700 mt-1">
+                        Reguler: {summary.totalKaryawan - summary.lemburCount} orang
+                      </div>
+                    </div>
+                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                      <div className="font-semibold text-orange-800">
+                        Status Kehadiran
+                      </div>
+                      <div className="text-2xl font-bold text-orange-900 mt-2">
+                        {summary.attendanceRate >= 90 
+                          ? "Excellent" 
+                          : summary.attendanceRate >= 80 
+                          ? "Good" 
+                          : "Needs Improvement"}
+                      </div>
+                      <div className="text-sm text-orange-700 mt-1">
+                        {summary.jumlahLaporan} laporan hari ini
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
         )}
