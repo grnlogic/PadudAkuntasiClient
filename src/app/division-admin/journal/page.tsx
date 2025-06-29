@@ -332,6 +332,12 @@ export default function JournalPage() {
         // ✅ NEW: Set laporan penjualan sales
         if (divisionType === "PEMASARAN") {
           setLaporanPenjualanSales(laporanData);
+          console.log("ISI laporanPenjualanSales:", laporanData);
+          if (laporanData && laporanData.length > 0) {
+            laporanData.forEach((laporan, idx) => {
+              console.log(`Laporan[${idx}]`, laporan);
+            });
+          }
         }
 
         // ✅ NEW: Set laporan produksi
@@ -2546,8 +2552,8 @@ export default function JournalPage() {
           </CardContent>
         </Card>
 
-        {/* ✅ NEW: Laporan Penjualan Sales Display untuk Pemasaran */}
-        {divisionType === "PEMASARAN" && laporanPenjualanSales.length > 0 && (
+        {/* === SUMMARY CARD SELALU TAMPIL === */}
+        {divisionType === "PEMASARAN" && (
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -2603,113 +2609,65 @@ export default function JournalPage() {
           </Card>
         )}
 
-        {/* ✅ NEW: Laporan Produksi Display untuk Produksi */}
-        {divisionType === "PRODUKSI" && laporanProduksi.length > 0 && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-green-600">🏭</span>
-                Ringkasan Produksi Hari Ini
-              </CardTitle>
-              <CardDescription>
-                Kontrol hasil produksi, barang gagal, stock, dan HPP hari ini.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {(() => {
-                const summary = getProduksiSummary();
-                return (
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <div className="font-semibold text-green-800">
-                        Total Hasil Produksi
-                      </div>
-                      <div className="text-2xl font-bold text-green-900 mt-2">
-                        {summary.totalHasilProduksi.toLocaleString()} Unit
-                      </div>
-                    </div>
-                    <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                      <div className="font-semibold text-red-800">
-                        Total Barang Gagal
-                      </div>
-                      <div className="text-2xl font-bold text-red-900 mt-2">
-                        {summary.totalBarangGagal.toLocaleString()} Unit
-                      </div>
-                    </div>
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="font-semibold text-blue-800">
-                        Total Stock Barang Jadi
-                      </div>
-                      <div className="text-2xl font-bold text-blue-900 mt-2">
-                        {summary.totalStockBarangJadi.toLocaleString()} Unit
-                      </div>
-                    </div>
-                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                      <div className="font-semibold text-purple-800">
-                        Total HPP Barang Jadi
-                      </div>
-                      <div className="text-2xl font-bold text-purple-900 mt-2">
-                        {formatCurrency(summary.totalHpBarangJadi)}
-                      </div>
-                    </div>
-                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                      <div className="font-semibold text-orange-800">
-                        Jumlah Laporan
-                      </div>
-                      <div className="text-2xl font-bold text-orange-900 mt-2">
-                        {summary.jumlahLaporan}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Existing Entries - Updated Display */}
-        {divisionType === "BLENDING" ? (
+        {/* === TABEL DETAIL === */}
+        {divisionType === "PEMASARAN" ? (
+          // TABEL KHUSUS PENJUALAN SALES
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Waktu</TableHead>
                 <TableHead>Kode Akun</TableHead>
                 <TableHead>Nama Akun</TableHead>
+                <TableHead>Sales</TableHead>
                 <TableHead>Tipe</TableHead>
-                <TableHead>Stok Awal</TableHead>
-                <TableHead>Pemakaian</TableHead>
-                <TableHead>Stok Akhir</TableHead>
-                <TableHead>Kondisi Gudang</TableHead>
+                <TableHead>Keterangan</TableHead>
+                <TableHead>Target</TableHead>
+                <TableHead>Realisasi</TableHead>
+                <TableHead>Retur</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {laporanGudang.map((entry) => (
-                <TableRow key={entry.id}>
+              {laporanPenjualanSales.map((laporan, idx) => (
+                <TableRow key={laporan.id}>
                   <TableCell className="text-sm text-gray-500">
-                    {new Date(entry.createdAt).toLocaleTimeString("id-ID", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {laporan.created_at
+                      ? new Date(laporan.created_at).toLocaleTimeString(
+                          "id-ID",
+                          {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          }
+                        )
+                      : "-"}
                   </TableCell>
                   <TableCell className="font-mono text-blue-600">
-                    {entry.account?.accountCode}
+                    {laporan.account?.accountCode || "-"}
                   </TableCell>
                   <TableCell className="font-medium">
-                    {entry.account?.accountName}
+                    {laporan.account?.accountName || "-"}
+                  </TableCell>
+                  <TableCell>{laporan.salesperson?.nama || "-"}</TableCell>
+                  <TableCell>
+                    <Badge className="bg-orange-100 text-orange-800">
+                      Penjualan
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{laporan.keterangan_kendala || "-"}</TableCell>
+                  <TableCell>
+                    {formatCurrency(laporan.target_penjualan || 0)}
                   </TableCell>
                   <TableCell>
-                    <Badge className="bg-green-100 text-green-800">Unit</Badge>
+                    {formatCurrency(laporan.realisasi_penjualan || 0)}
                   </TableCell>
-                  <TableCell>{entry.stokAwal ?? "-"}</TableCell>
-                  <TableCell>{entry.pemakaian ?? "-"}</TableCell>
-                  <TableCell>{entry.stokAkhir ?? "-"}</TableCell>
-                  <TableCell>{entry.kondisiGudang ?? "-"}</TableCell>
+                  <TableCell>
+                    {formatCurrency(laporan.retur_penjualan || 0)}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => removeLaporanGudang(entry.id)}
+                      onClick={() => removeLaporanPenjualanSales(laporan.id)}
                       className="text-red-600 hover:text-red-700"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -2720,19 +2678,76 @@ export default function JournalPage() {
             </TableBody>
           </Table>
         ) : (
+          // TABEL DEFAULT UNTUK DIVISI LAIN
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Waktu</TableHead>
                 <TableHead>Kode Akun</TableHead>
                 <TableHead>Nama Akun</TableHead>
+                <TableHead>Sales</TableHead>
                 <TableHead>Tipe</TableHead>
                 <TableHead>Keterangan</TableHead>
+                <TableHead>Target</TableHead>
+                <TableHead>Realisasi</TableHead>
                 <TableHead>Nilai</TableHead>
                 <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
+              {/* KHUSUS DIVISI PEMASARAN: tampilkan detail laporan penjualan sales */}
+              {divisionType === "PEMASARAN" &&
+                laporanPenjualanSales.length > 0 && (
+                  <>
+                    {laporanPenjualanSales.map((laporan) => (
+                      <TableRow key={laporan.id}>
+                        <TableCell className="text-sm text-gray-500">
+                          {new Date(laporan.createdAt).toLocaleTimeString(
+                            "id-ID",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-blue-600">
+                          {laporan.account?.accountCode || "-"}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {laporan.account?.accountName || "-"}
+                        </TableCell>
+                        <TableCell>
+                          {laporan.salesperson?.nama || "-"}
+                        </TableCell>
+                        <TableCell>{laporan.transactionType || "-"}</TableCell>
+                        <TableCell>{laporan.description || "-"}</TableCell>
+                        <TableCell>
+                          {formatCurrency(laporan.targetAmount || 0)}
+                        </TableCell>
+                        <TableCell>
+                          {formatCurrency(laporan.realisasiAmount || 0)}
+                        </TableCell>
+                        <TableCell>
+                          {formatCurrency(laporan.nilai || 0)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              removeLaporanPenjualanSales(laporan.id)
+                            }
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </>
+                )}
+
+              {/* Tampilkan existingEntries seperti biasa untuk entri lain */}
               {existingEntries.map((entry) => {
                 const account = accounts.find(
                   (acc) => acc.id === entry.accountId
@@ -2751,17 +2766,8 @@ export default function JournalPage() {
                     <TableCell className="font-medium">
                       {account?.accountName}
                     </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={
-                          account?.valueType === "NOMINAL"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-green-100 text-green-800"
-                        }
-                      >
-                        {account?.valueType === "NOMINAL" ? "💰 Rp" : "📦 Unit"}
-                      </Badge>
-                    </TableCell>
+                    <TableCell>{entry.salesperson?.nama || "-"}</TableCell>
+                    <TableCell>{entry.transactionType || "-"}</TableCell>
                     <TableCell className="text-sm">
                       {entry.description || "-"}
                     </TableCell>

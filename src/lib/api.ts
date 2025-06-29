@@ -38,15 +38,7 @@ async function apiRequest<T>(
     const token =
       typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
-    // ✅ Log request details for piutang endpoint
-    if (endpoint.includes("/piutang")) {
-      console.log("🔍 API REQUEST DEBUG:", {
-        endpoint,
-        method: options.method,
-        body: options.body,
-        headers: options.headers,
-      });
-    }
+    
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: {
@@ -64,14 +56,7 @@ async function apiRequest<T>(
       data = null;
     }
 
-    // ✅ Log response for piutang endpoint
-    if (endpoint.includes("/piutang")) {
-      console.log("🔍 API RESPONSE DEBUG:", {
-        status: response.status,
-        ok: response.ok,
-        data,
-      });
-    }
+   
 
     if (!response.ok) {
       return {
