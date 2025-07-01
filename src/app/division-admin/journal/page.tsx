@@ -2792,7 +2792,7 @@ export default function JournalPage() {
               </button>
             </div>
 
-            {/* === FORM & TABEL KEUANGAN === */}
+            {/* === FORM INPUT KEUANGAN BERDASARKAN TAB === */}
             <>
               {/* FORM INPUT KEUANGAN BERDASARKAN TAB */}
               {selectedTransactionType === "KAS" && (
@@ -3112,83 +3112,7 @@ export default function JournalPage() {
                   {loading ? "Menyimpan..." : "SAVE KEUANGAN"}
                 </Button>
               </div>
-              {/* TABEL KEUANGAN */}
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Waktu</TableHead>
-                    <TableHead>Kode Akun</TableHead>
-                    <TableHead>Nama Akun</TableHead>
-                    <TableHead>Jenis Transaksi</TableHead>
-                    <TableHead>Keterangan</TableHead>
-                    <TableHead>Nilai</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {existingEntries.map((entry) => {
-                    const account = accounts.find(
-                      (acc) => acc.id === entry.accountId
-                    );
-                    return (
-                      <TableRow key={entry.id}>
-                        <TableCell className="text-sm text-gray-500">
-                          {new Date(entry.createdAt).toLocaleTimeString(
-                            "id-ID",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }
-                          )}
-                        </TableCell>
-                        <TableCell className="font-mono text-blue-600">
-                          {account?.accountCode}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {account?.accountName}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            className={
-                              (entry as any).transactionType === "PENERIMAAN"
-                                ? "bg-green-100 text-green-800"
-                                : (entry as any).transactionType ===
-                                  "PENGELUARAN"
-                                ? "bg-red-100 text-red-800"
-                                : (entry as any).transactionType ===
-                                  "SALDO_AKHIR"
-                                ? "bg-purple-100 text-purple-800"
-                                : (entry as any).transactionType ===
-                                  "PIUTANG_BARU"
-                                ? "bg-blue-100 text-blue-800"
-                                : (entry as any).transactionType ===
-                                  "PIUTANG_TERTAGIH"
-                                ? "bg-emerald-100 text-emerald-800"
-                                : (entry as any).transactionType ===
-                                  "PIUTANG_MACET"
-                                ? "bg-orange-100 text-orange-800"
-                                : (entry as any).transactionType ===
-                                  "UTANG_BARU"
-                                ? "bg-red-100 text-red-800"
-                                : (entry as any).transactionType ===
-                                  "UTANG_DIBAYAR"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-gray-100 text-gray-800"
-                            }
-                          >
-                            {(entry as any).transactionType || "REGULER"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {entry.description || "-"}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {formatCurrency(entry.nilai || 0)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              {/* TABEL KEUANGAN DIHILANGKAN */}
             </>
           </>
         ) : divisionType === "PEMASARAN" ? (
@@ -3347,51 +3271,60 @@ export default function JournalPage() {
                     {loading ? "Menyimpan..." : "SAVE LAPORAN SALES"}
                   </Button>
                 </div>
-                {/* TABEL SALES */}
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Waktu</TableHead>
-                      <TableHead>Sales</TableHead>
-                      <TableHead>Target</TableHead>
-                      <TableHead>Realisasi</TableHead>
-                      <TableHead>Retur</TableHead>
-                      <TableHead>Kendala</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {laporanPenjualanSales.map((laporan) => (
-                      <TableRow key={laporan.id}>
-                        <TableCell className="text-sm text-gray-500">
-                          {laporan.createdAt
-                            ? new Date(laporan.createdAt).toLocaleTimeString(
-                                "id-ID",
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }
-                              )
-                            : "-"}
-                        </TableCell>
-                        <TableCell>
-                          {laporan.salesperson?.username || "-"}
-                        </TableCell>
-                        <TableCell>
-                          {formatCurrency(laporan.targetPenjualan || 0)}
-                        </TableCell>
-                        <TableCell>
-                          {formatCurrency(laporan.realisasiPenjualan || 0)}
-                        </TableCell>
-                        <TableCell>
-                          {formatCurrency(laporan.returPenjualan || 0)}
-                        </TableCell>
-                        <TableCell>
-                          {laporan.keteranganKendala || "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                {/* SUMMARY CARD PEMASARAN */}
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <span className="text-orange-600">📈</span>
+                      Ringkasan Penjualan Hari Ini
+                    </CardTitle>
+                    <CardDescription>
+                      Total target, realisasi, retur, dan jumlah sales hari ini.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {(() => {
+                      const summary = getPemasaranSummary();
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <div className="font-semibold text-blue-800">
+                              Total Target
+                            </div>
+                            <div className="text-2xl font-bold text-blue-900 mt-2">
+                              {formatCurrency(summary.totalTarget)}
+                            </div>
+                          </div>
+                          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                            <div className="font-semibold text-green-800">
+                              Total Realisasi
+                            </div>
+                            <div className="text-2xl font-bold text-green-900 mt-2">
+                              {formatCurrency(summary.totalRealisasi)}
+                            </div>
+                          </div>
+                          <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                            <div className="font-semibold text-orange-800">
+                              Total Retur
+                            </div>
+                            <div className="text-2xl font-bold text-orange-900 mt-2">
+                              {formatCurrency(summary.totalRetur)}
+                            </div>
+                          </div>
+                          <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                            <div className="font-semibold text-purple-800">
+                              Jumlah Sales
+                            </div>
+                            <div className="text-2xl font-bold text-purple-900 mt-2">
+                              {summary.jumlahSales}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
+                {/* TABEL SALES DIHILANGKAN */}
               </>
             )}
 
@@ -3459,50 +3392,65 @@ export default function JournalPage() {
                     {loading ? "Menyimpan..." : "SAVE JURNAL"}
                   </Button>
                 </div>
-                {/* TABEL JURNAL */}
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Waktu</TableHead>
-                      <TableHead>Kode Akun</TableHead>
-                      <TableHead>Nama Akun</TableHead>
-                      <TableHead>Keterangan</TableHead>
-                      <TableHead>Nilai</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {existingEntries.map((entry) => {
-                      const account = accounts.find(
-                        (acc) => acc.id === entry.accountId
+                {/* SUMMARY CARD JURNAL AKUNTANSI */}
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <span className="text-blue-600">📒</span>
+                      Ringkasan Jurnal Akuntansi Hari Ini
+                    </CardTitle>
+                    <CardDescription>
+                      Total nilai jurnal, jumlah transaksi, dan akun unik yang
+                      digunakan hari ini.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {(() => {
+                      // Filter existingEntries untuk hari ini (jurnal akuntansi saja, exclude sales)
+                      const jurnalEntries = existingEntries.filter((entry) => {
+                        // exclude sales entries (yang punya salesUserId)
+                        return !(entry as any).salesUserId;
+                      });
+                      const totalNilai = jurnalEntries.reduce(
+                        (sum, entry) => sum + Number(entry.nilai || 0),
+                        0
                       );
+                      const jumlahTransaksi = jurnalEntries.length;
+                      const akunUnik = new Set(
+                        jurnalEntries.map((entry) => entry.accountId)
+                      ).size;
                       return (
-                        <TableRow key={entry.id}>
-                          <TableCell className="text-sm text-gray-500">
-                            {new Date(entry.createdAt).toLocaleTimeString(
-                              "id-ID",
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )}
-                          </TableCell>
-                          <TableCell className="font-mono text-blue-600">
-                            {account?.accountCode}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {account?.accountName}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {entry.description || "-"}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {formatCurrency(entry.nilai || 0)}
-                          </TableCell>
-                        </TableRow>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <div className="font-semibold text-blue-800">
+                              Total Nilai Jurnal
+                            </div>
+                            <div className="text-2xl font-bold text-blue-900 mt-2">
+                              {formatCurrency(totalNilai)}
+                            </div>
+                          </div>
+                          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                            <div className="font-semibold text-green-800">
+                              Jumlah Transaksi
+                            </div>
+                            <div className="text-2xl font-bold text-green-900 mt-2">
+                              {jumlahTransaksi}
+                            </div>
+                          </div>
+                          <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                            <div className="font-semibold text-purple-800">
+                              Akun Unik
+                            </div>
+                            <div className="text-2xl font-bold text-purple-900 mt-2">
+                              {akunUnik}
+                            </div>
+                          </div>
+                        </div>
                       );
-                    })}
-                  </TableBody>
-                </Table>
+                    })()}
+                  </CardContent>
+                </Card>
+                {/* TABEL JURNAL DIHILANGKAN */}
               </>
             )}
           </>
