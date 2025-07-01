@@ -297,192 +297,215 @@ export default function JournalPage() {
     return summary;
   };
 
-  const loadData = async () => {
-    if (user?.division?.id) {
-      try {
-        setLoading(true);
 
-        const accountsPromise = getAccountsByDivision(user.division.id);
-        const entriesPromise = getEntriHarianByDate(selectedDate);
-        const piutangPromise = getPiutangTransaksi();
-        const utangPromise = getUtangTransaksi();
+const loadData = async () => {
+  if (user?.division?.id) {
+    try {
+      setLoading(true);
 
-        // ✅ NEW: Load laporan gudang untuk divisi BLENDING
-        const laporanGudangPromise =
-          divisionType === "BLENDING"
-            ? getLaporanGudang()
-            : Promise.resolve([]);
-        const laporanProduksiPromise =
-          divisionType === "PRODUKSI"
-            ? getLaporanProduksi()
-            : Promise.resolve([]);
-        const laporanPromise =
-          divisionType === "PEMASARAN"
-            ? getLaporanPenjualanSales()
-            : Promise.resolve([]);
-        const usersPromise =
-          divisionType === "PEMASARAN" ? getUsers() : Promise.resolve([]);
-        const salespeoplePromise =
-          divisionType === "PEMASARAN" ? getSalespeople() : Promise.resolve([]);
+      const accountsPromise = getAccountsByDivision(user.division.id);
+      const entriesPromise = getEntriHarianByDate(selectedDate);
+      const piutangPromise = getPiutangTransaksi();
+      const utangPromise = getUtangTransaksi();
 
-        const [
-          accountsData,
-          entriesData,
-          piutangData,
-          utangData,
-          laporanGudangData, // ✅ ADD: Laporan gudang data
-          laporanProduksiData,
-          laporanData,
-          usersData,
-          salespeopleData,
-        ] = await Promise.all([
-          accountsPromise,
-          entriesPromise,
-          piutangPromise,
-          utangPromise,
-          laporanGudangPromise, // ✅ ADD: Laporan gudang promise
-          laporanProduksiPromise,
-          laporanPromise,
-          usersPromise,
-          salespeoplePromise,
-        ]);
+      // ✅ FIXED: Ambil semua data dulu, filter di frontend
+      const laporanGudangPromise =
+        divisionType === "BLENDING"
+          ? getLaporanGudang()
+          : Promise.resolve([]);
+      const laporanProduksiPromise =
+        divisionType === "PRODUKSI"
+          ? getLaporanProduksi()
+          : Promise.resolve([]);
+      const laporanPromise =
+        divisionType === "PEMASARAN"
+          ? getLaporanPenjualanSales()
+          : Promise.resolve([]);
+      const usersPromise =
+        divisionType === "PEMASARAN" ? getUsers() : Promise.resolve([]);
+      const salespeoplePromise =
+        divisionType === "PEMASARAN" ? getSalespeople() : Promise.resolve([]);
 
-        console.log("ISI accountsData:", accountsData);
+      const [
+        accountsData,
+        entriesData,
+        piutangData,
+        utangData,
+        laporanGudangData,
+        laporanProduksiData,
+        laporanData,
+        usersData,
+        salespeopleData,
+      ] = await Promise.all([
+        accountsPromise,
+        entriesPromise,
+        piutangPromise,
+        utangPromise,
+        laporanGudangPromise,
+        laporanProduksiPromise,
+        laporanPromise,
+        usersPromise,
+        salespeoplePromise,
+      ]);
 
-        setAccounts(accountsData);
-        setUsers(usersData);
-        setSalespeople(salespeopleData);
+      setAccounts(accountsData);
+      setUsers(usersData);
+      setSalespeople(salespeopleData);
 
-        // ✅ NEW: Set laporan penjualan sales
-        if (divisionType === "PEMASARAN") {
-          setLaporanPenjualanSales(laporanData);
-          console.log("ISI laporanPenjualanSales:", laporanData);
-          if (laporanData && laporanData.length > 0) {
-            laporanData.forEach((laporan, idx) => {
-              console.log(`Laporan[${idx}]`, laporan);
-            });
-          }
-        }
-
-        // ✅ NEW: Set laporan produksi
-        if (divisionType === "PRODUKSI") {
-          setLaporanProduksi(laporanProduksiData);
-          console.log("ISI laporanProduksi:", laporanProduksiData);
-        }
-
-        // ✅ NEW: Set laporan gudang
-        if (divisionType === "BLENDING") {
-          setLaporanGudang(laporanGudangData);
-        }
-
-        // Filter entries yang belong to current division
-        const accountIds = accountsData.map((acc) => acc.id);
-        const divisionEntries = entriesData.filter(
-          (entry: { accountId: string }) => accountIds.includes(entry.accountId)
-        );
-
-        // Ambil akun COA pertama yang mengandung "kas besar", jika tidak ada ambil akun pertama
-        let piutangAccount = accountsData.find((acc) =>
-          acc.accountName.toLowerCase().includes("kas besar")
-        );
-        if (!piutangAccount) {
-          piutangAccount = accountsData[0];
-        }
-
-        console.log("Akun yang dipakai untuk piutang:", piutangAccount);
-
-        if (!piutangAccount || !piutangAccount.id) {
-          alert("Akun piutang tidak ditemukan di COA divisi ini!");
-          return;
-        }
-
-        // Mapping piutang/utang HANYA untuk divisi KEUANGAN
-        let mappedPiutang: any[] = [];
-        let mappedUtang: any[] = [];
-        if (divisionType === "KEUANGAN") {
-          mappedPiutang = (piutangData || [])
-            .filter((p: any) => {
-              const tgl = p.tanggal_transaksi || p.tanggalTransaksi;
-              return tgl && tgl.startsWith(selectedDate);
-            })
-            .map((p: any) => ({
-              id: p.id,
-              tanggal: p.tanggal_transaksi || p.tanggalTransaksi || "",
-              accountId: piutangAccount.id,
-              nilai: p.nominal,
-              description: p.keterangan,
-              transactionType: p.tipe_transaksi || p.tipeTransaksi || "",
-              createdAt:
-                p.created_at ||
-                p.createdAt ||
-                p.tanggal_transaksi ||
-                p.tanggalTransaksi ||
-                "",
-              keterangan: p.keterangan,
-              date: p.tanggal_transaksi || p.tanggalTransaksi || "",
-              createdBy: p.user?.username || "system",
-            }));
-
-          mappedUtang = (utangData || [])
-            .filter((u: any) => {
-              const tgl = u.tanggal_transaksi || u.tanggalTransaksi;
-              return tgl && tgl.startsWith(selectedDate);
-            })
-            .map((u: any) => ({
-              id: u.id,
-              tanggal: u.tanggal_transaksi || u.tanggalTransaksi || "",
-              accountId: piutangAccount.id,
-              nilai: u.nominal,
-              description: u.keterangan,
-              transactionType: u.tipe_transaksi || u.tipeTransaksi || "",
-              createdAt:
-                u.created_at ||
-                u.createdAt ||
-                u.tanggal_transaksi ||
-                u.tanggalTransaksi ||
-                "",
-              keterangan: u.keterangan,
-              date: u.tanggal_transaksi || u.tanggalTransaksi || "",
-              createdBy: u.user?.username || "system",
-            }));
-        }
-
-        // Gabungkan entri harian, piutang, dan utang
-        const combinedEntries = [
-          ...divisionEntries,
-          ...(divisionType === "KEUANGAN" ? mappedPiutang : []),
-          ...(divisionType === "KEUANGAN" ? mappedUtang : []),
-        ];
-
-        setExistingEntries(combinedEntries);
-
-        // ✅ NEW: Hitung summary untuk keuangan
-        if (divisionType === "KEUANGAN") {
-          const summary = calculateKeuanganSummary(
-            combinedEntries,
-            accountsData
+      // ✅ FIXED: Filter dengan multiple format tanggal
+      if (divisionType === "PEMASARAN") {
+        const filteredLaporanSales = laporanData.filter((laporan: any) => {
+          const laporanDate = laporan.tanggal_laporan || laporan.tanggalLaporan || laporan.created_at;
+          if (!laporanDate) return false;
+          
+          // Support multiple date formats
+          const dateStr = laporanDate.toString();
+          return (
+            dateStr.startsWith(selectedDate) || // 2025-07-01
+            dateStr.includes(selectedDate) ||   // Contains 2025-07-01
+            dateStr.split('T')[0] === selectedDate // ISO format: 2025-07-01T10:30:00Z
           );
-          setKeuanganSummary(summary);
-          console.log("🔍 KEUANGAN SUMMARY:", summary);
-        }
-
-        // SET summary piutang
-        setPiutangSummary(
-          calculatePiutangSummary(piutangData || [], selectedDate)
-        );
-
-        // ✅ Only show success for manual refresh
-        if (loading) {
-          toastSuccess.custom("Data berhasil dimuat ulang");
-        }
-      } catch (error) {
-        toastError.custom("Gagal memuat data");
-        console.error("Load data error:", error);
-      } finally {
-        setLoading(false);
+        });
+        setLaporanPenjualanSales(filteredLaporanSales);
+        console.log("✅ FILTERED laporan sales untuk tanggal", selectedDate, ":", {
+          total: laporanData.length,
+          filtered: filteredLaporanSales.length,
+          sampelDate: laporanData[0]?.tanggal_laporan || laporanData[0]?.created_at
+        });
       }
+
+      // ✅ FIXED: Filter laporan produksi dengan format fleksibel
+      if (divisionType === "PRODUKSI") {
+        const filteredLaporanProduksi = laporanProduksiData.filter((laporan: any) => {
+          const laporanDate = laporan.tanggal_laporan || laporan.tanggalLaporan || laporan.created_at;
+          if (!laporanDate) return false;
+          
+          const dateStr = laporanDate.toString();
+          return (
+            dateStr.startsWith(selectedDate) ||
+            dateStr.includes(selectedDate) ||
+            dateStr.split('T')[0] === selectedDate
+          );
+        });
+        setLaporanProduksi(filteredLaporanProduksi);
+        console.log("✅ FILTERED laporan produksi untuk tanggal", selectedDate, ":", {
+          total: laporanProduksiData.length,
+          filtered: filteredLaporanProduksi.length
+        });
+      }
+
+      // ✅ FIXED: Filter laporan gudang dengan format fleksibel
+      if (divisionType === "BLENDING") {
+        const filteredLaporanGudang = laporanGudangData.filter((laporan: any) => {
+          const laporanDate = laporan.tanggal_laporan || laporan.tanggalLaporan || laporan.created_at;
+          if (!laporanDate) return false;
+          
+          const dateStr = laporanDate.toString();
+          return (
+            dateStr.startsWith(selectedDate) ||
+            dateStr.includes(selectedDate) ||
+            dateStr.split('T')[0] === selectedDate
+          );
+        });
+        setLaporanGudang(filteredLaporanGudang);
+        console.log("✅ FILTERED laporan gudang untuk tanggal", selectedDate, ":", {
+          total: laporanGudangData.length,
+          filtered: filteredLaporanGudang.length
+        });
+      }
+
+      // Filter entries yang belong to current division
+      const accountIds = accountsData.map((acc) => acc.id);
+      const divisionEntries = entriesData.filter(
+        (entry: { accountId: string }) => accountIds.includes(entry.accountId)
+      );
+
+      // ✅ Map piutang dan utang data dengan format tanggal yang benar
+      const mappedPiutangEntries = piutangData
+        .filter((p: any) => {
+          const transaksiDate = p.tanggal_transaksi || p.tanggalTransaksi;
+          if (!transaksiDate) return false;
+          
+          const dateStr = transaksiDate.toString();
+          return (
+            dateStr.startsWith(selectedDate) ||
+            dateStr.includes(selectedDate) ||
+            dateStr.split('T')[0] === selectedDate
+          );
+        })
+        .map((p: any) => ({
+          id: `piutang-${p.id}`,
+          accountId: p.account_id?.toString() || p.accountId?.toString(),
+          createdAt: p.tanggal_transaksi || p.tanggalTransaksi || p.created_at,
+          nilai: Number(p.nominal) || 0,
+          description: p.keterangan || "",
+          transactionType: p.tipe_transaksi || p.tipeTransaksi,
+          kategori: p.kategori,
+        }));
+
+      const mappedUtangEntries = utangData
+        .filter((u: any) => {
+          const transaksiDate = u.tanggal_transaksi || u.tanggalTransaksi;
+          if (!transaksiDate) return false;
+          
+          const dateStr = transaksiDate.toString();
+          return (
+            dateStr.startsWith(selectedDate) ||
+            dateStr.includes(selectedDate) ||
+            dateStr.split('T')[0] === selectedDate
+          );
+        })
+        .map((u: any) => ({
+          id: `utang-${u.id}`,
+          accountId: u.account_id?.toString() || u.accountId?.toString(),
+          createdAt: u.tanggal_transaksi || u.tanggalTransaksi || u.created_at,
+          nilai: Number(u.nominal) || 0,
+          description: u.keterangan || "",
+          transactionType: u.tipe_transaksi || u.tipeTransaksi,
+          kategori: u.kategori,
+        }));
+
+      // Combine all entries
+      const allEntries = [
+        ...divisionEntries,
+        ...mappedPiutangEntries,
+        ...mappedUtangEntries,
+      ];
+
+      setExistingEntries(allEntries);
+
+      // Calculate summaries
+      if (divisionType === "KEUANGAN") {
+        const summary = calculateKeuanganSummary(allEntries, accountsData);
+        setKeuanganSummary(summary);
+        
+        const piutangSummaryData = calculatePiutangSummary(piutangData, selectedDate);
+        setPiutangSummary(piutangSummaryData);
+      }
+
+      console.log("✅ DATA LOADED SUCCESSFULLY:", {
+        selectedDate,
+        divisionEntries: divisionEntries.length,
+        piutangEntries: mappedPiutangEntries.length,
+        utangEntries: mappedUtangEntries.length,
+        totalEntries: allEntries.length,
+        laporanCount: divisionType === "PEMASARAN" ? filteredLaporanSales?.length : 0
+      });
+
+      // ✅ Only show success for manual refresh
+      if (loading) {
+        toastSuccess.custom("Data berhasil dimuat ulang");
+      }
+    } catch (error) {
+      toastError.custom("Gagal memuat data");
+      console.error("Load data error:", error);
+    } finally {
+      setLoading(false);
     }
-  };
+  }
+};
+
+// ...existing code...
 
   const addNewRow = () => {
     const newRow: JournalRow = {
