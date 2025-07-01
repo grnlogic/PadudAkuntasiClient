@@ -721,7 +721,20 @@ export const getLaporanProduksi = async (): Promise<
   try {
     const response = await laporanProduksiAPI.getAll();
     if (response.success && response.data) {
-      return response.data;
+      const mappedData = response.data.map((laporan: any) => ({
+        id: laporan.id,
+        tanggalLaporan: laporan.tanggal_laporan || laporan.tanggalLaporan,
+        account: laporan.account,
+        hasilProduksi: laporan.hasil_produksi ?? laporan.hasilProduksi,
+        barangGagal: laporan.barang_gagal ?? laporan.barangGagal,
+        stockBarangJadi: laporan.stock_barang_jadi ?? laporan.stockBarangJadi,
+        hpBarangJadi: laporan.hp_barang_jadi ?? laporan.hpBarangJadi,
+        keteranganKendala:
+          laporan.keterangan_kendala ?? laporan.keteranganKendala,
+        createdBy: laporan.created_by ?? laporan.createdBy,
+        createdAt: laporan.created_at ?? laporan.createdAt,
+      }));
+      return mappedData;
     }
     return [];
   } catch (error) {
