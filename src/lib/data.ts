@@ -677,17 +677,25 @@ export const getLaporanPenjualanSales = async (): Promise<
   try {
     const response = await laporanPenjualanSalesAPI.getAll();
     if (response.success && response.data) {
-      // Mapping snake_case ke camelCase
+      // ✅ FIXED: Mapping snake_case ke camelCase dengan field yang konsisten
       const mappedData = response.data.map((laporan: any) => ({
         id: laporan.id,
         tanggalLaporan: laporan.tanggal_laporan || laporan.tanggalLaporan,
         salesperson: laporan.salesperson,
-        targetPenjualan: laporan.target_penjualan ?? laporan.targetPenjualan,
-        realisasiPenjualan:
-          laporan.realisasi_penjualan ?? laporan.realisasiPenjualan,
+        // ✅ FIXED: Map ke field yang diharapkan PDF
+        targetAmount:
+          laporan.target_penjualan ??
+          laporan.targetPenjualan ??
+          laporan.targetAmount,
+        realisasiAmount:
+          laporan.realisasi_penjualan ??
+          laporan.realisasiPenjualan ??
+          laporan.realisasiAmount,
         returPenjualan: laporan.retur_penjualan ?? laporan.returPenjualan,
         keteranganKendala:
           laporan.keterangan_kendala ?? laporan.keteranganKendala,
+        // ✅ ADD: Map sales user ID
+        salesUserId: laporan.sales_user_id ?? laporan.salesUserId,
         createdBy: laporan.created_by ?? laporan.createdBy,
         createdAt: laporan.created_at ?? laporan.createdAt,
       }));
@@ -735,14 +743,18 @@ export const getLaporanProduksi = async (): Promise<
   try {
     const response = await laporanProduksiAPI.getAll();
     if (response.success && response.data) {
+      // ✅ FIXED: Mapping dengan field yang konsisten untuk PDF
       const mappedData = response.data.map((laporan: any) => ({
         id: laporan.id,
         tanggalLaporan: laporan.tanggal_laporan || laporan.tanggalLaporan,
         account: laporan.account,
+        // ✅ FIXED: Map ke field yang diharapkan PDF
         hasilProduksi: laporan.hasil_produksi ?? laporan.hasilProduksi,
         barangGagal: laporan.barang_gagal ?? laporan.barangGagal,
         stockBarangJadi: laporan.stock_barang_jadi ?? laporan.stockBarangJadi,
         hpBarangJadi: laporan.hp_barang_jadi ?? laporan.hpBarangJadi,
+        // ✅ ADD: Map HPP amount untuk PDF
+        hppAmount: laporan.hpp_amount ?? laporan.hppAmount,
         keteranganKendala:
           laporan.keterangan_kendala ?? laporan.keteranganKendala,
         createdBy: laporan.created_by ?? laporan.createdBy,
@@ -807,6 +819,8 @@ export const getLaporanGudang = async (): Promise<LaporanGudangHarian[]> => {
         pemakaian: laporan.pemakaian,
         stokAkhir: laporan.stokAkhir ?? laporan.stok_akhir,
         kondisiGudang: laporan.kondisiGudang ?? laporan.kondisi_gudang,
+        // ✅ ADD: Map pemakaian amount untuk PDF
+        pemakaianAmount: laporan.pemakaian_amount ?? laporan.pemakaianAmount,
         createdBy: {
           id: laporan.createdBy?.id ?? laporan.created_by?.id,
           username: laporan.createdBy?.username ?? laporan.created_by?.username,

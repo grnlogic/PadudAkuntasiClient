@@ -446,7 +446,7 @@ export default function JournalPage() {
         );
 
         // ✅ Map piutang dan utang data dengan format tanggal yang benar
-        const mappedPiutangEntries = piutangData
+        const mappedPiutangEntries = (piutangData || [])
           .filter((p: any) => {
             const transaksiDate = p.tanggal_transaksi || p.tanggalTransaksi;
             if (!transaksiDate) return false;
@@ -467,9 +467,14 @@ export default function JournalPage() {
             description: p.keterangan || "",
             transactionType: p.tipe_transaksi || p.tipeTransaksi,
             kategori: p.kategori,
+            // ✅ ADD: Required EntriHarian fields
+            keterangan: p.keterangan || "",
+            date: p.tanggal_transaksi || p.tanggalTransaksi || p.created_at,
+            tanggal: p.tanggal_transaksi || p.tanggalTransaksi || p.created_at,
+            createdBy: p.created_by || "system",
           }));
 
-        const mappedUtangEntries = utangData
+        const mappedUtangEntries = (utangData || [])
           .filter((u: any) => {
             const transaksiDate = u.tanggal_transaksi || u.tanggalTransaksi;
             if (!transaksiDate) return false;
@@ -490,6 +495,11 @@ export default function JournalPage() {
             description: u.keterangan || "",
             transactionType: u.tipe_transaksi || u.tipeTransaksi,
             kategori: u.kategori,
+            // ✅ ADD: Required EntriHarian fields
+            keterangan: u.keterangan || "",
+            date: u.tanggal_transaksi || u.tanggalTransaksi || u.created_at,
+            tanggal: u.tanggal_transaksi || u.tanggalTransaksi || u.created_at,
+            createdBy: u.created_by || "system",
           }));
 
         // Combine all entries
@@ -507,7 +517,7 @@ export default function JournalPage() {
           setKeuanganSummary(summary);
 
           const piutangSummaryData = calculatePiutangSummary(
-            piutangData,
+            piutangData || [],
             selectedDate
           );
           setPiutangSummary(piutangSummaryData);
@@ -1489,8 +1499,22 @@ export default function JournalPage() {
             divisionName: user?.division?.name || "UNKNOWN",
             entries: existingEntries,
             accounts: accounts,
+            // ✅ FIXED: Include specialized division data
+            ...(divisionType === "PEMASARAN" && { laporanPenjualanSales }),
+            ...(divisionType === "PRODUKSI" && { laporanProduksi }),
+            ...(divisionType === "BLENDING" && { laporanGudang }),
             ...(divisionType === "KEUANGAN" && { summary: keuanganSummary }),
+            // ✅ ADD: Include users and salespeople for reference
+            users,
+            salespeople,
           };
+
+          // Tambahkan sebelum downloadEnhancedPDF(reportData)
+          console.log("=== DEBUG PDF PRODUKSI ===");
+          console.log("entries", existingEntries);
+          console.log("laporanProduksi", laporanProduksi);
+          console.log("accounts", accounts);
+          console.log("reportData", reportData);
 
           downloadEnhancedPDF(reportData);
           toastSuccess.custom("Jendela print PDF telah dibuka");
@@ -1514,7 +1538,14 @@ export default function JournalPage() {
             divisionName: user?.division?.name || "UNKNOWN",
             entries: existingEntries,
             accounts: accounts,
+            // ✅ FIXED: Include specialized division data
+            ...(divisionType === "PEMASARAN" && { laporanPenjualanSales }),
+            ...(divisionType === "PRODUKSI" && { laporanProduksi }),
+            ...(divisionType === "BLENDING" && { laporanGudang }),
             ...(divisionType === "KEUANGAN" && { summary: keuanganSummary }),
+            // ✅ ADD: Include users and salespeople for reference
+            users,
+            salespeople,
           };
 
           previewEnhancedPDF(reportData);
@@ -2308,14 +2339,15 @@ export default function JournalPage() {
   };
 
   const getPemasaranSummary = () => {
+    console.log("DEBUG laporanPenjualanSales:", laporanPenjualanSales); // Tambahkan log ini
     let totalTarget = 0;
     let totalRealisasi = 0;
     let totalRetur = 0;
 
     laporanPenjualanSales.forEach((laporan) => {
-      totalTarget += laporan.target_penjualan || 0;
-      totalRealisasi += laporan.realisasi_penjualan || 0;
-      totalRetur += laporan.retur_penjualan || 0;
+      totalTarget += laporan.targetAmount || 0;
+      totalRealisasi += laporan.realisasiAmount || 0;
+      totalRetur += laporan.returPenjualan || 0;
     });
 
     return {

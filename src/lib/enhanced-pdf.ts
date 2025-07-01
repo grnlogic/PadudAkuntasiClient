@@ -11,6 +11,46 @@ interface PDFReportData {
     totalPengeluaran: number;
     totalSaldoAkhir: number;
   };
+  // ✅ NEW: Support for specialized division data
+  laporanPenjualanSales?: any[];
+  laporanProduksi?: any[];
+  laporanGudang?: any[];
+  users?: any[];
+  salespeople?: any[];
+}
+
+// ✅ NEW: Helper function untuk transform data dari backend format ke frontend format
+function transformBackendData(entry: any): any {
+  return {
+    ...entry,
+    // Transform snake_case to camelCase for common fields
+    targetAmount: entry.target_amount || entry.targetAmount,
+    realisasiAmount: entry.realisasi_amount || entry.realisasiAmount,
+    hppAmount: entry.hpp_amount || entry.hppAmount,
+    pemakaianAmount: entry.pemakaian_amount || entry.pemakaianAmount,
+    stokAkhir: entry.stok_akhir || entry.stokAkhir,
+    stokAwal: entry.stok_awal || entry.stokAwal,
+    pemakaian: entry.pemakaian || entry.pemakaian,
+    hasilProduksi: entry.hasil_produksi || entry.hasilProduksi,
+    barangGagal: entry.barang_gagal || entry.barangGagal,
+    stockBarangJadi: entry.stock_barang_jadi || entry.stockBarangJadi,
+    hpBarangJadi: entry.hpp_barang_jadi || entry.hpBarangJadi,
+    returPenjualan: entry.retur_penjualan || entry.returPenjualan,
+    keteranganKendala: entry.keterangan_kendala || entry.keteranganKendala,
+    kondisiGudang: entry.kondisi_gudang || entry.kondisiGudang,
+    attendanceStatus: entry.attendance_status || entry.attendanceStatus,
+    absentCount: entry.absent_count || entry.absentCount,
+    overtimeHours: entry.overtime_hours || entry.overtimeHours,
+    // Keuangan specific fields
+    saldoAkhir: entry.saldo_akhir || entry.saldoAkhir,
+    transactionType: entry.transaction_type || entry.transactionType,
+    // Sales specific fields
+    salesUserId: entry.sales_user_id || entry.salesUserId,
+    // Date fields
+    tanggalLaporan:
+      entry.tanggal_laporan || entry.tanggalLaporan || entry.created_at,
+    tanggalTransaksi: entry.tanggal_transaksi || entry.tanggalTransaksi,
+  };
 }
 
 const formatCurrency = (amount: number): string => {
@@ -28,6 +68,124 @@ function getNilaiDisplay(entry: any, accounts: any[]): string {
   return isKuantitas
     ? (entry.nilai || 0).toLocaleString("id-ID") + " pcs"
     : formatCurrency(entry.nilai || 0);
+}
+
+// ✅ NEW: Helper untuk mendapatkan semua data entries yang sudah ditransform
+function getAllTransformedEntries(data: PDFReportData): any[] {
+  const divisionName = data.divisionName.toUpperCase();
+  let transformedEntries: any[] = [];
+
+  // Helper untuk filter entri harian sesuai divisi
+  function filterEntriHarian(entries: any[]) {
+    // Jika account ada di data.accounts, berarti milik divisi ini
+    const accountIds = (data.accounts || []).map((acc: any) => acc.id);
+    return entries.filter((entry) => accountIds.includes(entry.accountId));
+  }
+
+  // KEUANGAN: entries + piutang/utang
+  if (divisionName.includes("KEUANGAN")) {
+    transformedEntries = data.entries.map(transformBackendData);
+    // Piutang/utang sudah dimasukkan di entries oleh page.tsx, jadi cukup entries saja
+    return transformedEntries;
+  }
+
+  // PEMASARAN: entries + laporanPenjualanSales
+  if (divisionName.includes("PEMASARAN")) {
+    transformedEntries = filterEntriHarian(data.entries).map(
+      transformBackendData
+    );
+    if (data.laporanPenjualanSales) {
+      const salesEntries = data.laporanPenjualanSales.map((sales: any) => {
+        const transformed = transformBackendData(sales);
+        return {
+          ...transformed,
+          id: `sales-${sales.id}`,
+          accountId:
+            sales.account_id?.toString() || sales.accountId?.toString(),
+          description: `Laporan Sales - ${
+            sales.sales_user_id || sales.salesUserId || "Unknown"
+          }`,
+          nilai: Number(transformed.realisasiAmount) || 0,
+          targetAmount: Number(transformed.targetAmount) || 0,
+          realisasiAmount: Number(transformed.realisasiAmount) || 0,
+          returPenjualan: Number(transformed.returPenjualan) || 0,
+          keteranganKendala: transformed.keteranganKendala || "",
+        };
+      });
+      transformedEntries.push(...salesEntries);
+    }
+    return transformedEntries;
+  }
+
+  // PRODUKSI: HANYA laporanProduksi
+  if (divisionName.includes("PRODUKSI")) {
+    if (data.laporanProduksi) {
+      const produksiEntries = data.laporanProduksi.map((produksi: any) => {
+        const transformed = transformBackendData(produksi);
+        return {
+          ...transformed,
+          id: `produksi-${produksi.id}`,
+          accountId: produksi.account?.id?.toString(),
+          description: `Laporan Produksi - ${
+            transformed.hasilProduksi || 0
+          } unit`,
+          nilai: Number(transformed.hasilProduksi) || 0,
+          hppAmount: Number(transformed.hppAmount) || 0,
+          hasilProduksi: Number(transformed.hasilProduksi) || 0,
+          barangGagal: Number(transformed.barangGagal) || 0,
+          stockBarangJadi: Number(transformed.stockBarangJadi) || 0,
+          hpBarangJadi: Number(transformed.hpBarangJadi) || 0,
+        };
+      });
+      // Debug log
+      console.log("[PDF PRODUKSI] produksiEntries only:", produksiEntries);
+      return produksiEntries;
+    }
+    return [];
+  }
+
+  // GUDANG/BLENDING/DISTRIBUSI: entries + laporanGudang
+  if (
+    divisionName.includes("GUDANG") ||
+    divisionName.includes("BLENDING") ||
+    divisionName.includes("DISTRIBUSI")
+  ) {
+    transformedEntries = filterEntriHarian(data.entries).map(
+      transformBackendData
+    );
+    if (data.laporanGudang) {
+      const gudangEntries = data.laporanGudang.map((gudang: any) => {
+        const transformed = transformBackendData(gudang);
+        return {
+          ...transformed,
+          id: `gudang-${gudang.id}`,
+          accountId:
+            gudang.account_id?.toString() || gudang.accountId?.toString(),
+          description: `Laporan Gudang - Stok: ${transformed.stokAkhir || 0}`,
+          nilai: Number(transformed.pemakaianAmount) || 0,
+          pemakaianAmount: Number(transformed.pemakaianAmount) || 0,
+          stokAkhir: Number(transformed.stokAkhir) || 0,
+          stokAwal: Number(transformed.stokAwal) || 0,
+          pemakaian: Number(transformed.pemakaian) || 0,
+          kondisiGudang: transformed.kondisiGudang || "",
+        };
+      });
+      transformedEntries.push(...gudangEntries);
+    }
+    return transformedEntries;
+  }
+
+  // HRD: entries HRD saja
+  if (divisionName.includes("HRD")) {
+    // Hanya entries yang ada attendanceStatus
+    transformedEntries = filterEntriHarian(data.entries)
+      .filter((entry) => entry.attendanceStatus)
+      .map(transformBackendData);
+    return transformedEntries;
+  }
+
+  // Default: entries yang relevan saja
+  return filterEntriHarian(data.entries).map(transformBackendData);
 }
 
 export function downloadEnhancedPDF(data: PDFReportData) {
@@ -245,31 +403,32 @@ function generateEnhancedHTML(data: PDFReportData): string {
 function generateSummarySection(data: PDFReportData): string {
   const divisionName = data.divisionName.toUpperCase();
 
+  // ✅ FIXED: Gunakan data yang sudah ditransform
+  const allEntries = getAllTransformedEntries(data);
+
   // KEUANGAN Summary
   if (data.summary) {
     // Ringkasan transaksi keuangan
     let piutangSummary = "";
     let utangSummary = "";
     if (divisionName.includes("KEUANGAN")) {
-      // Hitung total piutang
-      const totalPiutangBaru = data.entries
-        .filter((entry) => (entry as any).transactionType === "PIUTANG_BARU")
-        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
-      const totalPiutangTertagih = data.entries
-        .filter(
-          (entry) => (entry as any).transactionType === "PIUTANG_TERTAGIH"
-        )
-        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
-      const totalPiutangMacet = data.entries
-        .filter((entry) => (entry as any).transactionType === "PIUTANG_MACET")
-        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
-      const totalSaldoAkhirPiutang = data.entries
-        .filter((entry) => (entry as any).transactionType === "SALDO_AKHIR")
+      // Hitung total piutang dari data yang sudah ditransform
+      const totalPiutangBaru = allEntries
+        .filter((entry) => entry.transactionType === "PIUTANG_BARU")
+        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
+      const totalPiutangTertagih = allEntries
+        .filter((entry) => entry.transactionType === "PIUTANG_TERTAGIH")
+        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
+      const totalPiutangMacet = allEntries
+        .filter((entry) => entry.transactionType === "PIUTANG_MACET")
+        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
+      const totalSaldoAkhirPiutang = allEntries
+        .filter((entry) => entry.transactionType === "SALDO_AKHIR")
         .reduce(
-          (sum, entry) =>
-            sum + Number((entry as any).saldoAkhir || entry.nilai),
+          (sum, entry) => sum + Number(entry.saldoAkhir || entry.nilai || 0),
           0
         );
+
       piutangSummary = `
         <div class="summary-title" style="margin-top:24px;">RINGKASAN PIUTANG</div>
         <table class="summary-table">
@@ -308,23 +467,23 @@ function generateSummarySection(data: PDFReportData): string {
         </table>
       `;
 
-      // ✅ NEW: Hitung total utang
-      const totalUtangBaru = data.entries
-        .filter((entry) => (entry as any).transactionType === "UTANG_BARU")
-        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
-      const totalUtangDibayar = data.entries
-        .filter((entry) => (entry as any).transactionType === "UTANG_DIBAYAR")
-        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
-      const totalBahanBaku = data.entries
-        .filter((entry) => (entry as any).kategori === "BAHAN_BAKU")
-        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
-      const totalBank = data.entries
+      // ✅ FIXED: Hitung total utang dari data yang sudah ditransform
+      const totalUtangBaru = allEntries
+        .filter((entry) => entry.transactionType === "UTANG_BARU")
+        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
+      const totalUtangDibayar = allEntries
+        .filter((entry) => entry.transactionType === "UTANG_DIBAYAR")
+        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
+      const totalBahanBaku = allEntries
+        .filter((entry) => entry.kategori === "BAHAN_BAKU")
+        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
+      const totalBank = allEntries
         .filter(
           (entry) =>
-            (entry as any).kategori === "BANK_HM" ||
-            (entry as any).kategori === "BANK_HENRY"
+            entry.kategori === "BANK_HM" || entry.kategori === "BANK_HENRY"
         )
-        .reduce((sum, entry) => sum + Number(entry.nilai), 0);
+        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
+
       utangSummary = `
         <div class="summary-title" style="margin-top:24px;">RINGKASAN UTANG</div>
         <table class="summary-table">
@@ -406,13 +565,13 @@ function generateSummarySection(data: PDFReportData): string {
 
   // PEMASARAN Summary
   if (divisionName.includes("PEMASARAN")) {
-    const totalTarget = data.entries.reduce((sum, entry) => {
-      const target = (entry as any).targetAmount || 0;
+    const totalTarget = allEntries.reduce((sum, entry) => {
+      const target = entry.targetAmount || 0;
       return sum + Number(target);
     }, 0);
 
-    const totalRealisasi = data.entries.reduce((sum, entry) => {
-      const realisasi = (entry as any).realisasiAmount || 0;
+    const totalRealisasi = allEntries.reduce((sum, entry) => {
+      const realisasi = entry.realisasiAmount || 0;
       return sum + Number(realisasi);
     }, 0);
 
@@ -458,12 +617,13 @@ function generateSummarySection(data: PDFReportData): string {
 
   // PRODUKSI Summary
   if (divisionName.includes("PRODUKSI")) {
-    const totalProduksi = data.entries.reduce((sum, entry) => {
-      return sum + Number(entry.nilai);
+    const totalProduksi = allEntries.reduce((sum, entry) => {
+      return sum + Number(entry.nilai || 0);
     }, 0);
 
-    const totalHPP = data.entries.reduce((sum, entry) => {
-      const hpp = (entry as any).hppAmount || 0;
+    // GUNAKAN hpBarangJadi jika ada, fallback ke hppAmount
+    const totalHPP = allEntries.reduce((sum, entry) => {
+      const hpp = entry.hpBarangJadi || entry.hppAmount || 0;
       return sum + Number(hpp);
     }, 0);
 
@@ -508,24 +668,22 @@ function generateSummarySection(data: PDFReportData): string {
 
   // GUDANG Summary
   if (divisionName.includes("GUDANG")) {
-    const totalPemakaian = data.entries.reduce((sum, entry) => {
-      const pemakaian = (entry as any).pemakaianAmount || 0;
+    const totalPemakaian = allEntries.reduce((sum, entry) => {
+      const pemakaian = entry.pemakaianAmount || 0;
       return sum + Number(pemakaian);
     }, 0);
 
-    const validEntries = data.entries.filter(
-      (entry) => (entry as any).stokAkhir != null
-    );
+    const validEntries = allEntries.filter((entry) => entry.stokAkhir != null);
     const avgStok =
       validEntries.length > 0
         ? validEntries.reduce((sum, entry) => {
-            const stok = (entry as any).stokAkhir || 0;
+            const stok = entry.stokAkhir || 0;
             return sum + Number(stok);
           }, 0) / validEntries.length
         : 0;
 
-    const lowStockCount = data.entries.filter((entry) => {
-      const stok = (entry as any).stokAkhir || 0;
+    const lowStockCount = allEntries.filter((entry) => {
+      const stok = entry.stokAkhir || 0;
       return Number(stok) < 100;
     }).length;
 
@@ -570,17 +728,17 @@ function generateSummarySection(data: PDFReportData): string {
 
   // HRD Summary
   if (divisionName.includes("HRD")) {
-    const totalKaryawan = data.entries.length;
-    const hadirCount = data.entries.filter((entry) => {
-      const status = (entry as any).attendanceStatus;
+    const totalKaryawan = allEntries.length;
+    const hadirCount = allEntries.filter((entry) => {
+      const status = entry.attendanceStatus;
       return status === "HADIR";
     }).length;
 
     const attendanceRate =
       totalKaryawan > 0 ? (hadirCount / totalKaryawan) * 100 : 0;
 
-    const totalOvertime = data.entries.reduce((sum, entry) => {
-      const overtime = (entry as any).overtimeHours || 0;
+    const totalOvertime = allEntries.reduce((sum, entry) => {
+      const overtime = entry.overtimeHours || 0;
       return sum + Number(overtime);
     }, 0);
 
@@ -633,6 +791,12 @@ function generateSummarySection(data: PDFReportData): string {
 function generateDetailsSection(data: PDFReportData): string {
   const divisionName = data.divisionName.toUpperCase();
 
+  // ✅ FIXED: Gunakan data yang sudah ditransform
+  const allEntries = getAllTransformedEntries(data);
+
+  console.log("[PDF PRODUKSI] generateDetailsSection allEntries:", allEntries);
+  console.log("[PDF PRODUKSI] accounts:", data.accounts);
+
   let headerColumns = "";
 
   if (divisionName.includes("KEUANGAN")) {
@@ -650,40 +814,27 @@ function generateDetailsSection(data: PDFReportData): string {
     headerColumns = "<th>Nilai</th>";
   }
 
-  const rows = data.entries
+  const rows = allEntries
     .map((entry, index) => {
       const account = data.accounts.find((acc) => acc.id === entry.accountId);
 
       let dataCells = "";
 
       if (divisionName.includes("KEUANGAN")) {
-        const transactionType = (entry as any).transactionType || "-";
-        // Ganti logika ini:
-        // const nilai = entry.nilai || 0;
-        // const saldoAkhir =
-        //   transactionType === "SALDO_AKHIR"
-        //     ? (entry as any).saldoAkhir || nilai
-        //     : "";
-        // dataCells = `
-        //   <td style="text-align: center;">${transactionType}</td>
-        //   <td style="text-align: right;">${formatCurrency(nilai)}</td>
-        //   <td style="text-align: right;">${
-        //     saldoAkhir !== "" ? formatCurrency(saldoAkhir) : "-"
-        //   }</td>
-        // `;
-
-        // Ganti dengan hanya satu kolom nominal:
+        const transactionType = entry.transactionType || "-";
         const nominalValue =
           transactionType === "SALDO_AKHIR"
-            ? (entry as any).saldoAkhir ?? entry.nilai
+            ? entry.saldoAkhir ?? entry.nilai
             : entry.nilai;
         dataCells = `
           <td style="text-align: center;">${transactionType}</td>
-          <td style="text-align: right;">${formatCurrency(nominalValue)}</td>
+          <td style="text-align: right;">${formatCurrency(
+            nominalValue || 0
+          )}</td>
         `;
       } else if (divisionName.includes("PEMASARAN")) {
-        const target = (entry as any).targetAmount || 0;
-        const realisasi = (entry as any).realisasiAmount || 0;
+        const target = entry.targetAmount || 0;
+        const realisasi = entry.realisasiAmount || 0;
         const achievement =
           target > 0 ? ((realisasi / target) * 100).toFixed(1) + "%" : "-";
         dataCells = `
@@ -693,7 +844,7 @@ function generateDetailsSection(data: PDFReportData): string {
       `;
       } else if (divisionName.includes("PRODUKSI")) {
         const produksi = entry.nilai || 0;
-        const hpp = (entry as any).hppAmount || 0;
+        const hpp = entry.hppAmount || 0;
         const hppPerUnit = produksi > 0 ? hpp / produksi : 0;
         dataCells = `
         <td style="text-align: right;">${produksi.toLocaleString("id-ID")}</td>
@@ -701,8 +852,8 @@ function generateDetailsSection(data: PDFReportData): string {
         <td style="text-align: right;">${formatCurrency(hppPerUnit)}</td>
       `;
       } else if (divisionName.includes("GUDANG")) {
-        const pemakaian = (entry as any).pemakaianAmount || 0;
-        const stokAkhir = (entry as any).stokAkhir || 0;
+        const pemakaian = entry.pemakaianAmount || 0;
+        const stokAkhir = entry.stokAkhir || 0;
         const status = stokAkhir < 100 ? "Stok Rendah" : "Stok Aman";
         dataCells = `
         <td style="text-align: right;">${pemakaian.toLocaleString("id-ID")}</td>
@@ -710,12 +861,12 @@ function generateDetailsSection(data: PDFReportData): string {
         <td style="text-align: center;">${status}</td>
       `;
       } else if (divisionName.includes("HRD")) {
-        const status = (entry as any).attendanceStatus || "-";
-        const absentCount = (entry as any).absentCount || 0;
-        const shift = (entry as any).shift || "-";
+        const status = entry.attendanceStatus || "-";
+        const absentCount = entry.absentCount || 0;
+        const shift = entry.shift || "-";
         dataCells = `
         <td style="text-align: center;">${status}</td>
-        <td style="text-align: righ t;">${absentCount} orang</td>
+        <td style="text-align: right;">${absentCount} orang</td>
         <td style="text-align: center;">${shift}</td>
       `;
       } else {
