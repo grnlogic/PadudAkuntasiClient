@@ -148,6 +148,7 @@ export default function JournalPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [existingEntries, setExistingEntries] = useState<EntriHarian[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(""); // Tambahkan state error
 
   const user = getCurrentUser();
 
@@ -537,9 +538,10 @@ export default function JournalPage() {
         if (loading) {
           toastSuccess.custom("Data berhasil dimuat ulang");
         }
-      } catch (error) {
-        toastError.custom("Gagal memuat data");
-        console.error("Load data error:", error);
+      } catch (err: any) {
+        setError(err.message || "Gagal memuat data laporan harian");
+        setTimeout(() => setError(""), 5000);
+        setLoading(false);
       } finally {
         setLoading(false);
       }
@@ -3992,6 +3994,11 @@ export default function JournalPage() {
         {renderJournalTable()}
         {renderSummaryCard()}
       </div>
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
     </ClientErrorBoundary>
   );
 }

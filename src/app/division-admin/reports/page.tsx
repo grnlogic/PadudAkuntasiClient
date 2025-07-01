@@ -724,24 +724,122 @@ export default function ReportsPage() {
 
   const exportReport = () => {
     try {
-      const csvContent = [
-        [
-          "Kode Akun",
-          "Nama Akun",
-          "Total Debet",
-          "Total Kredit",
-          "Saldo",
-          "Jumlah Transaksi",
-        ],
-        ...reportData.map((item) => [
-          item.accountCode,
-          item.accountName,
-          item.debet,
-          item.kredit,
-          item.debet - item.kredit,
-          item.transactions,
-        ]),
-      ]
+      let headers: string[] = [];
+      let rows: any[][] = [];
+      switch (divisionType) {
+        case "KEUANGAN":
+          headers = [
+            "Kode Akun",
+            "Nama Akun",
+            "Penerimaan",
+            "Pengeluaran",
+            "Saldo Bersih",
+            "Jumlah Transaksi",
+          ];
+          rows = reportData.map((item) => [
+            item.accountCode,
+            item.accountName,
+            item.penerimaan,
+            item.pengeluaran,
+            item.saldoBersih,
+            item.transactions,
+          ]);
+          break;
+        case "PRODUKSI":
+          headers = [
+            "Kode Akun",
+            "Nama Akun",
+            "Total Produksi",
+            "Total HPP",
+            "HPP/Unit",
+            "Jumlah Transaksi",
+          ];
+          rows = reportData.map((item) => [
+            item.accountCode,
+            item.accountName,
+            item.totalProduksi,
+            item.totalHPP,
+            item.hppPerUnit,
+            item.transactions,
+          ]);
+          break;
+        case "PEMASARAN":
+          headers = [
+            "Kode Akun",
+            "Nama Akun",
+            "Total Target",
+            "Total Realisasi",
+            "Achievement Rate (%)",
+            "Jumlah Transaksi",
+          ];
+          rows = reportData.map((item) => [
+            item.accountCode,
+            item.accountName,
+            item.totalTarget,
+            item.totalRealisasi,
+            item.achievementRate,
+            item.transactions,
+          ]);
+          break;
+        case "GUDANG":
+          headers = [
+            "Kode Akun",
+            "Nama Akun",
+            "Total Pemakaian",
+            "Stok Awal",
+            "Stok Akhir",
+            "Jumlah Transaksi",
+          ];
+          rows = reportData.map((item) => [
+            item.accountCode,
+            item.accountName,
+            item.totalPemakaian,
+            item.stokAwal,
+            item.stokAkhir,
+            item.transactions,
+          ]);
+          break;
+        case "HRD":
+          headers = [
+            "Kode Akun",
+            "Nama Akun",
+            "Total Karyawan",
+            "Hadir",
+            "Tidak Hadir",
+            "Overtime",
+            "Attendance Rate (%)",
+            "Jumlah Transaksi",
+          ];
+          rows = reportData.map((item) => [
+            item.accountCode,
+            item.accountName,
+            item.totalKaryawan,
+            item.hadirCount,
+            item.tidakHadirCount,
+            item.overtimeHours,
+            item.attendanceRate,
+            item.transactions,
+          ]);
+          break;
+        default:
+          headers = [
+            "Kode Akun",
+            "Nama Akun",
+            "Total Debet",
+            "Total Kredit",
+            "Selisih",
+            "Jumlah Transaksi",
+          ];
+          rows = reportData.map((item) => [
+            item.accountCode,
+            item.accountName,
+            item.debet,
+            item.kredit,
+            (item.debet || 0) - (item.kredit || 0),
+            item.transactions,
+          ]);
+      }
+      const csvContent = [headers, ...rows]
         .map((row) => row.join(","))
         .join("\n");
 

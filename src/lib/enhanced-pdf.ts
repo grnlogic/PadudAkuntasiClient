@@ -790,26 +790,23 @@ function generateSummarySection(data: PDFReportData): string {
 
 function generateDetailsSection(data: PDFReportData): string {
   const divisionName = data.divisionName.toUpperCase();
-
-  // ✅ FIXED: Gunakan data yang sudah ditransform
   const allEntries = getAllTransformedEntries(data);
-
-  console.log("[PDF PRODUKSI] generateDetailsSection allEntries:", allEntries);
-  console.log("[PDF PRODUKSI] accounts:", data.accounts);
-
   let headerColumns = "";
 
   if (divisionName.includes("KEUANGAN")) {
     headerColumns = "<th>Jenis Transaksi</th><th>Nominal</th>";
   } else if (divisionName.includes("PEMASARAN")) {
-    headerColumns = "<th>Target</th><th>Realisasi</th><th>Achievement</th>";
+    headerColumns =
+      "<th>Target</th><th>Realisasi</th><th>Retur</th><th>Achievement</th><th>Kendala</th><th>Sales</th>";
   } else if (divisionName.includes("PRODUKSI")) {
-    headerColumns = "<th>Produksi (Unit)</th><th>HPP</th><th>HPP/Unit</th>";
+    headerColumns =
+      "<th>Hasil Produksi</th><th>Barang Gagal</th><th>Stock Barang Jadi</th><th>HPP</th><th>HP/Unit</th><th>Kendala</th>";
   } else if (divisionName.includes("GUDANG")) {
-    headerColumns = "<th>Pemakaian</th><th>Stok Akhir</th><th>Status</th>";
+    headerColumns =
+      "<th>Stok Awal</th><th>Pemakaian</th><th>Stok Akhir</th><th>Kondisi Gudang</th>";
   } else if (divisionName.includes("HRD")) {
     headerColumns =
-      "<th>Status Kehadiran</th><th>Jam Lembur</th><th>Shift</th>";
+      "<th>Status Kehadiran</th><th>Tidak Hadir</th><th>Shift</th><th>Jam Lembur</th>";
   } else {
     headerColumns = "<th>Nilai</th>";
   }
@@ -817,9 +814,7 @@ function generateDetailsSection(data: PDFReportData): string {
   const rows = allEntries
     .map((entry, index) => {
       const account = data.accounts.find((acc) => acc.id === entry.accountId);
-
       let dataCells = "";
-
       if (divisionName.includes("KEUANGAN")) {
         const transactionType = entry.transactionType || "-";
         const nominalValue =
@@ -835,42 +830,60 @@ function generateDetailsSection(data: PDFReportData): string {
       } else if (divisionName.includes("PEMASARAN")) {
         const target = entry.targetAmount || 0;
         const realisasi = entry.realisasiAmount || 0;
+        const retur = entry.returPenjualan || 0;
         const achievement =
           target > 0 ? ((realisasi / target) * 100).toFixed(1) + "%" : "-";
+        const kendala = entry.keteranganKendala || "-";
+        const sales = entry.salesUserId || entry.salesperson?.username || "-";
         dataCells = `
         <td style="text-align: right;">${formatCurrency(target)}</td>
         <td style="text-align: right;">${formatCurrency(realisasi)}</td>
+        <td style="text-align: right;">${formatCurrency(retur)}</td>
         <td style="text-align: center;">${achievement}</td>
+        <td style="text-align: left;">${kendala}</td>
+        <td style="text-align: left;">${sales}</td>
       `;
       } else if (divisionName.includes("PRODUKSI")) {
-        const produksi = entry.nilai || 0;
+        const hasil = entry.hasilProduksi || 0;
+        const gagal = entry.barangGagal || 0;
+        const stockJadi = entry.stockBarangJadi || 0;
         const hpp = entry.hppAmount || 0;
-        const hppPerUnit = produksi > 0 ? hpp / produksi : 0;
+        const hpBarangJadi = entry.hpBarangJadi || 0;
+        const hppPerUnit = hasil > 0 ? hpp / hasil : 0;
+        const kendala = entry.keteranganKendala || "-";
         dataCells = `
-        <td style="text-align: right;">${produksi.toLocaleString("id-ID")}</td>
+        <td style="text-align: right;">${hasil.toLocaleString("id-ID")}</td>
+        <td style="text-align: right;">${gagal.toLocaleString("id-ID")}</td>
+        <td style="text-align: right;">${stockJadi.toLocaleString("id-ID")}</td>
         <td style="text-align: right;">${formatCurrency(hpp)}</td>
-        <td style="text-align: right;">${formatCurrency(hppPerUnit)}</td>
+        <td style="text-align: right;">${formatCurrency(
+          hpBarangJadi || hppPerUnit
+        )}</td>
+        <td style="text-align: left;">${kendala}</td>
       `;
       } else if (divisionName.includes("GUDANG")) {
-        const pemakaian = entry.pemakaianAmount || 0;
+        const stokAwal = entry.stokAwal || 0;
+        const pemakaian = entry.pemakaianAmount || entry.pemakaian || 0;
         const stokAkhir = entry.stokAkhir || 0;
-        const status = stokAkhir < 100 ? "Stok Rendah" : "Stok Aman";
+        const kondisi = entry.kondisiGudang || "-";
         dataCells = `
+        <td style="text-align: right;">${stokAwal.toLocaleString("id-ID")}</td>
         <td style="text-align: right;">${pemakaian.toLocaleString("id-ID")}</td>
         <td style="text-align: right;">${stokAkhir.toLocaleString("id-ID")}</td>
-        <td style="text-align: center;">${status}</td>
+        <td style="text-align: left;">${kondisi}</td>
       `;
       } else if (divisionName.includes("HRD")) {
         const status = entry.attendanceStatus || "-";
         const absentCount = entry.absentCount || 0;
         const shift = entry.shift || "-";
+        const overtime = entry.overtimeHours || 0;
         dataCells = `
         <td style="text-align: center;">${status}</td>
-        <td style="text-align: right;">${absentCount} orang</td>
+        <td style="text-align: center;">${absentCount} orang</td>
         <td style="text-align: center;">${shift}</td>
+        <td style="text-align: right;">${overtime} jam</td>
       `;
       } else {
-        // PERBAIKAN: Gunakan getNilaiDisplay untuk format yang dinamis
         dataCells = `
         <td style="text-align: right;">${getNilaiDisplay(
           entry,
@@ -878,7 +891,6 @@ function generateDetailsSection(data: PDFReportData): string {
         )}</td>
         `;
       }
-
       return `
       <tr>
         <td style="text-align: center;">${index + 1}</td>
@@ -890,7 +902,7 @@ function generateDetailsSection(data: PDFReportData): string {
             account?.accountName || "Unknown Account"
           }</div>
         </td>
-        <td>${entry.description || "-"}</td>
+        <td>${entry.description || entry.keterangan || "-"}</td>
         ${dataCells}
       </tr>
     `;

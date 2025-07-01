@@ -155,9 +155,9 @@ export const getDivisions = async (): Promise<Division[]> => {
           transformDivisionFromBackend(division)
         );
     }
-    return [];
+    throw new Error(response.error || "Gagal mengambil data divisi");
   } catch (error) {
-    return [];
+    throw error;
   }
 };
 
@@ -166,7 +166,7 @@ export const getDivisionById = async (id: string): Promise<Division | null> => {
     const divisions = await getDivisions();
     return divisions.find((d) => d.id === id) || null;
   } catch (error) {
-    return null;
+    throw error;
   }
 };
 
@@ -174,10 +174,8 @@ export const getDivisionById = async (id: string): Promise<Division | null> => {
 export const getAccounts = async (): Promise<Account[]> => {
   try {
     const response = await accountsAPI.getAll();
-
     if (response.success && response.data && Array.isArray(response.data)) {
       const accounts = response.data.map((account: any) => {
-        // Check if data is already in frontend format
         if (account.accountCode && account.accountName) {
           return {
             id: account.id?.toString() || "",
@@ -193,17 +191,13 @@ export const getAccounts = async (): Promise<Account[]> => {
             createdAt: account.createdAt || new Date().toISOString(),
           };
         }
-
-        // Transform from backend format
         return transformAccountFromBackend(account);
       });
-
       return accounts;
     }
-
-    return [];
+    throw new Error(response.error || "Gagal mengambil data akun");
   } catch (error) {
-    return [];
+    throw error;
   }
 };
 
@@ -238,7 +232,7 @@ export const getAccountsByDivision = async (
     }
     return [];
   } catch (error) {
-    return [];
+    throw error;
   }
 };
 

@@ -66,13 +66,27 @@ export default function AccountRackPage() {
   });
 
   useEffect(() => {
-    loadAccounts();
+    // Tambahkan try-catch agar error saat load data muncul di UI
+    const fetchAccounts = async () => {
+      try {
+        await loadAccounts();
+      } catch (err: any) {
+        setError(err.message || "Gagal memuat data akun");
+        setTimeout(() => setError(""), 5000);
+      }
+    };
+    fetchAccounts();
   }, []);
 
   const loadAccounts = async () => {
     if (user?.division?.id) {
-      const divisionAccounts = await getAccountsByDivision(user.division.id);
-      setAccounts(divisionAccounts);
+      try {
+        const divisionAccounts = await getAccountsByDivision(user.division.id);
+        setAccounts(divisionAccounts);
+      } catch (err: any) {
+        setError(err.message || "Gagal memuat data akun");
+        setTimeout(() => setError(""), 5000);
+      }
     }
   };
 
@@ -105,7 +119,7 @@ export default function AccountRackPage() {
       "KEUANGAN & ADMINISTRASI": "1",
       "PEMASARAN & PENJUALAN": "2",
       PRODUKSI: "3",
-      "BLENDING": "10",
+      BLENDING: "10",
       HRD: "5",
     };
 
@@ -493,8 +507,8 @@ export default function AccountRackPage() {
 
           {filteredAccounts.length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              Belum ada entri  {user?.division?.name}. Tambahkan
-              entri pertama untuk memulai!
+              Belum ada entri {user?.division?.name}. Tambahkan entri pertama
+              untuk memulai!
             </div>
           )}
         </CardContent>
