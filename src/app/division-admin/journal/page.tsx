@@ -297,215 +297,248 @@ export default function JournalPage() {
     return summary;
   };
 
+  const loadData = async () => {
+    if (user?.division?.id) {
+      try {
+        setLoading(true);
 
-const loadData = async () => {
-  if (user?.division?.id) {
-    try {
-      setLoading(true);
+        const accountsPromise = getAccountsByDivision(user.division.id);
+        const entriesPromise = getEntriHarianByDate(selectedDate);
+        const piutangPromise = getPiutangTransaksi();
+        const utangPromise = getUtangTransaksi();
 
-      const accountsPromise = getAccountsByDivision(user.division.id);
-      const entriesPromise = getEntriHarianByDate(selectedDate);
-      const piutangPromise = getPiutangTransaksi();
-      const utangPromise = getUtangTransaksi();
+        // ✅ FIXED: Ambil semua data dulu, filter di frontend
+        const laporanGudangPromise =
+          divisionType === "BLENDING"
+            ? getLaporanGudang()
+            : Promise.resolve([]);
+        const laporanProduksiPromise =
+          divisionType === "PRODUKSI"
+            ? getLaporanProduksi()
+            : Promise.resolve([]);
+        const laporanPromise =
+          divisionType === "PEMASARAN"
+            ? getLaporanPenjualanSales()
+            : Promise.resolve([]);
+        const usersPromise =
+          divisionType === "PEMASARAN" ? getUsers() : Promise.resolve([]);
+        const salespeoplePromise =
+          divisionType === "PEMASARAN" ? getSalespeople() : Promise.resolve([]);
 
-      // ✅ FIXED: Ambil semua data dulu, filter di frontend
-      const laporanGudangPromise =
-        divisionType === "BLENDING"
-          ? getLaporanGudang()
-          : Promise.resolve([]);
-      const laporanProduksiPromise =
-        divisionType === "PRODUKSI"
-          ? getLaporanProduksi()
-          : Promise.resolve([]);
-      const laporanPromise =
-        divisionType === "PEMASARAN"
-          ? getLaporanPenjualanSales()
-          : Promise.resolve([]);
-      const usersPromise =
-        divisionType === "PEMASARAN" ? getUsers() : Promise.resolve([]);
-      const salespeoplePromise =
-        divisionType === "PEMASARAN" ? getSalespeople() : Promise.resolve([]);
+        const [
+          accountsData,
+          entriesData,
+          piutangData,
+          utangData,
+          laporanGudangData,
+          laporanProduksiData,
+          laporanData,
+          usersData,
+          salespeopleData,
+        ] = await Promise.all([
+          accountsPromise,
+          entriesPromise,
+          piutangPromise,
+          utangPromise,
+          laporanGudangPromise,
+          laporanProduksiPromise,
+          laporanPromise,
+          usersPromise,
+          salespeoplePromise,
+        ]);
 
-      const [
-        accountsData,
-        entriesData,
-        piutangData,
-        utangData,
-        laporanGudangData,
-        laporanProduksiData,
-        laporanData,
-        usersData,
-        salespeopleData,
-      ] = await Promise.all([
-        accountsPromise,
-        entriesPromise,
-        piutangPromise,
-        utangPromise,
-        laporanGudangPromise,
-        laporanProduksiPromise,
-        laporanPromise,
-        usersPromise,
-        salespeoplePromise,
-      ]);
+        setAccounts(accountsData);
+        setUsers(usersData);
+        setSalespeople(salespeopleData);
 
-      setAccounts(accountsData);
-      setUsers(usersData);
-      setSalespeople(salespeopleData);
-
-      // ✅ FIXED: Filter dengan multiple format tanggal
-      if (divisionType === "PEMASARAN") {
-        const filteredLaporanSales = laporanData.filter((laporan: any) => {
-          const laporanDate = laporan.tanggal_laporan || laporan.tanggalLaporan || laporan.created_at;
-          if (!laporanDate) return false;
-          
-          // Support multiple date formats
-          const dateStr = laporanDate.toString();
-          return (
-            dateStr.startsWith(selectedDate) || // 2025-07-01
-            dateStr.includes(selectedDate) ||   // Contains 2025-07-01
-            dateStr.split('T')[0] === selectedDate // ISO format: 2025-07-01T10:30:00Z
+        // ✅ FIXED: Filter dengan multiple format tanggal
+        let filteredLaporanSales = [];
+        if (divisionType === "PEMASARAN") {
+          filteredLaporanSales = laporanData.filter((laporan) => {
+            const laporanDate =
+              laporan.tanggal_laporan ||
+              laporan.tanggalLaporan ||
+              laporan.created_at;
+            if (!laporanDate) return false;
+            const dateStr = laporanDate.toString();
+            return (
+              dateStr.startsWith(selectedDate) ||
+              dateStr.includes(selectedDate) ||
+              dateStr.split("T")[0] === selectedDate
+            );
+          });
+          setLaporanPenjualanSales(filteredLaporanSales);
+          console.log(
+            "✅ FILTERED laporan sales untuk tanggal",
+            selectedDate,
+            ":",
+            {
+              total: laporanData.length,
+              filtered: filteredLaporanSales.length,
+              sampelDate:
+                laporanData[0]?.tanggal_laporan || laporanData[0]?.created_at,
+            }
           );
-        });
-        setLaporanPenjualanSales(filteredLaporanSales);
-        console.log("✅ FILTERED laporan sales untuk tanggal", selectedDate, ":", {
-          total: laporanData.length,
-          filtered: filteredLaporanSales.length,
-          sampelDate: laporanData[0]?.tanggal_laporan || laporanData[0]?.created_at
-        });
-      }
+        }
 
-      // ✅ FIXED: Filter laporan produksi dengan format fleksibel
-      if (divisionType === "PRODUKSI") {
-        const filteredLaporanProduksi = laporanProduksiData.filter((laporan: any) => {
-          const laporanDate = laporan.tanggal_laporan || laporan.tanggalLaporan || laporan.created_at;
-          if (!laporanDate) return false;
-          
-          const dateStr = laporanDate.toString();
-          return (
-            dateStr.startsWith(selectedDate) ||
-            dateStr.includes(selectedDate) ||
-            dateStr.split('T')[0] === selectedDate
+        // ✅ FIXED: Filter laporan produksi dengan format fleksibel
+        if (divisionType === "PRODUKSI") {
+          const filteredLaporanProduksi = laporanProduksiData.filter(
+            (laporan: any) => {
+              const laporanDate =
+                laporan.tanggal_laporan ||
+                laporan.tanggalLaporan ||
+                laporan.created_at;
+              if (!laporanDate) return false;
+
+              const dateStr = laporanDate.toString();
+              return (
+                dateStr.startsWith(selectedDate) ||
+                dateStr.includes(selectedDate) ||
+                dateStr.split("T")[0] === selectedDate
+              );
+            }
           );
-        });
-        setLaporanProduksi(filteredLaporanProduksi);
-        console.log("✅ FILTERED laporan produksi untuk tanggal", selectedDate, ":", {
-          total: laporanProduksiData.length,
-          filtered: filteredLaporanProduksi.length
-        });
-      }
-
-      // ✅ FIXED: Filter laporan gudang dengan format fleksibel
-      if (divisionType === "BLENDING") {
-        const filteredLaporanGudang = laporanGudangData.filter((laporan: any) => {
-          const laporanDate = laporan.tanggal_laporan || laporan.tanggalLaporan || laporan.created_at;
-          if (!laporanDate) return false;
-          
-          const dateStr = laporanDate.toString();
-          return (
-            dateStr.startsWith(selectedDate) ||
-            dateStr.includes(selectedDate) ||
-            dateStr.split('T')[0] === selectedDate
+          setLaporanProduksi(filteredLaporanProduksi);
+          console.log(
+            "✅ FILTERED laporan produksi untuk tanggal",
+            selectedDate,
+            ":",
+            {
+              total: laporanProduksiData.length,
+              filtered: filteredLaporanProduksi.length,
+            }
           );
-        });
-        setLaporanGudang(filteredLaporanGudang);
-        console.log("✅ FILTERED laporan gudang untuk tanggal", selectedDate, ":", {
-          total: laporanGudangData.length,
-          filtered: filteredLaporanGudang.length
-        });
-      }
+        }
 
-      // Filter entries yang belong to current division
-      const accountIds = accountsData.map((acc) => acc.id);
-      const divisionEntries = entriesData.filter(
-        (entry: { accountId: string }) => accountIds.includes(entry.accountId)
-      );
+        // ✅ FIXED: Filter laporan gudang dengan format fleksibel
+        if (divisionType === "BLENDING") {
+          const filteredLaporanGudang = laporanGudangData.filter(
+            (laporan: any) => {
+              const laporanDate =
+                laporan.tanggal_laporan ||
+                laporan.tanggalLaporan ||
+                laporan.created_at;
+              if (!laporanDate) return false;
 
-      // ✅ Map piutang dan utang data dengan format tanggal yang benar
-      const mappedPiutangEntries = piutangData
-        .filter((p: any) => {
-          const transaksiDate = p.tanggal_transaksi || p.tanggalTransaksi;
-          if (!transaksiDate) return false;
-          
-          const dateStr = transaksiDate.toString();
-          return (
-            dateStr.startsWith(selectedDate) ||
-            dateStr.includes(selectedDate) ||
-            dateStr.split('T')[0] === selectedDate
+              const dateStr = laporanDate.toString();
+              return (
+                dateStr.startsWith(selectedDate) ||
+                dateStr.includes(selectedDate) ||
+                dateStr.split("T")[0] === selectedDate
+              );
+            }
           );
-        })
-        .map((p: any) => ({
-          id: `piutang-${p.id}`,
-          accountId: p.account_id?.toString() || p.accountId?.toString(),
-          createdAt: p.tanggal_transaksi || p.tanggalTransaksi || p.created_at,
-          nilai: Number(p.nominal) || 0,
-          description: p.keterangan || "",
-          transactionType: p.tipe_transaksi || p.tipeTransaksi,
-          kategori: p.kategori,
-        }));
-
-      const mappedUtangEntries = utangData
-        .filter((u: any) => {
-          const transaksiDate = u.tanggal_transaksi || u.tanggalTransaksi;
-          if (!transaksiDate) return false;
-          
-          const dateStr = transaksiDate.toString();
-          return (
-            dateStr.startsWith(selectedDate) ||
-            dateStr.includes(selectedDate) ||
-            dateStr.split('T')[0] === selectedDate
+          setLaporanGudang(filteredLaporanGudang);
+          console.log(
+            "✅ FILTERED laporan gudang untuk tanggal",
+            selectedDate,
+            ":",
+            {
+              total: laporanGudangData.length,
+              filtered: filteredLaporanGudang.length,
+            }
           );
-        })
-        .map((u: any) => ({
-          id: `utang-${u.id}`,
-          accountId: u.account_id?.toString() || u.accountId?.toString(),
-          createdAt: u.tanggal_transaksi || u.tanggalTransaksi || u.created_at,
-          nilai: Number(u.nominal) || 0,
-          description: u.keterangan || "",
-          transactionType: u.tipe_transaksi || u.tipeTransaksi,
-          kategori: u.kategori,
-        }));
+        }
 
-      // Combine all entries
-      const allEntries = [
-        ...divisionEntries,
-        ...mappedPiutangEntries,
-        ...mappedUtangEntries,
-      ];
+        // Filter entries yang belong to current division
+        const accountIds = accountsData.map((acc) => acc.id);
+        const divisionEntries = entriesData.filter(
+          (entry: { accountId: string }) => accountIds.includes(entry.accountId)
+        );
 
-      setExistingEntries(allEntries);
+        // ✅ Map piutang dan utang data dengan format tanggal yang benar
+        const mappedPiutangEntries = piutangData
+          .filter((p: any) => {
+            const transaksiDate = p.tanggal_transaksi || p.tanggalTransaksi;
+            if (!transaksiDate) return false;
 
-      // Calculate summaries
-      if (divisionType === "KEUANGAN") {
-        const summary = calculateKeuanganSummary(allEntries, accountsData);
-        setKeuanganSummary(summary);
-        
-        const piutangSummaryData = calculatePiutangSummary(piutangData, selectedDate);
-        setPiutangSummary(piutangSummaryData);
+            const dateStr = transaksiDate.toString();
+            return (
+              dateStr.startsWith(selectedDate) ||
+              dateStr.includes(selectedDate) ||
+              dateStr.split("T")[0] === selectedDate
+            );
+          })
+          .map((p: any) => ({
+            id: `piutang-${p.id}`,
+            accountId: p.account_id?.toString() || p.accountId?.toString(),
+            createdAt:
+              p.tanggal_transaksi || p.tanggalTransaksi || p.created_at,
+            nilai: Number(p.nominal) || 0,
+            description: p.keterangan || "",
+            transactionType: p.tipe_transaksi || p.tipeTransaksi,
+            kategori: p.kategori,
+          }));
+
+        const mappedUtangEntries = utangData
+          .filter((u: any) => {
+            const transaksiDate = u.tanggal_transaksi || u.tanggalTransaksi;
+            if (!transaksiDate) return false;
+
+            const dateStr = transaksiDate.toString();
+            return (
+              dateStr.startsWith(selectedDate) ||
+              dateStr.includes(selectedDate) ||
+              dateStr.split("T")[0] === selectedDate
+            );
+          })
+          .map((u: any) => ({
+            id: `utang-${u.id}`,
+            accountId: u.account_id?.toString() || u.accountId?.toString(),
+            createdAt:
+              u.tanggal_transaksi || u.tanggalTransaksi || u.created_at,
+            nilai: Number(u.nominal) || 0,
+            description: u.keterangan || "",
+            transactionType: u.tipe_transaksi || u.tipeTransaksi,
+            kategori: u.kategori,
+          }));
+
+        // Combine all entries
+        const allEntries = [
+          ...divisionEntries,
+          ...mappedPiutangEntries,
+          ...mappedUtangEntries,
+        ];
+
+        setExistingEntries(allEntries);
+
+        // Calculate summaries
+        if (divisionType === "KEUANGAN") {
+          const summary = calculateKeuanganSummary(allEntries, accountsData);
+          setKeuanganSummary(summary);
+
+          const piutangSummaryData = calculatePiutangSummary(
+            piutangData,
+            selectedDate
+          );
+          setPiutangSummary(piutangSummaryData);
+        }
+
+        console.log("✅ DATA LOADED SUCCESSFULLY:", {
+          selectedDate,
+          divisionEntries: divisionEntries.length,
+          piutangEntries: mappedPiutangEntries.length,
+          utangEntries: mappedUtangEntries.length,
+          totalEntries: allEntries.length,
+          laporanCount:
+            divisionType === "PEMASARAN" ? filteredLaporanSales.length : 0,
+        });
+
+        // ✅ Only show success for manual refresh
+        if (loading) {
+          toastSuccess.custom("Data berhasil dimuat ulang");
+        }
+      } catch (error) {
+        toastError.custom("Gagal memuat data");
+        console.error("Load data error:", error);
+      } finally {
+        setLoading(false);
       }
-
-      console.log("✅ DATA LOADED SUCCESSFULLY:", {
-        selectedDate,
-        divisionEntries: divisionEntries.length,
-        piutangEntries: mappedPiutangEntries.length,
-        utangEntries: mappedUtangEntries.length,
-        totalEntries: allEntries.length,
-        laporanCount: divisionType === "PEMASARAN" ? filteredLaporanSales?.length : 0
-      });
-
-      // ✅ Only show success for manual refresh
-      if (loading) {
-        toastSuccess.custom("Data berhasil dimuat ulang");
-      }
-    } catch (error) {
-      toastError.custom("Gagal memuat data");
-      console.error("Load data error:", error);
-    } finally {
-      setLoading(false);
     }
-  }
-};
+  };
 
-// ...existing code...
+  // ...existing code...
 
   const addNewRow = () => {
     const newRow: JournalRow = {
@@ -2199,7 +2232,7 @@ const loadData = async () => {
             <div className="md:col-span-2">
               <Label>Keterangan</Label>
               <Input
-                placeholder="Deskripsi"
+                placeholder="Deskripsi transaksi piutang"
                 value={journalRows[0].keterangan}
                 onChange={(e) =>
                   updateRow(journalRows[0].id, "keterangan", e.target.value)
@@ -2284,7 +2317,7 @@ const loadData = async () => {
             <div className="md:col-span-2">
               <Label>Keterangan</Label>
               <Input
-                placeholder="Deskripsi"
+                placeholder="Deskripsi transaksi utang"
                 value={journalRows[0].keterangan}
                 onChange={(e) =>
                   updateRow(journalRows[0].id, "keterangan", e.target.value)
@@ -2446,6 +2479,232 @@ const loadData = async () => {
       ).length,
     };
   };
+
+  // Fungsi untuk render tabel jurnal sesuai divisi
+  function renderJournalTable() {
+    switch (divisionType) {
+      case "PRODUKSI":
+        return (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Waktu</TableHead>
+                <TableHead>Kode Akun</TableHead>
+                <TableHead>Nama Akun</TableHead>
+                <TableHead>Hasil Produksi</TableHead>
+                <TableHead>Barang Gagal</TableHead>
+                <TableHead>Stock Barang Jadi</TableHead>
+                <TableHead>HPP</TableHead>
+                <TableHead>Kendala</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {laporanProduksi.map((laporan) => (
+                <TableRow key={laporan.id}>
+                  <TableCell>
+                    {laporan.createdAt
+                      ? new Date(laporan.createdAt).toLocaleTimeString(
+                          "id-ID",
+                          { hour: "2-digit", minute: "2-digit" }
+                        )
+                      : "-"}
+                  </TableCell>
+                  <TableCell>{laporan.account?.accountCode || "-"}</TableCell>
+                  <TableCell>{laporan.account?.accountName || "-"}</TableCell>
+                  <TableCell>{laporan.hasilProduksi ?? "-"}</TableCell>
+                  <TableCell>{laporan.barangGagal ?? "-"}</TableCell>
+                  <TableCell>{laporan.stockBarangJadi ?? "-"}</TableCell>
+                  <TableCell>{laporan.hpBarangJadi ?? "-"}</TableCell>
+                  <TableCell>{laporan.keteranganKendala || "-"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        );
+      case "BLENDING":
+        return (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Waktu</TableHead>
+                <TableHead>Kode Akun</TableHead>
+                <TableHead>Nama Akun</TableHead>
+                <TableHead>Stok Awal</TableHead>
+                <TableHead>Pemakaian</TableHead>
+                <TableHead>Stok Akhir</TableHead>
+                <TableHead>HPP</TableHead>
+                <TableHead>Kondisi Gudang</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {laporanGudang.map((laporan) => (
+                <TableRow key={laporan.id}>
+                  <TableCell>
+                    {laporan.createdAt
+                      ? new Date(laporan.createdAt).toLocaleTimeString(
+                          "id-ID",
+                          { hour: "2-digit", minute: "2-digit" }
+                        )
+                      : "-"}
+                  </TableCell>
+                  <TableCell>{laporan.account?.accountCode || "-"}</TableCell>
+                  <TableCell>{laporan.account?.accountName || "-"}</TableCell>
+                  <TableCell>{laporan.stokAwal ?? "-"}</TableCell>
+                  <TableCell>{laporan.pemakaian ?? "-"}</TableCell>
+                  <TableCell>{laporan.stokAkhir ?? "-"}</TableCell>
+                  <TableCell>{laporan.hppAmount ?? "-"}</TableCell>
+                  <TableCell>{laporan.kondisiGudang || "-"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        );
+      case "HRD":
+        return (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Waktu</TableHead>
+                <TableHead>Kode Akun</TableHead>
+                <TableHead>Nama Akun</TableHead>
+                <TableHead>Status Kehadiran</TableHead>
+                <TableHead>Jumlah Tidak Hadir</TableHead>
+                <TableHead>Shift</TableHead>
+                <TableHead>Kendala</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {existingEntries.map((entry) => {
+                const account = accounts.find(
+                  (acc) => acc.id === entry.accountId
+                );
+                return (
+                  <TableRow key={entry.id}>
+                    <TableCell>
+                      {entry.createdAt
+                        ? new Date(entry.createdAt).toLocaleTimeString(
+                            "id-ID",
+                            { hour: "2-digit", minute: "2-digit" }
+                          )
+                        : "-"}
+                    </TableCell>
+                    <TableCell>{account?.accountCode || "-"}</TableCell>
+                    <TableCell>{account?.accountName || "-"}</TableCell>
+                    <TableCell>
+                      {(entry as any).attendanceStatus || "-"}
+                    </TableCell>
+                    <TableCell>{(entry as any).absentCount ?? "-"}</TableCell>
+                    <TableCell>{(entry as any).shift || "-"}</TableCell>
+                    <TableCell>
+                      {(entry as any).keteranganKendala || "-"}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        );
+      default:
+        // Pemasaran, Keuangan, General
+        return (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Waktu</TableHead>
+                <TableHead>Kode Akun</TableHead>
+                <TableHead>Nama Akun</TableHead>
+                <TableHead>Keterangan</TableHead>
+                <TableHead>Nilai</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {existingEntries.map((entry) => {
+                const account = accounts.find(
+                  (acc) => acc.id === entry.accountId
+                );
+                return (
+                  <TableRow key={entry.id}>
+                    <TableCell>
+                      {entry.createdAt
+                        ? new Date(entry.createdAt).toLocaleTimeString(
+                            "id-ID",
+                            { hour: "2-digit", minute: "2-digit" }
+                          )
+                        : "-"}
+                    </TableCell>
+                    <TableCell>{account?.accountCode || "-"}</TableCell>
+                    <TableCell>{account?.accountName || "-"}</TableCell>
+                    <TableCell>{entry.description || "-"}</TableCell>
+                    <TableCell>{formatCurrency(entry.nilai || 0)}</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        );
+    }
+  }
+
+  // Fungsi untuk render summary card sesuai divisi
+  function renderSummaryCard() {
+    switch (divisionType) {
+      case "PRODUKSI": {
+        const summary = getProduksiSummary();
+        return (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-green-600">🏭</span>
+                Ringkasan Produksi Hari Ini
+              </CardTitle>
+              <CardDescription>
+                Total hasil produksi, barang gagal, stock barang jadi, dan HPP
+                hari ini.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="font-semibold text-blue-800">
+                    Total Hasil Produksi
+                  </div>
+                  <div className="text-2xl font-bold text-blue-900 mt-2">
+                    {summary.totalHasilProduksi}
+                  </div>
+                </div>
+                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                  <div className="font-semibold text-orange-800">
+                    Total Barang Gagal
+                  </div>
+                  <div className="text-2xl font-bold text-orange-900 mt-2">
+                    {summary.totalBarangGagal}
+                  </div>
+                </div>
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="font-semibold text-green-800">
+                    Total Stock Barang Jadi
+                  </div>
+                  <div className="text-2xl font-bold text-green-900 mt-2">
+                    {summary.totalStockBarangJadi}
+                  </div>
+                </div>
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="font-semibold text-purple-800">Total HPP</div>
+                  <div className="text-2xl font-bold text-purple-900 mt-2">
+                    {summary.totalHpBarangJadi}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      }
+
+      default:
+        // Pemasaran, Keuangan, General: summary card sudah ada di bawah (tidak perlu double)
+        return null;
+    }
+  }
 
   return (
     <ClientErrorBoundary>
@@ -3362,432 +3621,6 @@ const loadData = async () => {
           </>
         )}
 
-        {/* === SUMMARY CARD SELALU TAMPIL === */}
-        {divisionType === "PEMASARAN" && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-orange-600">📈</span>
-                Ringkasan Penjualan Hari Ini
-              </CardTitle>
-              <CardDescription>
-                Kontrol target, realisasi, dan retur penjualan seluruh sales
-                hari ini.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {(() => {
-                const summary = getPemasaranSummary();
-                return (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="font-semibold text-blue-800">
-                        Total Target
-                      </div>
-                      <div className="text-2xl font-bold text-blue-900 mt-2">
-                        {formatCurrency(summary.totalTarget)}
-                      </div>
-                    </div>
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <div className="font-semibold text-green-800">
-                        Total Realisasi
-                      </div>
-                      <div className="text-2xl font-bold text-green-900 mt-2">
-                        {formatCurrency(summary.totalRealisasi)}
-                      </div>
-                    </div>
-                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                      <div className="font-semibold text-orange-800">
-                        Total Retur
-                      </div>
-                      <div className="text-2xl font-bold text-orange-900 mt-2">
-                        {formatCurrency(summary.totalRetur)}
-                      </div>
-                    </div>
-                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                      <div className="font-semibold text-purple-800">
-                        Jumlah Sales
-                      </div>
-                      <div className="text-2xl font-bold text-purple-900 mt-2">
-                        {summary.jumlahSales}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* ✅ NEW: Summary Card untuk PRODUKSI */}
-        {divisionType === "PRODUKSI" && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-green-600">🏭</span>
-                Ringkasan Produksi Hari Ini
-              </CardTitle>
-              <CardDescription>
-                Kontrol hasil produksi, barang gagal, dan stok barang jadi hari
-                ini.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {(() => {
-                const summary = getProduksiSummary();
-                return (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <div className="font-semibold text-green-800">
-                        Total Hasil Produksi
-                      </div>
-                      <div className="text-2xl font-bold text-green-900 mt-2">
-                        {summary.totalHasilProduksi.toLocaleString()} Unit
-                      </div>
-                    </div>
-                    <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                      <div className="font-semibold text-red-800">
-                        Total Barang Gagal
-                      </div>
-                      <div className="text-2xl font-bold text-red-900 mt-2">
-                        {summary.totalBarangGagal.toLocaleString()} Unit
-                      </div>
-                    </div>
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="font-semibold text-blue-800">
-                        Stock Barang Jadi
-                      </div>
-                      <div className="text-2xl font-bold text-blue-900 mt-2">
-                        {summary.totalStockBarangJadi.toLocaleString()} Unit
-                      </div>
-                    </div>
-                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                      <div className="font-semibold text-purple-800">
-                        Harga Pokok Barang Jadi
-                      </div>
-                      <div className="text-2xl font-bold text-purple-900 mt-2">
-                        {formatCurrency(summary.totalHpBarangJadi)}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* === TABEL DETAIL === */}
-        {divisionType === "PEMASARAN" ? (
-          // TABEL KHUSUS PENJUALAN SALES
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Waktu</TableHead>
-                <TableHead>Kode Akun</TableHead>
-                <TableHead>Nama Akun</TableHead>
-                <TableHead>Sales</TableHead>
-                <TableHead>Tipe</TableHead>
-                <TableHead>Keterangan</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>Realisasi</TableHead>
-                <TableHead>Retur</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {laporanPenjualanSales.map((laporan, idx) => (
-                <TableRow key={laporan.id}>
-                  <TableCell className="text-sm text-gray-500">
-                    {laporan.created_at
-                      ? new Date(laporan.created_at).toLocaleTimeString(
-                          "id-ID",
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }
-                        )
-                      : "-"}
-                  </TableCell>
-                  <TableCell className="font-mono text-blue-600">
-                    {(laporan.account as any)?.accountCode || "-"}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {(laporan.account as any)?.accountName || "-"}
-                  </TableCell>
-                  <TableCell>{laporan.salesperson?.username || "-"}</TableCell>
-                  <TableCell>
-                    <Badge className="bg-orange-100 text-orange-800">
-                      Penjualan
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{laporan.keterangan_kendala || "-"}</TableCell>
-                  <TableCell>
-                    {formatCurrency(laporan.target_penjualan || 0)}
-                  </TableCell>
-                  <TableCell>
-                    {formatCurrency(laporan.realisasi_penjualan || 0)}
-                  </TableCell>
-                  <TableCell>
-                    {formatCurrency(laporan.retur_penjualan || 0)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeLaporanPenjualanSales(laporan.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : divisionType === "PRODUKSI" ? (
-          // ✅ NEW: TABEL KHUSUS PRODUKSI
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Waktu</TableHead>
-                <TableHead>Kode Akun</TableHead>
-                <TableHead>Nama Akun</TableHead>
-                <TableHead>Hasil Produksi</TableHead>
-                <TableHead>Barang Gagal</TableHead>
-                <TableHead>Stock Barang Jadi</TableHead>
-                <TableHead>Harga Pokok</TableHead>
-                <TableHead>Kendala</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {laporanProduksi.map((laporan) => (
-                <TableRow key={laporan.id}>
-                  <TableCell className="text-sm text-gray-500">
-                    {laporan.createdAt
-                      ? new Date(laporan.createdAt).toLocaleTimeString(
-                          "id-ID",
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }
-                        )
-                      : "-"}
-                  </TableCell>
-                  <TableCell className="font-mono text-blue-600">
-                    {laporan.account?.accountCode || "-"}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {laporan.account?.accountName || "-"}
-                  </TableCell>
-                  <TableCell>
-                    {(laporan.hasilProduksi || 0).toLocaleString()} Unit
-                  </TableCell>
-                  <TableCell>
-                    {(laporan.barangGagal || 0).toLocaleString()} Unit
-                  </TableCell>
-                  <TableCell>
-                    {(laporan.stockBarangJadi || 0).toLocaleString()} Unit
-                  </TableCell>
-                  <TableCell>
-                    {formatCurrency(laporan.hpBarangJadi || 0)}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {laporan.keteranganKendala || "-"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeLaporanProduksi(laporan.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : divisionType === "BLENDING" ? (
-          // ✅ NEW: TABEL KHUSUS BLENDING
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Waktu</TableHead>
-                <TableHead>Kode Akun</TableHead>
-                <TableHead>Nama Akun</TableHead>
-                <TableHead>Stok Awal</TableHead>
-                <TableHead>Pemakaian</TableHead>
-                <TableHead>Stok Akhir</TableHead>
-                <TableHead>Kondisi Gudang</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {laporanGudang.map((laporan) => (
-                <TableRow key={laporan.id}>
-                  <TableCell className="text-sm text-gray-500">
-                    {laporan.createdAt
-                      ? new Date(laporan.createdAt).toLocaleTimeString(
-                          "id-ID",
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }
-                        )
-                      : "-"}
-                  </TableCell>
-                  <TableCell className="font-mono text-blue-600">
-                    {laporan.account?.accountCode || "-"}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {laporan.account?.accountName || "-"}
-                  </TableCell>
-                  <TableCell>
-                    {(laporan.stokAwal || 0).toLocaleString()} Unit
-                  </TableCell>
-                  <TableCell>
-                    {(laporan.pemakaian || 0).toLocaleString()} Unit
-                  </TableCell>
-                  <TableCell>
-                    {(laporan.stokAkhir || 0).toLocaleString()} Unit
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {laporan.kondisiGudang || "-"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeLaporanGudang(laporan.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          // TABEL DEFAULT UNTUK DIVISI LAIN
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Waktu</TableHead>
-                <TableHead>Kode Akun</TableHead>
-                <TableHead>Nama Akun</TableHead>
-                <TableHead>Sales</TableHead>
-                <TableHead>Tipe</TableHead>
-                <TableHead>Keterangan</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>Realisasi</TableHead>
-                <TableHead>Nilai</TableHead>
-                <TableHead className="text-right">Aksi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {/* KHUSUS DIVISI PEMASARAN: tampilkan detail laporan penjualan sales */}
-              {divisionType === "PEMASARAN" &&
-                laporanPenjualanSales.length > 0 && (
-                  <>
-                    {laporanPenjualanSales.map((laporan) => (
-                      <TableRow key={laporan.id}>
-                        <TableCell className="text-sm text-gray-500">
-                          {new Date(laporan.createdAt).toLocaleTimeString(
-                            "id-ID",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }
-                          )}
-                        </TableCell>
-                        <TableCell className="font-mono text-blue-600">
-                          {laporan.account?.accountCode || "-"}
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {laporan.account?.accountName || "-"}
-                        </TableCell>
-                        <TableCell>
-                          {laporan.salesperson?.username || "-"}
-                        </TableCell>
-                        <TableCell>{laporan.transactionType || "-"}</TableCell>
-                        <TableCell>{laporan.description || "-"}</TableCell>
-                        <TableCell>
-                          {formatCurrency(laporan.targetAmount || 0)}
-                        </TableCell>
-                        <TableCell>
-                          {formatCurrency(laporan.realisasiAmount || 0)}
-                        </TableCell>
-                        <TableCell>
-                          {formatCurrency(laporan.nilai || 0)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              removeLaporanPenjualanSales(laporan.id)
-                            }
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </>
-                )}
-
-              {/* Tampilkan existingEntries seperti biasa untuk entri lain */}
-              {existingEntries.map((entry) => {
-                const account = accounts.find(
-                  (acc) => acc.id === entry.accountId
-                );
-                return (
-                  <TableRow key={entry.id}>
-                    <TableCell className="text-sm text-gray-500">
-                      {new Date(entry.createdAt).toLocaleTimeString("id-ID", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </TableCell>
-                    <TableCell className="font-mono text-blue-600">
-                      {account?.accountCode}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {account?.accountName}
-                    </TableCell>
-                    <TableCell>-</TableCell>
-                    <TableCell>{entry.transactionType || "-"}</TableCell>
-                    <TableCell className="text-sm">
-                      {entry.description || "-"}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {formatDisplayValue(
-                        entry.nilai.toString(),
-                        account?.valueType || "NOMINAL",
-                        entry
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeExistingEntry(entry.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-
         {/* ✅ NEW: Summary untuk UTANG */}
         {divisionType === "KEUANGAN" && (
           <Card>
@@ -4202,6 +4035,9 @@ const loadData = async () => {
             </CardContent>
           </Card>
         )}
+
+        {renderJournalTable()}
+        {renderSummaryCard()}
       </div>
     </ClientErrorBoundary>
   );
