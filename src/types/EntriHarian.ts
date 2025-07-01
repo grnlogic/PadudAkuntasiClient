@@ -15,7 +15,6 @@ export interface EntriHarian {
   transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR";
   targetAmount?: number;
   realisasiAmount?: number;
-  hppAmount?: number;
   pemakaianAmount?: number;
   stokAkhir?: number;
   // ✅ NEW: Keuangan saldo akhir
@@ -61,7 +60,6 @@ export interface CreateEntriHarianRequest {
   returPenjualan?: number;
   keteranganKendala?: string;
   // ✅ Produksi fields
-  hppAmount?: number;
   hasilProduksi?: number;
   barangGagal?: number;
   stockBarangJadi?: number;

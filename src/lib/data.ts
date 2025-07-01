@@ -677,7 +677,21 @@ export const getLaporanPenjualanSales = async (): Promise<
   try {
     const response = await laporanPenjualanSalesAPI.getAll();
     if (response.success && response.data) {
-      return response.data;
+      // Mapping snake_case ke camelCase
+      const mappedData = response.data.map((laporan: any) => ({
+        id: laporan.id,
+        tanggalLaporan: laporan.tanggal_laporan || laporan.tanggalLaporan,
+        salesperson: laporan.salesperson,
+        targetPenjualan: laporan.target_penjualan ?? laporan.targetPenjualan,
+        realisasiPenjualan:
+          laporan.realisasi_penjualan ?? laporan.realisasiPenjualan,
+        returPenjualan: laporan.retur_penjualan ?? laporan.returPenjualan,
+        keteranganKendala:
+          laporan.keterangan_kendala ?? laporan.keteranganKendala,
+        createdBy: laporan.created_by ?? laporan.createdBy,
+        createdAt: laporan.created_at ?? laporan.createdAt,
+      }));
+      return mappedData;
     }
     return [];
   } catch (error) {

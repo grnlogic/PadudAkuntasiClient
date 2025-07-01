@@ -107,7 +107,6 @@ interface JournalRow {
   transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR"; // For Keuangan with 3 options
   targetAmount?: string; // For Pemasaran
   realisasiAmount?: string; // For Pemasaran
-  hppAmount?: string; // For Produksi (paired with production)
   pemakaianAmount?: string; // For Gudang
   stokAkhir?: string; // For Gudang
   // ✅ NEW: HRD fields - Updated
@@ -184,7 +183,6 @@ export default function JournalPage() {
       transactionType: undefined,
       targetAmount: "",
       realisasiAmount: "",
-      hppAmount: "",
       pemakaianAmount: "",
       stokAkhir: "",
       saldoAkhir: "",
@@ -551,7 +549,6 @@ export default function JournalPage() {
       transactionType: undefined,
       targetAmount: "",
       realisasiAmount: "",
-      hppAmount: "",
       pemakaianAmount: "",
       stokAkhir: "",
       saldoAkhir: "",
@@ -689,8 +686,7 @@ export default function JournalPage() {
           row.stokAwal ||
           row.pemakaian ||
           row.stokAkhir ||
-          row.kondisiGudang ||
-          row.hppAmount
+          row.kondisiGudang
         ) {
           return true;
         }
@@ -1059,9 +1055,6 @@ export default function JournalPage() {
               ...(row.realisasiAmount && {
                 realisasiAmount: Number.parseFloat(row.realisasiAmount),
               }),
-              ...(row.hppAmount && {
-                hppAmount: Number.parseFloat(row.hppAmount),
-              }),
               ...(row.pemakaianAmount && {
                 pemakaianAmount: Number.parseFloat(row.pemakaianAmount),
               }),
@@ -1305,7 +1298,6 @@ export default function JournalPage() {
             transactionType: undefined,
             targetAmount: "",
             realisasiAmount: "",
-            hppAmount: "",
             pemakaianAmount: "",
             stokAkhir: "",
             saldoAkhir: "",
@@ -1772,10 +1764,10 @@ export default function JournalPage() {
       case "BLENDING":
         return (
           <div className="col-span-12 mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
-                  📦 Stok Awal
+                  �� Stok Awal
                 </label>
                 <Input
                   type="number"
@@ -1819,33 +1811,16 @@ export default function JournalPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-green-700 mb-1">
-                  HPP (Harga Pokok Produksi)
-                </label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={row.hppAmount}
+                <Label>Kondisi Gudang</Label>
+                <textarea
+                  placeholder="Tuliskan kondisi gudang hari ini..."
+                  value={row.kondisiGudang}
                   onChange={(e) =>
-                    updateRow(row.id, "hppAmount", e.target.value)
+                    updateRow(row.id, "kondisiGudang", e.target.value)
                   }
-                  className="text-right text-sm"
-                  min="0"
-                  step="1000"
+                  className="mt-1 w-full border rounded p-2 min-h-[60px]"
                 />
               </div>
-            </div>
-            {/* Kondisi Gudang */}
-            <div className="mt-4">
-              <Label>Kondisi Gudang</Label>
-              <textarea
-                placeholder="Tuliskan kondisi gudang hari ini..."
-                value={row.kondisiGudang}
-                onChange={(e) =>
-                  updateRow(row.id, "kondisiGudang", e.target.value)
-                }
-                className="mt-1 w-full border rounded p-2 min-h-[60px]"
-              />
             </div>
           </div>
         );
@@ -2209,9 +2184,9 @@ export default function JournalPage() {
                   <SelectValue placeholder="Pilih kategori piutang" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="KARYAWAN">Karyawan</SelectItem>
-                  <SelectItem value="TOKO">Toko</SelectItem>
-                  <SelectItem value="BAHAN_BAKU">Bahan Baku</SelectItem>
+                  <SelectItem value="KARYAWAN">👤 Karyawan</SelectItem>
+                  <SelectItem value="TOKO">🏪 Toko</SelectItem>
+                  <SelectItem value="BAHAN_BAKU">📦 Bahan Baku</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2268,9 +2243,9 @@ export default function JournalPage() {
             <div>
               <Label>Tipe Utang</Label>
               <Select
-                value={journalRows[0].utangType || ""}
+                value={journalRows[0].transactionType || ""}
                 onValueChange={(value) =>
-                  updateRow(journalRows[0].id, "utangType", value)
+                  updateRow(journalRows[0].id, "transactionType", value)
                 }
               >
                 <SelectTrigger className="mt-1">
@@ -2294,9 +2269,9 @@ export default function JournalPage() {
                   <SelectValue placeholder="Pilih kategori utang" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="BAHAN_BAKU">Bahan Baku</SelectItem>
-                  <SelectItem value="BANK_HM">Bank HM</SelectItem>
-                  <SelectItem value="BANK_HENRY">Bank Henry</SelectItem>
+                  <SelectItem value="BAHAN_BAKU">📦 Bahan Baku</SelectItem>
+                  <SelectItem value="BANK_HM">🏦 Bank HM</SelectItem>
+                  <SelectItem value="BANK_HENRY">🏦 Bank Henry</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2494,7 +2469,7 @@ export default function JournalPage() {
                 <TableHead>Hasil Produksi</TableHead>
                 <TableHead>Barang Gagal</TableHead>
                 <TableHead>Stock Barang Jadi</TableHead>
-                <TableHead>HPP</TableHead>
+                <TableHead>HP Barang Jadi</TableHead>
                 <TableHead>Kendala</TableHead>
               </TableRow>
             </TableHeader>
@@ -2532,7 +2507,6 @@ export default function JournalPage() {
                 <TableHead>Stok Awal</TableHead>
                 <TableHead>Pemakaian</TableHead>
                 <TableHead>Stok Akhir</TableHead>
-                <TableHead>HPP</TableHead>
                 <TableHead>Kondisi Gudang</TableHead>
               </TableRow>
             </TableHeader>
@@ -2552,7 +2526,6 @@ export default function JournalPage() {
                   <TableCell>{laporan.stokAwal ?? "-"}</TableCell>
                   <TableCell>{laporan.pemakaian ?? "-"}</TableCell>
                   <TableCell>{laporan.stokAkhir ?? "-"}</TableCell>
-                  <TableCell>{laporan.hppAmount ?? "-"}</TableCell>
                   <TableCell>{laporan.kondisiGudang || "-"}</TableCell>
                 </TableRow>
               ))}
