@@ -90,6 +90,7 @@ import type {
   CreateLaporanGudangRequest,
 } from "@/lib/api";
 import { getSalespeople, createSalesperson, type Salesperson } from "@/lib/api";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface JournalRow {
   id: string;
@@ -1023,9 +1024,15 @@ export default function JournalPage() {
             } else {
               switch (divisionType) {
                 case "PEMASARAN":
-                  nilai = Number.parseFloat(
-                    row.realisasiAmount || row.targetAmount || "0"
-                  );
+                  // Jika ini sales entry, ambil dari realisasi/target
+                  if (row.salesUserId) {
+                    nilai = Number.parseFloat(
+                      row.realisasiAmount || row.targetAmount || "0"
+                    );
+                  } else {
+                    // Jika ini jurnal akuntansi biasa, ambil dari nominal
+                    nilai = Number.parseFloat(row.nominal || "0");
+                  }
                   break;
                 case "KEUANGAN":
                   nilai = Number.parseFloat(row.nominal || "0");
@@ -3358,7 +3365,50 @@ export default function JournalPage() {
                     })()}
                   </CardContent>
                 </Card>
-                {/* TABEL SALES DIHILANGKAN */}
+                {/* TABEL SALES */}
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Waktu</TableHead>
+                      <TableHead>Salesperson</TableHead>
+                      <TableHead>Target</TableHead>
+                      <TableHead>Realisasi</TableHead>
+                      <TableHead>Retur</TableHead>
+                      <TableHead>Kendala</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {laporanPenjualanSales.map((laporan) => (
+                      <TableRow key={laporan.id}>
+                        <TableCell>
+                          {laporan.createdAt
+                            ? new Date(laporan.createdAt).toLocaleTimeString(
+                                "id-ID",
+                                { hour: "2-digit", minute: "2-digit" }
+                              )
+                            : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {laporan.salesperson?.username || "-"}
+                        </TableCell>
+                        <TableCell>
+                          {laporan.targetAmount?.toLocaleString("id-ID") || "-"}
+                        </TableCell>
+                        <TableCell>
+                          {laporan.realisasiAmount?.toLocaleString("id-ID") ||
+                            "-"}
+                        </TableCell>
+                        <TableCell>
+                          {laporan.returPenjualan?.toLocaleString("id-ID") ||
+                            "-"}
+                        </TableCell>
+                        <TableCell>
+                          {laporan.keteranganKendala || "-"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </>
             )}
 
@@ -3485,6 +3535,7 @@ export default function JournalPage() {
                   </CardContent>
                 </Card>
                 {/* TABEL JURNAL DIHILANGKAN */}
+                {renderJournalTable()}
               </>
             )}
           </>
@@ -3991,7 +4042,8 @@ export default function JournalPage() {
           </Card>
         )}
 
-        {renderJournalTable()}
+        {/* Only render journal table if NOT in PEMASARAN division, or if in PEMASARAN but not in tab view */}
+        {divisionType !== "PEMASARAN" && renderJournalTable()}
         {renderSummaryCard()}
       </div>
       {error && (
