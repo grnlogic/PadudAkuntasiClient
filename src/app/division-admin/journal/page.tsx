@@ -355,10 +355,7 @@ export default function JournalPage() {
         let filteredLaporanSales = [];
         if (divisionType === "PEMASARAN") {
           filteredLaporanSales = laporanData.filter((laporan) => {
-            const laporanDate =
-              laporan.tanggal_laporan ||
-              laporan.tanggalLaporan ||
-              laporan.created_at;
+            const laporanDate = laporan.tanggalLaporan || laporan.createdAt;
             if (!laporanDate) return false;
             const dateStr = laporanDate.toString();
             return (
@@ -376,7 +373,7 @@ export default function JournalPage() {
               total: laporanData.length,
               filtered: filteredLaporanSales.length,
               sampelDate:
-                laporanData[0]?.tanggal_laporan || laporanData[0]?.created_at,
+                laporanData[0]?.tanggalLaporan || laporanData[0]?.createdAt,
             }
           );
         }
@@ -692,9 +689,9 @@ export default function JournalPage() {
         }
       }
 
-      // ✅ NEW: Validasi khusus BLENDING
+      // ✅ NEW: Validasi khusus BLENDING - FLEKSIBEL
       if (divisionType === "BLENDING") {
-        // Minimal salah satu field gudang terisi
+        // Minimal salah satu field gudang terisi (stok awal, pemakaian, stok akhir, atau kondisi)
         if (
           row.stokAwal ||
           row.pemakaian ||
@@ -813,7 +810,21 @@ export default function JournalPage() {
               ].includes(row.transactionType)
             ))) &&
         (divisionType !== "PEMASARAN" || !row.salesUserId) &&
-        (divisionType !== "HRD" || !row.attendanceStatus) // ✅ ADD: Exclude HRD entries
+        (divisionType !== "HRD" || !row.attendanceStatus) && // ✅ ADD: Exclude HRD entries
+        (divisionType !== "BLENDING" ||
+          !(
+            row.stokAwal ||
+            row.pemakaian ||
+            row.stokAkhir ||
+            row.kondisiGudang
+          )) && // ✅ ADD: Exclude BLENDING gudang entries
+        (divisionType !== "PRODUKSI" ||
+          !(
+            row.hasilProduksi ||
+            row.barangGagal ||
+            row.stockBarangJadi ||
+            row.hpBarangJadi
+          )) // ✅ ADD: Exclude PRODUKSI entries
     );
 
     // Tambahkan ini:
@@ -1185,7 +1196,11 @@ export default function JournalPage() {
           const gudangData: CreateLaporanGudangRequest = {
             tanggalLaporan: selectedDate,
             accountId: Number(row.accountId),
-            stokAwal: row.stokAwal ? Number(row.stokAwal) : undefined,
+            // ✅ CRITICAL: Kirim null hanya jika benar-benar kosong, kirim 0 jika user input 0
+            stokAwal:
+              row.stokAwal === "" || row.stokAwal === undefined
+                ? null // Kosong = auto-calculate
+                : Number(row.stokAwal), // Ada input = gunakan input user (bisa 0)
             pemakaian: row.pemakaian ? Number(row.pemakaian) : undefined,
             stokAkhir: row.stokAkhir ? Number(row.stokAkhir) : undefined,
             kondisiGudang: row.kondisiGudang || undefined,
@@ -1518,12 +1533,29 @@ export default function JournalPage() {
             salespeople,
           };
 
-          // Tambahkan sebelum downloadEnhancedPDF(reportData)
-          console.log("=== DEBUG PDF PRODUKSI ===");
-          console.log("entries", existingEntries);
-          console.log("laporanProduksi", laporanProduksi);
-          console.log("accounts", accounts);
-          console.log("reportData", reportData);
+          // ✅ DEBUG: Enhanced logging untuk troubleshooting account mapping
+          console.log("=== DEBUG PDF GENERATION ===");
+          console.log("divisionType:", divisionType);
+          console.log("selectedDate:", selectedDate);
+          console.log("accounts:", accounts);
+          console.log("existingEntries:", existingEntries);
+          
+          if (divisionType === "BLENDING") {
+            console.log("=== DEBUG BLENDING SPECIFIC ===");
+            console.log("laporanGudang:", laporanGudang);
+            console.log("laporanGudang accounts:", laporanGudang.map(lg => ({
+              id: lg.id,
+              account: lg.account,
+              accountId: lg.account?.id
+            })));
+          }
+          
+          if (divisionType === "PRODUKSI") {
+            console.log("=== DEBUG PRODUKSI SPECIFIC ===");
+            console.log("laporanProduksi:", laporanProduksi);
+          }
+          
+          console.log("reportData:", reportData);
 
           downloadEnhancedPDF(reportData);
           toastSuccess.custom("Jendela print PDF telah dibuka");
@@ -1804,10 +1836,17 @@ export default function JournalPage() {
       case "BLENDING":
         return (
           <div className="col-span-12 mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+            <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
+              <p className="text-sm text-blue-800">
+                💡 <strong>Tips:</strong> Kosongkan stok awal untuk
+                auto-calculate dari hari sebelumnya, atau isi dengan 0 untuk
+                mulai dari nol.
+              </p>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
-                  �� Stok Awal
+                  📦 Stok Awal (Opsional)
                 </label>
                 <Input
                   type="number"
@@ -1819,6 +1858,9 @@ export default function JournalPage() {
                   className="text-right text-sm"
                   min="0"
                 />
+                <div className="text-xs text-gray-500 mt-1">
+                  Kosongkan jika ingin dihitung otomatis
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
@@ -2354,8 +2396,8 @@ export default function JournalPage() {
     let totalRetur = 0;
 
     laporanPenjualanSales.forEach((laporan) => {
-      totalTarget += laporan.targetAmount || 0;
-      totalRealisasi += laporan.realisasiAmount || 0;
+      totalTarget += laporan.targetPenjualan || 0;
+      totalRealisasi += laporan.realisasiPenjualan || 0;
       totalRetur += laporan.returPenjualan || 0;
     });
 
@@ -3392,11 +3434,13 @@ export default function JournalPage() {
                           {laporan.salesperson?.username || "-"}
                         </TableCell>
                         <TableCell>
-                          {laporan.targetAmount?.toLocaleString("id-ID") || "-"}
+                          {laporan.targetPenjualan?.toLocaleString("id-ID") ||
+                            "-"}
                         </TableCell>
                         <TableCell>
-                          {laporan.realisasiAmount?.toLocaleString("id-ID") ||
-                            "-"}
+                          {laporan.realisasiPenjualan?.toLocaleString(
+                            "id-ID"
+                          ) || "-"}
                         </TableCell>
                         <TableCell>
                           {laporan.returPenjualan?.toLocaleString("id-ID") ||

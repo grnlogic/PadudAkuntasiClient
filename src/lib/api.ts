@@ -259,7 +259,6 @@ export interface CreateLaporanPenjualanSalesRequest {
 }
 
 export interface LaporanPenjualanSales {
-  [x: string]: number;
   id: number;
   tanggalLaporan: string;
   salesperson: {
@@ -593,7 +592,7 @@ export const laporanProduksiAPI = {
 export interface CreateLaporanGudangRequest {
   tanggalLaporan: string; // format: 'YYYY-MM-DD'
   accountId: number;
-  stokAwal?: number;
+  stokAwal?: number; // ✅ OPTIONAL - bisa kosong
   pemakaian?: number;
   stokAkhir?: number;
   kondisiGudang?: string;

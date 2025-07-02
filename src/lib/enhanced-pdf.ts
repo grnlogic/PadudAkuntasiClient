@@ -30,7 +30,8 @@ function transformBackendData(entry: any): any {
     pemakaianAmount: entry.pemakaian_amount || entry.pemakaianAmount,
     stokAkhir: entry.stok_akhir || entry.stokAkhir,
     stokAwal: entry.stok_awal || entry.stokAwal,
-    pemakaian: entry.pemakaian || entry.pemakaian,
+    pemakaian:
+      entry.pemakaian || entry.pemakaian_amount || entry.pemakaianAmount,
     hasilProduksi: entry.hasil_produksi || entry.hasilProduksi,
     barangGagal: entry.barang_gagal || entry.barangGagal,
     stockBarangJadi: entry.stock_barang_jadi || entry.stockBarangJadi,
@@ -103,7 +104,7 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
           accountId:
             sales.account_id?.toString() || sales.accountId?.toString(),
           description: `Laporan Sales - ${
-            sales.sales_user_id || sales.salesUserId || "Unknown"
+            sales.salesperson?.username || sales.salesperson?.nama || "Unknown"
           }`,
           nilai: Number(transformed.realisasiAmount) || 0,
           targetAmount: Number(transformed.targetAmount) || 0,
@@ -144,23 +145,24 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
     return [];
   }
 
-  // GUDANG/BLENDING/DISTRIBUSI: entries + laporanGudang
+  // GUDANG/BLENDING/DISTRIBUSI: HANYA laporanGudang (tidak gabung dengan entries)
   if (
     divisionName.includes("GUDANG") ||
     divisionName.includes("BLENDING") ||
     divisionName.includes("DISTRIBUSI")
   ) {
-    transformedEntries = filterEntriHarian(data.entries).map(
-      transformBackendData
-    );
+    // ✅ FIXED: Hanya gunakan laporanGudang, jangan gabung dengan entries untuk mencegah duplikasi
     if (data.laporanGudang) {
       const gudangEntries = data.laporanGudang.map((gudang: any) => {
         const transformed = transformBackendData(gudang);
         return {
           ...transformed,
           id: `gudang-${gudang.id}`,
+          // ✅ FIXED: Perbaiki mapping accountId untuk laporanGudang
           accountId:
-            gudang.account_id?.toString() || gudang.accountId?.toString(),
+            gudang.account?.id?.toString() || 
+            gudang.account_id?.toString() || 
+            gudang.accountId?.toString(),
           description: `Laporan Gudang - Stok: ${transformed.stokAkhir || 0}`,
           nilai: Number(transformed.pemakaianAmount) || 0,
           pemakaianAmount: Number(transformed.pemakaianAmount) || 0,
@@ -168,11 +170,15 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
           stokAwal: Number(transformed.stokAwal) || 0,
           pemakaian: Number(transformed.pemakaian) || 0,
           kondisiGudang: transformed.kondisiGudang || "",
+          // ✅ ADD: Include account object for easier lookup
+          account: gudang.account,
         };
       });
-      transformedEntries.push(...gudangEntries);
+      console.log("[PDF BLENDING] gudangEntries only:", gudangEntries);
+      return gudangEntries;
     }
-    return transformedEntries;
+    // Fallback ke entries jika tidak ada laporanGudang
+    return filterEntriHarian(data.entries).map(transformBackendData);
   }
 
   // HRD: entries HRD saja
@@ -666,11 +672,23 @@ function generateSummarySection(data: PDFReportData): string {
     `;
   }
 
-  // GUDANG Summary
-  if (divisionName.includes("GUDANG")) {
+  // GUDANG/BLENDING Summary
+  if (divisionName.includes("GUDANG") || divisionName.includes("BLENDING")) {
+    // ✅ FIXED: Use same fallback logic as detail table
+    const totalStokAwal = allEntries.reduce((sum, entry) => {
+      const stokAwal = entry.stokAwal || 0;
+      return sum + Number(stokAwal);
+    }, 0);
+
     const totalPemakaian = allEntries.reduce((sum, entry) => {
-      const pemakaian = entry.pemakaianAmount || 0;
+      // ✅ FIXED: Use same fallback as detail table
+      const pemakaian = entry.pemakaianAmount || entry.pemakaian || 0;
       return sum + Number(pemakaian);
+    }, 0);
+
+    const totalStokAkhir = allEntries.reduce((sum, entry) => {
+      const stokAkhir = entry.stokAkhir || 0;
+      return sum + Number(stokAkhir);
     }, 0);
 
     const validEntries = allEntries.filter((entry) => entry.stokAkhir != null);
@@ -699,8 +717,20 @@ function generateSummarySection(data: PDFReportData): string {
           </thead>
           <tbody>
             <tr>
+              <td>Total Stok Awal</td>
+              <td style="text-align: right;">${totalStokAwal.toLocaleString(
+                "id-ID"
+              )} unit</td>
+            </tr>
+            <tr>
               <td>Total Pemakaian</td>
               <td style="text-align: right;">${totalPemakaian.toLocaleString(
+                "id-ID"
+              )} unit</td>
+            </tr>
+            <tr>
+              <td>Total Stok Akhir</td>
+              <td style="text-align: right;">${totalStokAkhir.toLocaleString(
                 "id-ID"
               )} unit</td>
             </tr>
@@ -801,7 +831,10 @@ function generateDetailsSection(data: PDFReportData): string {
   } else if (divisionName.includes("PRODUKSI")) {
     headerColumns =
       "<th>Hasil Produksi</th><th>Barang Gagal</th><th>Stock Barang Jadi</th><th>HPP</th><th>HP/Unit</th><th>Kendala</th>";
-  } else if (divisionName.includes("GUDANG")) {
+  } else if (
+    divisionName.includes("GUDANG") ||
+    divisionName.includes("BLENDING")
+  ) {
     headerColumns =
       "<th>Stok Awal</th><th>Pemakaian</th><th>Stok Akhir</th><th>Kondisi Gudang</th>";
   } else if (divisionName.includes("HRD")) {
@@ -813,7 +846,30 @@ function generateDetailsSection(data: PDFReportData): string {
 
   const rows = allEntries
     .map((entry, index) => {
-      const account = data.accounts.find((acc) => acc.id === entry.accountId);
+      // ✅ FIXED: Improved account lookup dengan multiple fallbacks
+      let account = data.accounts.find((acc) => acc.id === entry.accountId);
+      
+      // Fallback: coba dengan string/number conversion
+      if (!account) {
+        account = data.accounts.find((acc) => acc.id?.toString() === entry.accountId?.toString());
+      }
+      
+      // Fallback: gunakan account dari entry jika ada (untuk laporanGudang)
+      if (!account && entry.account) {
+        account = entry.account;
+      }
+      
+      // Debug log untuk troubleshooting
+      if (!account) {
+        console.warn(`[PDF] Account not found for entry:`, {
+          entryId: entry.id,
+          entryAccountId: entry.accountId,
+          entryAccountIdType: typeof entry.accountId,
+          availableAccountIds: data.accounts.map(acc => ({ id: acc.id, type: typeof acc.id })),
+          entry: entry
+        });
+      }
+      
       let dataCells = "";
       if (divisionName.includes("KEUANGAN")) {
         const transactionType = entry.transactionType || "-";
@@ -834,7 +890,8 @@ function generateDetailsSection(data: PDFReportData): string {
         const achievement =
           target > 0 ? ((realisasi / target) * 100).toFixed(1) + "%" : "-";
         const kendala = entry.keteranganKendala || "-";
-        const sales = entry.salesUserId || entry.salesperson?.username || "-";
+        const sales =
+          entry.salesperson?.username || entry.salesperson?.nama || "-";
         dataCells = `
         <td style="text-align: right;">${formatCurrency(target)}</td>
         <td style="text-align: right;">${formatCurrency(realisasi)}</td>
@@ -861,7 +918,10 @@ function generateDetailsSection(data: PDFReportData): string {
         )}</td>
         <td style="text-align: left;">${kendala}</td>
       `;
-      } else if (divisionName.includes("GUDANG")) {
+      } else if (
+        divisionName.includes("GUDANG") ||
+        divisionName.includes("BLENDING")
+      ) {
         const stokAwal = entry.stokAwal || 0;
         const pemakaian = entry.pemakaianAmount || entry.pemakaian || 0;
         const stokAkhir = entry.stokAkhir || 0;
