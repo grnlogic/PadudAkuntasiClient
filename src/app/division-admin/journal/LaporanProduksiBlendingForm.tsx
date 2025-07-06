@@ -1019,7 +1019,81 @@ export default function LaporanProduksiBlendingForm({
 
         <Separator />
 
-
+        {/* ✅ NEW: Summary Card Section - Only for Produksi */}
+        {activeTab === "produksi" && (
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle>Ringkasan Laporan Produksi</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="bg-muted rounded-lg p-4 flex flex-col items-center shadow-sm">
+                  <span className="text-xs text-muted-foreground mb-1">
+                    Total Entri
+                  </span>
+                  <span className="text-xl font-bold">
+                    {laporanProduksiData.length}
+                  </span>
+                </div>
+                <div className="bg-muted rounded-lg p-4 flex flex-col items-center shadow-sm">
+                  <span className="text-xs text-muted-foreground mb-1">
+                    Total Hasil Produksi
+                  </span>
+                  <span className="text-xl font-bold">
+                    {laporanProduksiData.reduce(
+                      (acc, item) =>
+                        acc +
+                        (Number(item.hasilProduksi ?? item.hasil_produksi) ||
+                          0),
+                      0
+                    )}
+                  </span>
+                </div>
+                <div className="bg-muted rounded-lg p-4 flex flex-col items-center shadow-sm">
+                  <span className="text-xs text-muted-foreground mb-1">
+                    Total Barang Gagal
+                  </span>
+                  <span className="text-xl font-bold">
+                    {laporanProduksiData.reduce(
+                      (acc, item) =>
+                        acc +
+                        (Number(item.barangGagal ?? item.barang_gagal) || 0),
+                      0
+                    )}
+                  </span>
+                </div>
+                <div className="bg-muted rounded-lg p-4 flex flex-col items-center shadow-sm">
+                  <span className="text-xs text-muted-foreground mb-1">
+                    Total Stock Barang Jadi
+                  </span>
+                  <span className="text-xl font-bold">
+                    {laporanProduksiData.reduce(
+                      (acc, item) =>
+                        acc +
+                        (Number(
+                          item.stockBarangJadi ?? item.stock_barang_jadi
+                        ) || 0),
+                      0
+                    )}
+                  </span>
+                </div>
+                <div className="bg-muted rounded-lg p-4 flex flex-col items-center shadow-sm">
+                  <span className="text-xs text-muted-foreground mb-1">
+                    Total HP Barang Jadi
+                  </span>
+                  <span className="text-xl font-bold">
+                    {laporanProduksiData.reduce(
+                      (acc, item) =>
+                        acc +
+                        (Number(item.hpBarangJadi ?? item.hp_barang_jadi) || 0),
+                      0
+                    )}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ✅ PDF Export Buttons - Moved to top */}
         <div className="flex justify-end gap-2 mb-4">
