@@ -69,6 +69,7 @@ import {
   saveLaporanGudang, // ✅ ADD: Import laporan gudang
   deleteLaporanGudang, // ✅ ADD: Import laporan gudang
   getUsers, // ✅ ADD: Import getUsers function
+  getLaporanPenjualanProduk, // ✅ ADD: Import laporan penjualan produk
   type Account,
   type EntriHarian,
 } from "@/lib/data";
@@ -91,6 +92,18 @@ import type {
 } from "@/lib/api";
 import { getSalespeople, createSalesperson, type Salesperson } from "@/lib/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import dynamic from "next/dynamic";
+import { getPerusahaan } from "@/lib/data";
+
+const LaporanPenjualanWizard = dynamic(
+  () => import("./LaporanPenjualanWizard"),
+  { ssr: false }
+);
+
+const LaporanProduksiBlendingForm = dynamic(
+  () => import("./LaporanProduksiBlendingForm"),
+  { ssr: false }
+);
 
 interface JournalRow {
   id: string;
@@ -129,10 +142,10 @@ interface JournalRow {
   barangGagal?: string;
   stockBarangJadi?: string;
   hpBarangJadi?: string;
-  // ✅ NEW: Gudang fields for BLENDING
-  stokAwal?: string;
+  // ✅ NEW: Gudang fields for PERSEDIAAN_BAHAN_BAKU
+  barangMasuk?: string;
   pemakaian?: string;
-  kondisiGudang?: string;
+  keteranganGudang?: string;
 }
 
 // Tambahkan tipe untuk salesRows
@@ -202,9 +215,9 @@ export default function JournalPage() {
       stockBarangJadi: "",
       hpBarangJadi: "",
       // ✅ NEW: Initialize gudang fields
-      stokAwal: "",
+      barangMasuk: "",
       pemakaian: "",
-      kondisiGudang: "",
+      keteranganGudang: "",
     },
   ]);
 
@@ -231,9 +244,15 @@ export default function JournalPage() {
   // ✅ NEW: State untuk laporan gudang
   const [laporanGudang, setLaporanGudang] = useState<LaporanGudangHarian[]>([]);
 
+  // ✅ NEW: State untuk laporan penjualan produk
+  const [laporanPenjualanProduk, setLaporanPenjualanProduk] = useState<any[]>(
+    []
+  );
+
+  // Ganti state tab pemasaran
   const [selectedPemasaranTab, setSelectedPemasaranTab] = useState<
-    "SALES" | "JURNAL"
-  >("SALES");
+    "LAPORAN_PRODUK" | "JURNAL"
+  >("LAPORAN_PRODUK");
   const [salesRows, setSalesRows] = useState<SalesRowType[]>([
     {
       id: "1",
@@ -245,8 +264,13 @@ export default function JournalPage() {
     },
   ]);
 
+  const [perusahaanList, setPerusahaanList] = useState<any[]>([]);
+  const [selectedPerusahaanForNewSales, setSelectedPerusahaanForNewSales] =
+    useState<string>("");
+
   useEffect(() => {
     loadData();
+    getPerusahaan().then(setPerusahaanList);
   }, [selectedDate]);
 
   // ✅ NEW: Fungsi untuk menghitung summary keuangan
@@ -309,7 +333,7 @@ export default function JournalPage() {
 
         // ✅ FIXED: Ambil semua data dulu, filter di frontend
         const laporanGudangPromise =
-          divisionType === "BLENDING"
+          divisionType === "PERSEDIAAN_BAHAN_BAKU"
             ? getLaporanGudang()
             : Promise.resolve([]);
         const laporanProduksiPromise =
@@ -319,6 +343,10 @@ export default function JournalPage() {
         const laporanPromise =
           divisionType === "PEMASARAN"
             ? getLaporanPenjualanSales()
+            : Promise.resolve([]);
+        const laporanProdukPromise =
+          divisionType === "PEMASARAN"
+            ? getLaporanPenjualanProduk()
             : Promise.resolve([]);
         const usersPromise =
           divisionType === "PEMASARAN" ? getUsers() : Promise.resolve([]);
@@ -333,6 +361,7 @@ export default function JournalPage() {
           laporanGudangData,
           laporanProduksiData,
           laporanData,
+          laporanProdukData,
           usersData,
           salespeopleData,
         ] = await Promise.all([
@@ -343,6 +372,7 @@ export default function JournalPage() {
           laporanGudangPromise,
           laporanProduksiPromise,
           laporanPromise,
+          laporanProdukPromise,
           usersPromise,
           salespeoplePromise,
         ]);
@@ -351,18 +381,24 @@ export default function JournalPage() {
         setUsers(usersData);
         setSalespeople(salespeopleData);
 
-        // ✅ FIXED: Filter dengan multiple format tanggal
-        let filteredLaporanSales = [];
+        // ✅ FIXED: Filter dengan multiple format tanggal yang lebih robust
+        let filteredLaporanSales: any[] = [];
+        let filteredLaporanProduk: any[] = [];
+
         if (divisionType === "PEMASARAN") {
           filteredLaporanSales = laporanData.filter((laporan) => {
             const laporanDate = laporan.tanggalLaporan || laporan.createdAt;
             if (!laporanDate) return false;
-            const dateStr = laporanDate.toString();
-            return (
-              dateStr.startsWith(selectedDate) ||
-              dateStr.includes(selectedDate) ||
-              dateStr.split("T")[0] === selectedDate
-            );
+
+            // Normalisasi tanggal ke format YYYY-MM-DD
+            const normalizedDate = new Date(laporanDate)
+              .toISOString()
+              .split("T")[0];
+            const normalizedSelectedDate = new Date(selectedDate)
+              .toISOString()
+              .split("T")[0];
+
+            return normalizedDate === normalizedSelectedDate;
           });
           setLaporanPenjualanSales(filteredLaporanSales);
           console.log(
@@ -374,6 +410,35 @@ export default function JournalPage() {
               filtered: filteredLaporanSales.length,
               sampelDate:
                 laporanData[0]?.tanggalLaporan || laporanData[0]?.createdAt,
+            }
+          );
+
+          // ✅ NEW: Filter laporan penjualan produk dengan normalisasi tanggal
+          filteredLaporanProduk = laporanProdukData.filter((laporan: any) => {
+            const laporanDate =
+              laporan.tanggalLaporan ||
+              laporan.tanggal_laporan ||
+              laporan.createdAt;
+            if (!laporanDate) return false;
+
+            // Normalisasi tanggal ke format YYYY-MM-DD
+            const normalizedDate = new Date(laporanDate)
+              .toISOString()
+              .split("T")[0];
+            const normalizedSelectedDate = new Date(selectedDate)
+              .toISOString()
+              .split("T")[0];
+
+            return normalizedDate === normalizedSelectedDate;
+          });
+          setLaporanPenjualanProduk(filteredLaporanProduk);
+          console.log(
+            "✅ FILTERED laporan produk untuk tanggal",
+            selectedDate,
+            ":",
+            {
+              total: laporanProdukData.length,
+              filtered: filteredLaporanProduk.length,
             }
           );
         }
@@ -409,7 +474,7 @@ export default function JournalPage() {
         }
 
         // ✅ FIXED: Filter laporan gudang dengan format fleksibel
-        if (divisionType === "BLENDING") {
+        if (divisionType === "PERSEDIAAN_BAHAN_BAKU") {
           const filteredLaporanGudang = laporanGudangData.filter(
             (laporan: any) => {
               const laporanDate =
@@ -459,7 +524,10 @@ export default function JournalPage() {
           })
           .map((p: any) => ({
             id: `piutang-${p.id}`,
-            accountId: p.account_id?.toString() || p.accountId?.toString(),
+            accountId:
+              p.account?.id?.toString() ||
+              p.account_id?.toString() ||
+              p.accountId?.toString(),
             createdAt:
               p.tanggal_transaksi || p.tanggalTransaksi || p.created_at,
             nilai: Number(p.nominal) || 0,
@@ -532,6 +600,19 @@ export default function JournalPage() {
             divisionType === "PEMASARAN" ? filteredLaporanSales.length : 0,
         });
 
+        // ✅ DEBUG: Log data untuk troubleshooting PDF
+        if (divisionType === "PEMASARAN") {
+          console.log("🔍 DEBUG PDF DATA - PEMASARAN:", {
+            selectedDate,
+            laporanPenjualanSales: filteredLaporanSales,
+            laporanPenjualanProduk: filteredLaporanProduk,
+            totalSalesReports: filteredLaporanSales.length,
+            totalProductReports: filteredLaporanProduk.length,
+            sampleSalesData: filteredLaporanSales[0],
+            sampleProductData: filteredLaporanProduk[0],
+          });
+        }
+
         // ✅ Only show success for manual refresh
         if (loading) {
           toastSuccess.custom("Data berhasil dimuat ulang");
@@ -576,16 +657,20 @@ export default function JournalPage() {
       stockBarangJadi: "",
       hpBarangJadi: "",
       // ✅ NEW: Initialize gudang fields
-      stokAwal: "",
+      barangMasuk: "",
       pemakaian: "",
-      kondisiGudang: "",
+      keteranganGudang: "",
     };
     setJournalRows([...journalRows, newRow]);
+    // Baris baru ditambahkan
   };
 
   const removeRow = (rowId: string) => {
     if (journalRows.length > 1) {
       setJournalRows(journalRows.filter((row) => row.id !== rowId));
+      // Baris entri dihapus
+    } else {
+      // Minimal harus ada 1 baris entri
     }
   };
 
@@ -689,14 +774,14 @@ export default function JournalPage() {
         }
       }
 
-      // ✅ NEW: Validasi khusus BLENDING - FLEKSIBEL
-      if (divisionType === "BLENDING") {
+      // ✅ NEW: Validasi khusus PERSEDIAAN_BAHAN_BAKU - FLEKSIBEL
+      if (divisionType === "PERSEDIAAN_BAHAN_BAKU") {
         // Minimal salah satu field gudang terisi (stok awal, pemakaian, stok akhir, atau kondisi)
         if (
-          row.stokAwal ||
+          row.barangMasuk ||
           row.pemakaian ||
           row.stokAkhir ||
-          row.kondisiGudang
+          row.keteranganGudang
         ) {
           return true;
         }
@@ -811,13 +896,13 @@ export default function JournalPage() {
             ))) &&
         (divisionType !== "PEMASARAN" || !row.salesUserId) &&
         (divisionType !== "HRD" || !row.attendanceStatus) && // ✅ ADD: Exclude HRD entries
-        (divisionType !== "BLENDING" ||
+        (divisionType !== "PERSEDIAAN_BAHAN_BAKU" ||
           !(
-            row.stokAwal ||
+            row.barangMasuk ||
             row.pemakaian ||
             row.stokAkhir ||
-            row.kondisiGudang
-          )) && // ✅ ADD: Exclude BLENDING gudang entries
+            row.keteranganGudang
+          )) && // ✅ ADD: Exclude PERSEDIAAN_BAHAN_BAKU gudang entries
         (divisionType !== "PRODUKSI" ||
           !(
             row.hasilProduksi ||
@@ -849,11 +934,14 @@ export default function JournalPage() {
           row.hpBarangJadi)
     );
 
-    // ✅ NEW: Separate gudang entries for BLENDING
+    // ✅ NEW: Separate gudang entries for PERSEDIAAN_BAHAN_BAKU
     const gudangEntries = validRows.filter(
       (row) =>
-        divisionType === "BLENDING" &&
-        (row.stokAwal || row.pemakaian || row.stokAkhir || row.kondisiGudang)
+        divisionType === "PERSEDIAAN_BAHAN_BAKU" &&
+        (row.barangMasuk ||
+          row.pemakaian ||
+          row.stokAkhir ||
+          row.keteranganGudang)
     );
 
     console.log("📊 ENTRY SEPARATION:", {
@@ -1048,7 +1136,7 @@ export default function JournalPage() {
                 case "KEUANGAN":
                   nilai = Number.parseFloat(row.nominal || "0");
                   break;
-                case "BLENDING":
+                case "PERSEDIAAN_BAHAN_BAKU":
                   nilai = Number.parseFloat(row.kuantitas || "0");
                   break;
                 case "GUDANG":
@@ -1129,30 +1217,53 @@ export default function JournalPage() {
           pemasaranSalesEntries
         );
 
-        for (const row of pemasaranSalesEntries) {
-          const salesData: CreateLaporanPenjualanSalesRequest = {
-            tanggalLaporan: selectedDate,
-            salespersonId: Number(row.salesUserId),
-            targetPenjualan: row.targetAmount
-              ? Number(row.targetAmount)
-              : undefined,
-            realisasiPenjualan: row.realisasiAmount
-              ? Number(row.realisasiAmount)
-              : undefined,
-            returPenjualan: row.returPenjualan
-              ? Number(row.returPenjualan)
-              : undefined,
-            keteranganKendala: row.keteranganKendala || undefined,
-          };
+        // ✅ NEW: Convert pemasaran entries to regular entri harian format
+        const pemasaranEntriesToSave: CreateEntriHarianRequest[] =
+          pemasaranSalesEntries.map((row) => {
+            const account = getSelectedAccount(row.accountId)!;
 
-          console.log(
-            "📤 Akan mengirim laporan penjualan sales ke backend:",
-            salesData
+            return {
+              accountId: Number(row.accountId),
+              tanggal: selectedDate,
+              nilai: Number.parseFloat(
+                row.realisasiAmount || row.targetAmount || "0"
+              ),
+              description: row.keteranganKendala || "",
+              // ✅ ADD: Pemasaran-specific fields
+              targetAmount: row.targetAmount
+                ? Number.parseFloat(row.targetAmount)
+                : undefined,
+              realisasiAmount: row.realisasiAmount
+                ? Number.parseFloat(row.realisasiAmount)
+                : undefined,
+              // ✅ ADD: Sales user info
+              salesUserId: row.salesUserId
+                ? Number(row.salesUserId)
+                : undefined,
+              returPenjualan: row.returPenjualan
+                ? Number.parseFloat(row.returPenjualan)
+                : undefined,
+              keteranganKendala: row.keteranganKendala || undefined,
+            };
+          });
+
+        console.log(
+          "📤 SENDING PEMASARAN ENTRIES TO /api/v1/entri-harian/batch:",
+          pemasaranEntriesToSave
+        );
+
+        try {
+          const pemasaranResult = await saveEntriHarianBatch(
+            pemasaranEntriesToSave
           );
-          const result = await saveLaporanPenjualanSales(salesData);
-          console.log("✅ Hasil dari backend:", result);
-          savedResults.push(result);
-          console.log("✅ LAPORAN PENJUALAN SALES SAVED SUCCESSFULLY:", result);
+          savedResults.push(...pemasaranResult);
+          console.log(
+            "✅ PEMASARAN ENTRIES SAVED SUCCESSFULLY:",
+            pemasaranResult
+          );
+        } catch (pemasaranError) {
+          console.error("❌ PEMASARAN ENTRIES SAVE ERROR:", pemasaranError);
+          throw pemasaranError; // Re-throw to be caught by main catch block
         }
       }
 
@@ -1189,21 +1300,24 @@ export default function JournalPage() {
       }
 
       // ✅ NEW: Handle gudang entries separately
-      if (gudangEntries.length > 0 && divisionType === "BLENDING") {
+      if (
+        gudangEntries.length > 0 &&
+        divisionType === "PERSEDIAAN_BAHAN_BAKU"
+      ) {
         console.log("📦 PROCESSING GUDANG ENTRIES:", gudangEntries);
 
         for (const row of gudangEntries) {
           const gudangData: CreateLaporanGudangRequest = {
             tanggalLaporan: selectedDate,
             accountId: Number(row.accountId),
-            // ✅ CRITICAL: Kirim null hanya jika benar-benar kosong, kirim 0 jika user input 0
+            // ✅ CRITICAL: Kirim undefined hanya jika benar-benar kosong, kirim 0 jika user input 0
             stokAwal:
-              row.stokAwal === "" || row.stokAwal === undefined
-                ? null // Kosong = auto-calculate
-                : Number(row.stokAwal), // Ada input = gunakan input user (bisa 0)
+              row.barangMasuk === "" || row.barangMasuk === undefined
+                ? undefined // Kosong = auto-calculate
+                : Number(row.barangMasuk), // Ada input = gunakan input user (bisa 0)
             pemakaian: row.pemakaian ? Number(row.pemakaian) : undefined,
             stokAkhir: row.stokAkhir ? Number(row.stokAkhir) : undefined,
-            kondisiGudang: row.kondisiGudang || undefined,
+            kondisiGudang: row.keteranganGudang || undefined,
           };
 
           console.log(
@@ -1348,9 +1462,9 @@ export default function JournalPage() {
             stockBarangJadi: "",
             hpBarangJadi: "",
             // ✅ NEW: Initialize gudang fields
-            stokAwal: "",
+            barangMasuk: "",
             pemakaian: "",
-            kondisiGudang: "",
+            keteranganGudang: "",
           },
         ]);
 
@@ -1437,9 +1551,14 @@ export default function JournalPage() {
   // ✅ Helper function to get division type
   const getDivisionType = (): string => {
     const divisionName = user?.division?.name?.toLowerCase();
-    if (divisionName?.includes("produksi")) return "PRODUKSI";
+    if (divisionName?.includes("blending"))
+      return "BLENDING_PERSEDIAAN_BAHAN_BAKU";
     if (divisionName?.includes("keuangan")) return "KEUANGAN";
-    if (divisionName?.includes("blending")) return "BLENDING";
+    if (
+      divisionName?.includes("persediaan") ||
+      divisionName?.includes("bahan baku")
+    )
+      return "PERSEDIAAN_BAHAN_BAKU";
     if (
       divisionName?.includes("pemasaran") ||
       divisionName?.includes("marketing")
@@ -1453,6 +1572,16 @@ export default function JournalPage() {
     )
       return "HRD";
     return "GENERAL";
+  };
+
+  // ✅ Helper function to check if division can access production form
+  const canAccessProduksi = (): boolean => {
+    const divisionName = user?.division?.name;
+    return (
+      divisionName === "DIVISI PRODUKSI" ||
+      divisionName === "BLENDING PERSEDIAAN BAHAN BAKU" ||
+      divisionName === "DIVISI BLENDING PERSEDIAAN BAHAN BAKU"
+    );
   };
 
   const divisionType: string = getDivisionType();
@@ -1475,7 +1604,7 @@ export default function JournalPage() {
           hover: "hover:bg-blue-700",
           icon: DollarSign,
         };
-      case "BLENDING":
+      case "PERSEDIAAN_BAHAN_BAKU":
         return {
           bg: "bg-green-600",
           hover: "hover:bg-green-700",
@@ -1524,9 +1653,12 @@ export default function JournalPage() {
             entries: existingEntries,
             accounts: accounts,
             // ✅ FIXED: Include specialized division data
-            ...(divisionType === "PEMASARAN" && { laporanPenjualanSales }),
+            ...(divisionType === "PEMASARAN" && {
+              laporanPenjualanSales,
+              laporanPenjualanProduk,
+            }),
             ...(divisionType === "PRODUKSI" && { laporanProduksi }),
-            ...(divisionType === "BLENDING" && { laporanGudang }),
+            ...(divisionType === "PERSEDIAAN_BAHAN_BAKU" && { laporanGudang }),
             ...(divisionType === "KEUANGAN" && { summary: keuanganSummary }),
             // ✅ ADD: Include users and salespeople for reference
             users,
@@ -1539,22 +1671,25 @@ export default function JournalPage() {
           console.log("selectedDate:", selectedDate);
           console.log("accounts:", accounts);
           console.log("existingEntries:", existingEntries);
-          
-          if (divisionType === "BLENDING") {
-            console.log("=== DEBUG BLENDING SPECIFIC ===");
+
+          if (divisionType === "PERSEDIAAN_BAHAN_BAKU") {
+            console.log("=== DEBUG PERSEDIAAN_BAHAN_BAKU SPECIFIC ===");
             console.log("laporanGudang:", laporanGudang);
-            console.log("laporanGudang accounts:", laporanGudang.map(lg => ({
-              id: lg.id,
-              account: lg.account,
-              accountId: lg.account?.id
-            })));
+            console.log(
+              "laporanGudang accounts:",
+              laporanGudang.map((lg) => ({
+                id: lg.id,
+                account: lg.account,
+                accountId: lg.account?.id,
+              }))
+            );
           }
-          
+
           if (divisionType === "PRODUKSI") {
             console.log("=== DEBUG PRODUKSI SPECIFIC ===");
             console.log("laporanProduksi:", laporanProduksi);
           }
-          
+
           console.log("reportData:", reportData);
 
           downloadEnhancedPDF(reportData);
@@ -1580,9 +1715,12 @@ export default function JournalPage() {
             entries: existingEntries,
             accounts: accounts,
             // ✅ FIXED: Include specialized division data
-            ...(divisionType === "PEMASARAN" && { laporanPenjualanSales }),
+            ...(divisionType === "PEMASARAN" && {
+              laporanPenjualanSales,
+              laporanPenjualanProduk,
+            }),
             ...(divisionType === "PRODUKSI" && { laporanProduksi }),
-            ...(divisionType === "BLENDING" && { laporanGudang }),
+            ...(divisionType === "PERSEDIAAN_BAHAN_BAKU" && { laporanGudang }),
             ...(divisionType === "KEUANGAN" && { summary: keuanganSummary }),
             // ✅ ADD: Include users and salespeople for reference
             users,
@@ -1833,7 +1971,7 @@ export default function JournalPage() {
             </div>
           </div>
         );
-      case "BLENDING":
+      case "PERSEDIAAN_BAHAN_BAKU":
         return (
           <div className="col-span-12 mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
             <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
@@ -1851,9 +1989,9 @@ export default function JournalPage() {
                 <Input
                   type="number"
                   placeholder="0 unit"
-                  value={row.stokAwal}
+                  value={row.barangMasuk}
                   onChange={(e) =>
-                    updateRow(row.id, "stokAwal", e.target.value)
+                    updateRow(row.id, "barangMasuk", e.target.value)
                   }
                   className="text-right text-sm"
                   min="0"
@@ -1896,9 +2034,9 @@ export default function JournalPage() {
                 <Label>Kondisi Gudang</Label>
                 <textarea
                   placeholder="Tuliskan kondisi gudang hari ini..."
-                  value={row.kondisiGudang}
+                  value={row.keteranganGudang}
                   onChange={(e) =>
-                    updateRow(row.id, "kondisiGudang", e.target.value)
+                    updateRow(row.id, "keteranganGudang", e.target.value)
                   }
                   className="mt-1 w-full border rounded p-2 min-h-[60px]"
                 />
@@ -2217,7 +2355,7 @@ export default function JournalPage() {
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label>Akun</Label>
+              <Label>Akun Piutang</Label>
               <Select
                 value={journalRows[0].accountId}
                 onValueChange={(value) =>
@@ -2225,23 +2363,27 @@ export default function JournalPage() {
                 }
               >
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Pilih akun" />
+                  <SelectValue placeholder="Pilih akun piutang" />
                 </SelectTrigger>
                 <SelectContent>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {getAccountDisplay(account.id)}
-                    </SelectItem>
-                  ))}
+                  {accounts
+                    .filter((account) =>
+                      account.accountName.toLowerCase().includes("piutang")
+                    )
+                    .map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {getAccountDisplay(account.id)}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
             <div>
               <Label>Tipe Piutang</Label>
               <Select
-                value={journalRows[0].piutangType || ""}
+                value={journalRows[0].transactionType || ""}
                 onValueChange={(value) =>
-                  updateRow(journalRows[0].id, "piutangType", value)
+                  updateRow(journalRows[0].id, "transactionType", value)
                 }
               >
                 <SelectTrigger className="mt-1">
@@ -2303,7 +2445,7 @@ export default function JournalPage() {
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label>Akun</Label>
+              <Label>Akun Utang</Label>
               <Select
                 value={journalRows[0].accountId}
                 onValueChange={(value) =>
@@ -2311,14 +2453,18 @@ export default function JournalPage() {
                 }
               >
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Pilih akun" />
+                  <SelectValue placeholder="Pilih akun utang" />
                 </SelectTrigger>
                 <SelectContent>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {getAccountDisplay(account.id)}
-                    </SelectItem>
-                  ))}
+                  {accounts
+                    .filter((account) =>
+                      account.accountName.toLowerCase().includes("utang")
+                    )
+                    .map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {getAccountDisplay(account.id)}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -2441,7 +2587,7 @@ export default function JournalPage() {
 
     laporanGudang.forEach((laporan) => {
       // ✅ FIXED: Use proper field names
-      totalStokAwal += laporan.stokAwal || 0;
+      totalStokAwal += laporan.barangMasuk || 0;
       totalPemakaian += laporan.pemakaian || 0;
       totalStokAkhir += laporan.stokAkhir || 0;
     });
@@ -2579,7 +2725,7 @@ export default function JournalPage() {
             </TableBody>
           </Table>
         );
-      case "BLENDING":
+      case "PERSEDIAAN_BAHAN_BAKU":
         return (
           <Table>
             <TableHeader>
@@ -2606,10 +2752,10 @@ export default function JournalPage() {
                   </TableCell>
                   <TableCell>{laporan.account?.accountCode || "-"}</TableCell>
                   <TableCell>{laporan.account?.accountName || "-"}</TableCell>
-                  <TableCell>{laporan.stokAwal ?? "-"}</TableCell>
+                  <TableCell>{laporan.barangMasuk ?? "-"}</TableCell>
                   <TableCell>{laporan.pemakaian ?? "-"}</TableCell>
                   <TableCell>{laporan.stokAkhir ?? "-"}</TableCell>
-                  <TableCell>{laporan.kondisiGudang || "-"}</TableCell>
+                  <TableCell>{laporan.keterangan || "-"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -2762,6 +2908,23 @@ export default function JournalPage() {
     }
   }
 
+  const handleCreateSalesperson = async () => {
+    if (!newSalespersonName.trim() || !selectedPerusahaanForNewSales) return;
+    try {
+      const newSales = await createSalesperson(
+        newSalespersonName.trim(),
+        parseInt(selectedPerusahaanForNewSales),
+        user?.division?.id ? parseInt(user.division.id) : 6
+      );
+      setSalespeople([...salespeople, newSales]);
+      setNewSalespersonName("");
+      setSelectedPerusahaanForNewSales("");
+      toastSuccess.custom("Salesperson berhasil ditambahkan!");
+    } catch (error: any) {
+      toastError.custom("Gagal menambah salesperson: " + error.message);
+    }
+  };
+
   return (
     <ClientErrorBoundary>
       <div className="p-6 space-y-6">
@@ -2783,7 +2946,13 @@ export default function JournalPage() {
               (divisionType === "KEUANGAN" &&
                 (keuanganSummary.totalPenerimaan > 0 ||
                   keuanganSummary.totalPengeluaran > 0 ||
-                  keuanganSummary.totalSaldoAkhir > 0))) && (
+                  keuanganSummary.totalSaldoAkhir > 0)) ||
+              (divisionType === "PEMASARAN" &&
+                laporanPenjualanProduk.length > 0) ||
+              (divisionType === "PRODUKSI" && laporanProduksi.length > 0) ||
+              (divisionType === "PERSEDIAAN_BAHAN_BAKU" &&
+                laporanGudang.length > 0) ||
+              (divisionType === "HRD" && existingEntries.length > 0)) && (
               <div className="flex items-center gap-2">
                 <Button
                   onClick={previewPDFReport}
@@ -2879,322 +3048,549 @@ export default function JournalPage() {
             <>
               {/* FORM INPUT KEUANGAN BERDASARKAN TAB */}
               {selectedTransactionType === "KAS" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-blue-50 p-4 rounded-lg border border-blue-200 mb-4">
-                  <div>
-                    <Label>Akun Kas</Label>
-                    <Select
-                      value={journalRows[0].accountId}
-                      onValueChange={(value) =>
-                        updateRow(journalRows[0].id, "accountId", value)
-                      }
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Pilih akun kas" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {accounts
-                          .filter((account) =>
-                            account.accountName.toLowerCase().includes("kas")
-                          )
-                          .map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                              {getAccountDisplay(account.id)}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Jenis Transaksi Kas</Label>
-                    <Select
-                      value={journalRows[0].transactionType || ""}
-                      onValueChange={(value) =>
-                        updateRow(journalRows[0].id, "transactionType", value)
-                      }
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Pilih jenis transaksi" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PENERIMAAN">
-                          <span className="flex items-center gap-2">
-                            <span className="text-green-600">⬆️</span>{" "}
-                            Penerimaan
-                          </span>
-                        </SelectItem>
-                        <SelectItem value="PENGELUARAN">
-                          <span className="flex items-center gap-2">
-                            <span className="text-red-600">⬇️</span> Pengeluaran
-                          </span>
-                        </SelectItem>
-                        <SelectItem value="SALDO_AKHIR">
-                          <span className="flex items-center gap-2">
-                            <span className="text-purple-600">💰</span> Saldo
-                            Akhir
-                          </span>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Nominal</Label>
-                    <Input
-                      type="number"
-                      placeholder="Rp 0"
-                      value={journalRows[0].nominal}
-                      onChange={(e) =>
-                        updateRow(journalRows[0].id, "nominal", e.target.value)
-                      }
-                      className="mt-1"
-                      min="0"
-                      step="1000"
-                    />
-                  </div>
-                  <div>
-                    <Label>Keterangan</Label>
-                    <Input
-                      placeholder="Deskripsi transaksi kas"
-                      value={journalRows[0].keterangan}
-                      onChange={(e) =>
-                        updateRow(
-                          journalRows[0].id,
-                          "keterangan",
-                          e.target.value
-                        )
-                      }
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <DollarSign className="h-5 w-5" />
+                      Form Entri Kas Multiple
+                    </CardTitle>
+                    <CardDescription>
+                      Tambahkan beberapa entri kas sekaligus sebelum menyimpan.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {/* Multiple Entries List untuk KAS */}
+                    {journalRows.map((row, index) => (
+                      <div
+                        key={row.id}
+                        className="mb-6 p-4 border rounded-lg bg-blue-50"
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-semibold text-blue-700">
+                            Entri Kas #{index + 1}
+                          </h4>
+                          {journalRows.length > 1 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeRow(row.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Hapus
+                            </Button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label>Akun Kas</Label>
+                            <Select
+                              value={row.accountId}
+                              onValueChange={(value) =>
+                                updateRow(row.id, "accountId", value)
+                              }
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Pilih akun kas" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {accounts
+                                  .filter((account) =>
+                                    account.accountName
+                                      .toLowerCase()
+                                      .includes("kas")
+                                  )
+                                  .map((account) => (
+                                    <SelectItem
+                                      key={account.id}
+                                      value={account.id}
+                                    >
+                                      {getAccountDisplay(account.id)}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Jenis Transaksi Kas</Label>
+                            <Select
+                              value={row.transactionType || ""}
+                              onValueChange={(value) =>
+                                updateRow(row.id, "transactionType", value)
+                              }
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Pilih jenis transaksi" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="PENERIMAAN">
+                                  <span className="flex items-center gap-2">
+                                    <span className="text-green-600">⬆️</span>{" "}
+                                    Penerimaan
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="PENGELUARAN">
+                                  <span className="flex items-center gap-2">
+                                    <span className="text-red-600">⬇️</span>{" "}
+                                    Pengeluaran
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="SALDO_AKHIR">
+                                  <span className="flex items-center gap-2">
+                                    <span className="text-purple-600">💰</span>{" "}
+                                    Saldo Akhir
+                                  </span>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Nominal</Label>
+                            <Input
+                              type="number"
+                              placeholder="Rp 0"
+                              value={row.nominal}
+                              onChange={(e) =>
+                                updateRow(row.id, "nominal", e.target.value)
+                              }
+                              className="mt-1"
+                              min="0"
+                              step="1000"
+                            />
+                          </div>
+                          <div>
+                            <Label>Keterangan</Label>
+                            <Input
+                              placeholder="Deskripsi transaksi kas"
+                              value={row.keterangan}
+                              onChange={(e) =>
+                                updateRow(row.id, "keterangan", e.target.value)
+                              }
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
               )}
 
               {selectedTransactionType === "PIUTANG" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-green-50 p-4 rounded-lg border border-green-200 mb-4">
-                  <div>
-                    <Label>Akun Piutang</Label>
-                    <Select
-                      value={journalRows[0].accountId}
-                      onValueChange={(value) =>
-                        updateRow(journalRows[0].id, "accountId", value)
-                      }
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Pilih akun piutang" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {accounts
-                          .filter((account) =>
-                            account.accountName
-                              .toLowerCase()
-                              .includes("piutang")
-                          )
-                          .map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                              {getAccountDisplay(account.id)}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Tipe Piutang</Label>
-                    <Select
-                      value={journalRows[0].transactionType || ""}
-                      onValueChange={(value) =>
-                        updateRow(journalRows[0].id, "transactionType", value)
-                      }
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Pilih tipe piutang" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PIUTANG_BARU">
-                          <span className="flex items-center gap-2">
-                            <span className="text-blue-600">🆕</span> Piutang
-                            Baru
-                          </span>
-                        </SelectItem>
-                        <SelectItem value="PIUTANG_TERTAGIH">
-                          <span className="flex items-center gap-2">
-                            <span className="text-emerald-600">✅</span> Piutang
-                            Tertagih
-                          </span>
-                        </SelectItem>
-                        <SelectItem value="PIUTANG_MACET">
-                          <span className="flex items-center gap-2">
-                            <span className="text-orange-600">⚠️</span> Piutang
-                            Macet
-                          </span>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Kategori Piutang</Label>
-                    <Select
-                      value={journalRows[0].kategori || ""}
-                      onValueChange={(value) =>
-                        updateRow(journalRows[0].id, "kategori", value)
-                      }
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Pilih kategori piutang" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="KARYAWAN">👤 Karyawan</SelectItem>
-                        <SelectItem value="TOKO">🏪 Toko</SelectItem>
-                        <SelectItem value="BAHAN_BAKU">
-                          📦 Bahan Baku
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Nominal</Label>
-                    <Input
-                      type="number"
-                      placeholder="Rp 0"
-                      value={journalRows[0].nominal}
-                      onChange={(e) =>
-                        updateRow(journalRows[0].id, "nominal", e.target.value)
-                      }
-                      className="mt-1"
-                      min="0"
-                      step="1000"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Keterangan</Label>
-                    <Input
-                      placeholder="Deskripsi transaksi piutang"
-                      value={journalRows[0].keterangan}
-                      onChange={(e) =>
-                        updateRow(
-                          journalRows[0].id,
-                          "keterangan",
-                          e.target.value
-                        )
-                      }
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="h-5 w-5" />
+                      Form Entri Piutang Multiple
+                    </CardTitle>
+                    <CardDescription>
+                      Tambahkan beberapa entri piutang sekaligus sebelum
+                      menyimpan.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {/* Multiple Entries List untuk PIUTANG */}
+                    {journalRows.map((row, index) => (
+                      <div
+                        key={row.id}
+                        className="mb-6 p-4 border rounded-lg bg-green-50"
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-semibold text-green-700">
+                            Entri Piutang #{index + 1}
+                          </h4>
+                          {journalRows.length > 1 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeRow(row.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Hapus
+                            </Button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label>Akun Piutang</Label>
+                            <Select
+                              value={row.accountId}
+                              onValueChange={(value) =>
+                                updateRow(row.id, "accountId", value)
+                              }
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Pilih akun piutang" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {accounts
+                                  .filter((account) =>
+                                    account.accountName
+                                      .toLowerCase()
+                                      .includes("piutang")
+                                  )
+                                  .map((account) => (
+                                    <SelectItem
+                                      key={account.id}
+                                      value={account.id}
+                                    >
+                                      {getAccountDisplay(account.id)}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Tipe Piutang</Label>
+                            <Select
+                              value={row.transactionType || ""}
+                              onValueChange={(value) =>
+                                updateRow(row.id, "transactionType", value)
+                              }
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Pilih tipe piutang" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="PIUTANG_BARU">
+                                  <span className="flex items-center gap-2">
+                                    <span className="text-blue-600">🆕</span>{" "}
+                                    Piutang Baru
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="PIUTANG_TERTAGIH">
+                                  <span className="flex items-center gap-2">
+                                    <span className="text-emerald-600">✅</span>{" "}
+                                    Piutang Tertagih
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="PIUTANG_MACET">
+                                  <span className="flex items-center gap-2">
+                                    <span className="text-orange-600">⚠️</span>{" "}
+                                    Piutang Macet
+                                  </span>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Kategori Piutang</Label>
+                            <Select
+                              value={row.kategori || ""}
+                              onValueChange={(value) =>
+                                updateRow(row.id, "kategori", value)
+                              }
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Pilih kategori piutang" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="KARYAWAN">
+                                  👤 Karyawan
+                                </SelectItem>
+                                <SelectItem value="TOKO">🏪 Toko</SelectItem>
+                                <SelectItem value="BAHAN_BAKU">
+                                  📦 Bahan Baku
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Nominal</Label>
+                            <Input
+                              type="number"
+                              placeholder="Rp 0"
+                              value={row.nominal}
+                              onChange={(e) =>
+                                updateRow(row.id, "nominal", e.target.value)
+                              }
+                              className="mt-1"
+                              min="0"
+                              step="1000"
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <Label>Keterangan</Label>
+                            <Input
+                              placeholder="Deskripsi transaksi piutang"
+                              value={row.keterangan}
+                              onChange={(e) =>
+                                updateRow(row.id, "keterangan", e.target.value)
+                              }
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
               )}
 
               {selectedTransactionType === "UTANG" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-red-50 p-4 rounded-lg border border-red-200 mb-4">
-                  <div>
-                    <Label>Akun Utang</Label>
-                    <Select
-                      value={journalRows[0].accountId}
-                      onValueChange={(value) =>
-                        updateRow(journalRows[0].id, "accountId", value)
-                      }
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Pilih akun utang" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {accounts
-                          .filter((account) =>
-                            account.accountName.toLowerCase().includes("utang")
-                          )
-                          .map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                              {getAccountDisplay(account.id)}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Tipe Utang</Label>
-                    <Select
-                      value={journalRows[0].transactionType || ""}
-                      onValueChange={(value) =>
-                        updateRow(journalRows[0].id, "transactionType", value)
-                      }
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Pilih tipe utang" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="UTANG_BARU">
-                          <span className="flex items-center gap-2">
-                            <span className="text-red-600">🆕</span> Utang Baru
-                          </span>
-                        </SelectItem>
-                        <SelectItem value="UTANG_DIBAYAR">
-                          <span className="flex items-center gap-2">
-                            <span className="text-green-600">✅</span> Utang
-                            Dibayar
-                          </span>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Kategori Utang</Label>
-                    <Select
-                      value={journalRows[0].utangKategori || ""}
-                      onValueChange={(value) =>
-                        updateRow(journalRows[0].id, "utangKategori", value)
-                      }
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Pilih kategori utang" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="BAHAN_BAKU">
-                          📦 Bahan Baku
-                        </SelectItem>
-                        <SelectItem value="BANK_HM">🏦 Bank HM</SelectItem>
-                        <SelectItem value="BANK_HENRY">
-                          🏦 Bank Henry
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Nominal</Label>
-                    <Input
-                      type="number"
-                      placeholder="Rp 0"
-                      value={journalRows[0].nominal}
-                      onChange={(e) =>
-                        updateRow(journalRows[0].id, "nominal", e.target.value)
-                      }
-                      className="mt-1"
-                      min="0"
-                      step="1000"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Keterangan</Label>
-                    <Input
-                      placeholder="Deskripsi transaksi utang"
-                      value={journalRows[0].keterangan}
-                      onChange={(e) =>
-                        updateRow(
-                          journalRows[0].id,
-                          "keterangan",
-                          e.target.value
-                        )
-                      }
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Package className="h-5 w-5" />
+                      Form Entri Utang Multiple
+                    </CardTitle>
+                    <CardDescription>
+                      Tambahkan beberapa entri utang sekaligus sebelum
+                      menyimpan.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {/* Multiple Entries List untuk UTANG */}
+                    {journalRows.map((row, index) => (
+                      <div
+                        key={row.id}
+                        className="mb-6 p-4 border rounded-lg bg-red-50"
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-semibold text-red-700">
+                            Entri Utang #{index + 1}
+                          </h4>
+                          {journalRows.length > 1 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeRow(row.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Hapus
+                            </Button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label>Akun Utang</Label>
+                            <Select
+                              value={row.accountId}
+                              onValueChange={(value) =>
+                                updateRow(row.id, "accountId", value)
+                              }
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Pilih akun utang" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {accounts
+                                  .filter((account) =>
+                                    account.accountName
+                                      .toLowerCase()
+                                      .includes("utang")
+                                  )
+                                  .map((account) => (
+                                    <SelectItem
+                                      key={account.id}
+                                      value={account.id}
+                                    >
+                                      {getAccountDisplay(account.id)}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Tipe Utang</Label>
+                            <Select
+                              value={row.transactionType || ""}
+                              onValueChange={(value) =>
+                                updateRow(row.id, "transactionType", value)
+                              }
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Pilih tipe utang" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="UTANG_BARU">
+                                  <span className="flex items-center gap-2">
+                                    <span className="text-red-600">🆕</span>{" "}
+                                    Utang Baru
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="UTANG_DIBAYAR">
+                                  <span className="flex items-center gap-2">
+                                    <span className="text-green-600">✅</span>{" "}
+                                    Utang Dibayar
+                                  </span>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Kategori Utang</Label>
+                            <Select
+                              value={row.utangKategori || ""}
+                              onValueChange={(value) =>
+                                updateRow(row.id, "utangKategori", value)
+                              }
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue placeholder="Pilih kategori utang" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="BAHAN_BAKU">
+                                  📦 Bahan Baku
+                                </SelectItem>
+                                <SelectItem value="BANK_HM">
+                                  🏦 Bank HM
+                                </SelectItem>
+                                <SelectItem value="BANK_HENRY">
+                                  🏦 Bank Henry
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Nominal</Label>
+                            <Input
+                              type="number"
+                              placeholder="Rp 0"
+                              value={row.nominal}
+                              onChange={(e) =>
+                                updateRow(row.id, "nominal", e.target.value)
+                              }
+                              className="mt-1"
+                              min="0"
+                              step="1000"
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <Label>Keterangan</Label>
+                            <Input
+                              placeholder="Deskripsi transaksi utang"
+                              value={row.keterangan}
+                              onChange={(e) =>
+                                updateRow(row.id, "keterangan", e.target.value)
+                              }
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
               )}
               <div className="flex gap-2 pt-4 border-t mt-4">
+                <Button
+                  variant="outline"
+                  onClick={addNewRow}
+                  className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Tambah Baris Entri
+                </Button>
                 <Button
                   onClick={saveJournalEntries}
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                   disabled={loading}
                 >
-                  {loading ? "Menyimpan..." : "SAVE KEUANGAN"}
+                  {loading
+                    ? "Menyimpan..."
+                    : `SAVE ${journalRows.length} ENTRI KEUANGAN`}
                 </Button>
               </div>
+
+              {/* Summary untuk KEUANGAN */}
+              {journalRows.length > 1 && (
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  {(() => {
+                    const validRows = journalRows.filter((row) => {
+                      return (
+                        row.accountId &&
+                        row.nominal &&
+                        Number.parseFloat(row.nominal) > 0
+                      );
+                    });
+
+                    const invalidCount = journalRows.length - validRows.length;
+
+                    return (
+                      <>
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-sm text-blue-800">
+                            📝 <strong>Ringkasan:</strong> Akan menyimpan{" "}
+                            {journalRows.length} entri keuangan sekaligus
+                          </p>
+                          <div className="flex gap-2">
+                            <Badge
+                              variant="outline"
+                              className="text-green-700 bg-green-50 border-green-200"
+                            >
+                              ✅ {validRows.length} Valid
+                            </Badge>
+                            {invalidCount > 0 && (
+                              <Badge
+                                variant="outline"
+                                className="text-red-700 bg-red-50 border-red-200"
+                              >
+                                ⚠️ {invalidCount} Belum Lengkap
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Preview Entri KEUANGAN */}
+                        <div className="space-y-2">
+                          {journalRows.map((row, index) => {
+                            const account = getSelectedAccount(row.accountId);
+                            const isValid = validRows.includes(row);
+
+                            return (
+                              <div
+                                key={row.id}
+                                className={`flex items-center gap-2 text-xs p-2 rounded border ${
+                                  isValid
+                                    ? "bg-green-50 border-green-200"
+                                    : "bg-red-50 border-red-200"
+                                }`}
+                              >
+                                <span
+                                  className={`font-medium ${
+                                    isValid ? "text-green-600" : "text-red-600"
+                                  }`}
+                                >
+                                  #{index + 1}
+                                </span>
+                                <span className="text-gray-800">
+                                  {account
+                                    ? `${account.accountCode} - ${account.accountName}`
+                                    : "Akun belum dipilih"}
+                                </span>
+                                {row.transactionType && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {row.transactionType}
+                                  </Badge>
+                                )}
+                                {row.nominal && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {formatCurrency(Number(row.nominal))}
+                                  </Badge>
+                                )}
+                                {!isValid && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs text-red-600 bg-red-100"
+                                  >
+                                    ⚠️ Data belum lengkap
+                                  </Badge>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
               {/* TABEL KEUANGAN DIHILANGKAN */}
             </>
           </>
@@ -3204,470 +3600,357 @@ export default function JournalPage() {
             <div className="flex gap-2 mb-4">
               <button
                 className={`px-4 py-2 rounded-t font-semibold border-b-2 transition-all ${
-                  selectedPemasaranTab === "SALES"
+                  selectedPemasaranTab === "LAPORAN_PRODUK"
                     ? "border-orange-600 text-orange-700 bg-white"
                     : "border-transparent text-gray-500 bg-gray-100 hover:bg-gray-200"
                 }`}
-                onClick={() => setSelectedPemasaranTab("SALES")}
+                onClick={() => setSelectedPemasaranTab("LAPORAN_PRODUK")}
                 type="button"
               >
-                Laporan Sales
-              </button>
-              <button
-                className={`px-4 py-2 rounded-t font-semibold border-b-2 transition-all ${
-                  selectedPemasaranTab === "JURNAL"
-                    ? "border-blue-600 text-blue-700 bg-white"
-                    : "border-transparent text-gray-500 bg-gray-100 hover:bg-gray-200"
-                }`}
-                onClick={() => setSelectedPemasaranTab("JURNAL")}
-                type="button"
-              >
-                Jurnal Akuntansi
+                Laporan Produk
               </button>
             </div>
 
-            {/* === FORM & TABEL LAPORAN SALES === */}
-            {selectedPemasaranTab === "SALES" && (
-              <>
-                {/* FORM INPUT SALES */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-orange-50 p-4 rounded-lg border border-orange-200 mb-4">
-                  <div>
-                    <Label>Salesperson</Label>
-                    <Select
-                      value={salesRows[0].salesUserId || ""}
-                      onValueChange={(value) => {
-                        const newRows = [...salesRows];
-                        newRows[0].salesUserId = value;
-                        setSalesRows(newRows);
-                      }}
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Pilih salesperson..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {salespeople.map((sp) => (
-                          <SelectItem key={sp.id} value={sp.id.toString()}>
-                            {sp.nama}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Target Penjualan</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={salesRows[0].targetAmount}
-                      onChange={(e) => {
-                        const newRows = [...salesRows];
-                        newRows[0].targetAmount = e.target.value;
-                        setSalesRows(newRows);
-                      }}
-                      className="mt-1"
-                      min="0"
-                    />
-                  </div>
-                  <div>
-                    <Label>Realisasi Penjualan</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={salesRows[0].realisasiAmount}
-                      onChange={(e) => {
-                        const newRows = [...salesRows];
-                        newRows[0].realisasiAmount = e.target.value;
-                        setSalesRows(newRows);
-                      }}
-                      className="mt-1"
-                      min="0"
-                    />
-                  </div>
-                  <div>
-                    <Label>Retur/Potongan</Label>
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      value={salesRows[0].returPenjualan}
-                      onChange={(e) => {
-                        const newRows = [...salesRows];
-                        newRows[0].returPenjualan = e.target.value;
-                        setSalesRows(newRows);
-                      }}
-                      className="mt-1"
-                      min="0"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Kendala Penjualan</Label>
-                    <textarea
-                      placeholder="Tuliskan kendala penjualan hari ini..."
-                      value={salesRows[0].keteranganKendala}
-                      onChange={(e) => {
-                        const newRows = [...salesRows];
-                        newRows[0].keteranganKendala = e.target.value;
-                        setSalesRows(newRows);
-                      }}
-                      className="mt-1 w-full border rounded p-2 min-h-[60px]"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2 pt-4 border-t mt-4">
-                  <Button
-                    onClick={async () => {
-                      // Validasi dan simpan ke laporan_penjualan_sales
-                      const row = salesRows[0];
-                      if (!row.salesUserId) {
-                        toastError.validation("Salesperson wajib diisi");
-                        return;
-                      }
-                      await saveLaporanPenjualanSales({
-                        tanggalLaporan: selectedDate,
-                        salespersonId: Number(row.salesUserId),
-                        targetPenjualan: row.targetAmount
-                          ? Number(row.targetAmount)
-                          : undefined,
-                        realisasiPenjualan: row.realisasiAmount
-                          ? Number(row.realisasiAmount)
-                          : undefined,
-                        returPenjualan: row.returPenjualan
-                          ? Number(row.returPenjualan)
-                          : undefined,
-                        keteranganKendala: row.keteranganKendala || undefined,
-                      });
-                      setSalesRows([
-                        {
-                          id: "1",
-                          salesUserId: "",
-                          targetAmount: "",
-                          realisasiAmount: "",
-                          returPenjualan: "",
-                          keteranganKendala: "",
-                        },
-                      ]);
-                      await loadData();
-                      toastSuccess.custom("Laporan sales berhasil disimpan");
-                    }}
-                    className="bg-orange-600 hover:bg-orange-700 text-white"
-                    disabled={loading}
-                  >
-                    {loading ? "Menyimpan..." : "SAVE LAPORAN SALES"}
-                  </Button>
-                </div>
-                {/* SUMMARY CARD PEMASARAN */}
-                <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <span className="text-orange-600">📈</span>
-                      Ringkasan Penjualan Hari Ini
-                    </CardTitle>
-                    <CardDescription>
-                      Total target, realisasi, retur, dan jumlah sales hari ini.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {(() => {
-                      const summary = getPemasaranSummary();
-                      return (
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                            <div className="font-semibold text-blue-800">
-                              Total Target
-                            </div>
-                            <div className="text-2xl font-bold text-blue-900 mt-2">
-                              {formatCurrency(summary.totalTarget)}
-                            </div>
-                          </div>
-                          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                            <div className="font-semibold text-green-800">
-                              Total Realisasi
-                            </div>
-                            <div className="text-2xl font-bold text-green-900 mt-2">
-                              {formatCurrency(summary.totalRealisasi)}
-                            </div>
-                          </div>
-                          <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                            <div className="font-semibold text-orange-800">
-                              Total Retur
-                            </div>
-                            <div className="text-2xl font-bold text-orange-900 mt-2">
-                              {formatCurrency(summary.totalRetur)}
-                            </div>
-                          </div>
-                          <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                            <div className="font-semibold text-purple-800">
-                              Jumlah Sales
-                            </div>
-                            <div className="text-2xl font-bold text-purple-900 mt-2">
-                              {summary.jumlahSales}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </CardContent>
-                </Card>
-                {/* TABEL SALES */}
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Waktu</TableHead>
-                      <TableHead>Salesperson</TableHead>
-                      <TableHead>Target</TableHead>
-                      <TableHead>Realisasi</TableHead>
-                      <TableHead>Retur</TableHead>
-                      <TableHead>Kendala</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {laporanPenjualanSales.map((laporan) => (
-                      <TableRow key={laporan.id}>
-                        <TableCell>
-                          {laporan.createdAt
-                            ? new Date(laporan.createdAt).toLocaleTimeString(
-                                "id-ID",
-                                { hour: "2-digit", minute: "2-digit" }
-                              )
-                            : "-"}
-                        </TableCell>
-                        <TableCell>
-                          {laporan.salesperson?.username || "-"}
-                        </TableCell>
-                        <TableCell>
-                          {laporan.targetPenjualan?.toLocaleString("id-ID") ||
-                            "-"}
-                        </TableCell>
-                        <TableCell>
-                          {laporan.realisasiPenjualan?.toLocaleString(
-                            "id-ID"
-                          ) || "-"}
-                        </TableCell>
-                        <TableCell>
-                          {laporan.returPenjualan?.toLocaleString("id-ID") ||
-                            "-"}
-                        </TableCell>
-                        <TableCell>
-                          {laporan.keteranganKendala || "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </>
+            {/* === FORM & TABEL LAPORAN PRODUK === */}
+            {selectedPemasaranTab === "LAPORAN_PRODUK" && (
+              <LaporanPenjualanWizard />
             )}
-
-            {/* === FORM & TABEL JURNAL AKUNTANSI === */}
-            {selectedPemasaranTab === "JURNAL" && (
-              <>
-                {/* FORM INPUT JURNAL */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-blue-50 p-4 rounded-lg border border-blue-200 mb-4">
-                  <div>
-                    <Label>Akun</Label>
-                    <Select
-                      value={journalRows[0].accountId}
-                      onValueChange={(value) =>
-                        updateRow(journalRows[0].id, "accountId", value)
-                      }
-                    >
-                      <SelectTrigger className="mt-1">
-                        <SelectValue placeholder="Pilih akun" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {accounts.map((account) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            {getAccountDisplay(account.id)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Nominal</Label>
-                    <Input
-                      type="number"
-                      placeholder="Rp 0"
-                      value={journalRows[0].nominal}
-                      onChange={(e) =>
-                        updateRow(journalRows[0].id, "nominal", e.target.value)
-                      }
-                      className="mt-1"
-                      min="0"
-                      step="1000"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Keterangan</Label>
-                    <Input
-                      placeholder="Deskripsi"
-                      value={journalRows[0].keterangan}
-                      onChange={(e) =>
-                        updateRow(
-                          journalRows[0].id,
-                          "keterangan",
-                          e.target.value
-                        )
-                      }
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2 pt-4 border-t mt-4">
-                  <Button
-                    onClick={saveJournalEntries}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                    disabled={loading}
-                  >
-                    {loading ? "Menyimpan..." : "SAVE JURNAL"}
-                  </Button>
-                </div>
-                {/* SUMMARY CARD JURNAL AKUNTANSI */}
-                <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <span className="text-blue-600">📒</span>
-                      Ringkasan Jurnal Akuntansi Hari Ini
-                    </CardTitle>
-                    <CardDescription>
-                      Total nilai jurnal, jumlah transaksi, dan akun unik yang
-                      digunakan hari ini.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {(() => {
-                      // Filter existingEntries untuk hari ini (jurnal akuntansi saja, exclude sales)
-                      const jurnalEntries = existingEntries.filter((entry) => {
-                        // exclude sales entries (yang punya salesUserId)
-                        return !(entry as any).salesUserId;
-                      });
-                      const totalNilai = jurnalEntries.reduce(
-                        (sum, entry) => sum + Number(entry.nilai || 0),
-                        0
-                      );
-                      const jumlahTransaksi = jurnalEntries.length;
-                      const akunUnik = new Set(
-                        jurnalEntries.map((entry) => entry.accountId)
-                      ).size;
-                      return (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                            <div className="font-semibold text-blue-800">
-                              Total Nilai Jurnal
-                            </div>
-                            <div className="text-2xl font-bold text-blue-900 mt-2">
-                              {formatCurrency(totalNilai)}
-                            </div>
-                          </div>
-                          <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                            <div className="font-semibold text-green-800">
-                              Jumlah Transaksi
-                            </div>
-                            <div className="text-2xl font-bold text-green-900 mt-2">
-                              {jumlahTransaksi}
-                            </div>
-                          </div>
-                          <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                            <div className="font-semibold text-purple-800">
-                              Akun Unik
-                            </div>
-                            <div className="text-2xl font-bold text-purple-900 mt-2">
-                              {akunUnik}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </CardContent>
-                </Card>
-                {/* TABEL JURNAL DIHILANGKAN */}
-                {renderJournalTable()}
-              </>
-            )}
+          </>
+        ) : canAccessProduksi() ? (
+          <>
+            {/* === FORM KHUSUS PRODUKSI/BLENDING === */}
+            <LaporanProduksiBlendingForm
+              userDivision={user?.division!}
+              onSuccess={() => {
+                loadData();
+                toastSuccess.custom("Laporan produksi berhasil disimpan!");
+              }}
+            />
           </>
         ) : (
           // ... existing code untuk divisi lain ...
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-              <div>
-                <Label>Akun</Label>
-                <Select
-                  value={journalRows[0].accountId}
-                  onValueChange={(value) =>
-                    updateRow(journalRows[0].id, "accountId", value)
-                  }
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Pilih akun" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {getAccountDisplay(account.id)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {/* Tambah Salesperson Baru KHUSUS PEMASARAN */}
-              {divisionType === "PEMASARAN" && (
-                <div className="mb-2 flex flex-col gap-1">
-                  <Label>Tambah Salesperson Baru</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={newSalespersonName}
-                      onChange={(e) => setNewSalespersonName(e.target.value)}
-                      placeholder="Nama salesperson baru"
-                    />
-                    <Button
-                      onClick={async () => {
-                        if (!newSalespersonName.trim()) return;
-                        const newSales = await createSalesperson(
-                          newSalespersonName.trim()
-                        );
-                        setSalespeople([...salespeople, newSales]);
-                        setNewSalespersonName("");
-                      }}
-                      className="bg-purple-600 hover:bg-purple-700 text-white"
-                    >
-                      Tambah
-                    </Button>
+            {/* === MULTIPLE ENTRIES FORM === */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  Form Entri Multiple
+                </CardTitle>
+                <CardDescription>
+                  Tambahkan beberapa entri sekaligus sebelum menyimpan. Klik
+                  "Tambah Baris" untuk menambah entri baru.
+                </CardDescription>
+                <div className="mt-2 flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span className="text-gray-600">Entri Valid</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                    <span className="text-gray-600">Data Belum Lengkap</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <span className="text-gray-600">Akan Disimpan</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Plus className="h-4 w-4 text-blue-600" />
+                    <span className="text-blue-600 font-medium">
+                      Klik "Tambah Baris Entri" untuk menambah entri baru
+                    </span>
                   </div>
                 </div>
-              )}
-            </div>
-            {/* Form detail muncul jika akun sudah dipilih */}
-            {journalRows[0].accountId &&
-              renderSpecializedInput(
-                journalRows[0],
-                getSelectedAccount(journalRows[0].accountId)
-              )}
-            {/* Action Buttons */}
-            <div className="flex gap-2 pt-4 border-t mt-4">
-              <Button
-                variant="outline"
-                onClick={addNewRow}
-                className="bg-gray-50 hover:bg-gray-100"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                ADD TRANSAKSI
-              </Button>
-              <Button
-                onClick={saveJournalEntries}
-                className={`${divisionStyle.bg} ${divisionStyle.hover} text-white`}
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                    Menyimpan...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    SAVE {divisionType}
-                  </>
+              </CardHeader>
+              <CardContent>
+                {/* Multiple Entries List */}
+                {journalRows.map((row, index) => (
+                  <div
+                    key={row.id}
+                    className="mb-6 p-4 border rounded-lg bg-gray-50"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-semibold text-gray-700">
+                        Entri #{index + 1}
+                      </h4>
+                      {journalRows.length > 1 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeRow(row.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Hapus
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                      <div>
+                        <Label>Akun</Label>
+                        <Select
+                          value={row.accountId}
+                          onValueChange={(value) =>
+                            updateRow(row.id, "accountId", value)
+                          }
+                        >
+                          <SelectTrigger className="mt-1">
+                            <SelectValue placeholder="Pilih akun" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {accounts.map((account) => (
+                              <SelectItem key={account.id} value={account.id}>
+                                {getAccountDisplay(account.id)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Tambah Salesperson Baru KHUSUS PEMASARAN */}
+                      {divisionType === "PEMASARAN" && (
+                        <div className="mb-2 flex flex-col gap-2">
+                          <Label>Tambah Salesperson Baru</Label>
+                          <Select
+                            value={selectedPerusahaanForNewSales}
+                            onValueChange={setSelectedPerusahaanForNewSales}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Pilih perusahaan..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {perusahaanList.map((p) => (
+                                <SelectItem key={p.id} value={p.id.toString()}>
+                                  {p.nama}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Nama salesperson baru"
+                              value={newSalespersonName}
+                              onChange={(e) =>
+                                setNewSalespersonName(e.target.value)
+                              }
+                              disabled={!selectedPerusahaanForNewSales}
+                            />
+                            <Button
+                              onClick={handleCreateSalesperson}
+                              disabled={
+                                !newSalespersonName.trim() ||
+                                !selectedPerusahaanForNewSales
+                              }
+                              className="bg-purple-600 hover:bg-purple-700 text-white"
+                            >
+                              Tambah
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Form detail muncul jika akun sudah dipilih */}
+                    {row.accountId &&
+                      renderSpecializedInput(
+                        row,
+                        getSelectedAccount(row.accountId)
+                      )}
+                  </div>
+                ))}
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-4 border-t mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={addNewRow}
+                    className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Tambah Baris Entri
+                  </Button>
+                  <Button
+                    onClick={saveJournalEntries}
+                    className={`${divisionStyle.bg} ${divisionStyle.hover} text-white`}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                        Menyimpan...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        SAVE {journalRows.length} ENTRI {divisionType}
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* Summary of entries to be saved */}
+                {journalRows.length > 1 && (
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    {(() => {
+                      const validRows = journalRows.filter((row) => {
+                        const account = getSelectedAccount(row.accountId);
+                        if (!account) return false;
+
+                        // Validasi berdasarkan divisi
+                        if (divisionType === "PEMASARAN") {
+                          return (
+                            row.salesUserId &&
+                            (row.targetAmount ||
+                              row.realisasiAmount ||
+                              row.returPenjualan)
+                          );
+                        }
+                        if (divisionType === "HRD") {
+                          return (
+                            row.attendanceStatus ||
+                            row.absentCount ||
+                            row.shift ||
+                            row.keteranganKendala
+                          );
+                        }
+                        if (divisionType === "PRODUKSI") {
+                          return (
+                            row.hasilProduksi ||
+                            row.barangGagal ||
+                            row.stockBarangJadi ||
+                            row.hpBarangJadi ||
+                            row.keteranganKendala
+                          );
+                        }
+                        if (divisionType === "PERSEDIAAN_BAHAN_BAKU") {
+                          return (
+                            row.barangMasuk ||
+                            row.pemakaian ||
+                            row.stokAkhir ||
+                            row.keteranganGudang
+                          );
+                        }
+                        if (divisionType === "KEUANGAN") {
+                          return (
+                            row.accountId &&
+                            row.nominal &&
+                            Number.parseFloat(row.nominal) > 0
+                          );
+                        }
+
+                        // Validasi default
+                        return (
+                          row.accountId &&
+                          ((account.valueType === "NOMINAL" &&
+                            row.nominal &&
+                            Number.parseFloat(row.nominal) > 0) ||
+                            (account.valueType === "KUANTITAS" &&
+                              row.kuantitas &&
+                              Number.parseFloat(row.kuantitas) > 0))
+                        );
+                      });
+
+                      const invalidCount =
+                        journalRows.length - validRows.length;
+
+                      return (
+                        <>
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="text-sm text-blue-800">
+                              📝 <strong>Ringkasan:</strong> Akan menyimpan{" "}
+                              {journalRows.length} entri sekaligus
+                            </p>
+                            <div className="flex gap-2">
+                              <Badge
+                                variant="outline"
+                                className="text-green-700 bg-green-50 border-green-200"
+                              >
+                                ✅ {validRows.length} Valid
+                              </Badge>
+                              {invalidCount > 0 && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-red-700 bg-red-50 border-red-200"
+                                >
+                                  ⚠️ {invalidCount} Belum Lengkap
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Preview Entri */}
+                          <div className="space-y-2">
+                            {journalRows.map((row, index) => {
+                              const account = getSelectedAccount(row.accountId);
+                              const isValid = validRows.includes(row);
+
+                              return (
+                                <div
+                                  key={row.id}
+                                  className={`flex items-center gap-2 text-xs p-2 rounded border ${
+                                    isValid
+                                      ? "bg-green-50 border-green-200"
+                                      : "bg-red-50 border-red-200"
+                                  }`}
+                                >
+                                  <span
+                                    className={`font-medium ${
+                                      isValid
+                                        ? "text-green-600"
+                                        : "text-red-600"
+                                    }`}
+                                  >
+                                    #{index + 1}
+                                  </span>
+                                  <span className="text-gray-800">
+                                    {account
+                                      ? `${account.accountCode} - ${account.accountName}`
+                                      : "Akun belum dipilih"}
+                                  </span>
+                                  {row.nominal && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      {formatCurrency(Number(row.nominal))}
+                                    </Badge>
+                                  )}
+                                  {row.kuantitas && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      {row.kuantitas} unit
+                                    </Badge>
+                                  )}
+                                  {row.transactionType && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      {row.transactionType}
+                                    </Badge>
+                                  )}
+                                  {!isValid && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs text-red-600 bg-red-100"
+                                    >
+                                      ⚠️ Data belum lengkap
+                                    </Badge>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
                 )}
-              </Button>
-            </div>
+              </CardContent>
+            </Card>
           </>
         )}
 
@@ -3957,60 +4240,61 @@ export default function JournalPage() {
           </Card>
         )}
 
-        {divisionType === "BLENDING" && laporanGudang.length > 0 && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-green-600">📦</span>
-                Ringkasan Gudang Hari Ini
-              </CardTitle>
-              <CardDescription>
-                Kontrol stok awal, pemakaian, dan stok akhir gudang hari ini.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {(() => {
-                const summary = getGudangSummary();
-                return (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="font-semibold text-blue-800">
-                        Total Stok Awal
+        {divisionType === "PERSEDIAAN_BAHAN_BAKU" &&
+          laporanGudang.length > 0 && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span className="text-green-600">📦</span>
+                  Ringkasan Gudang Hari Ini
+                </CardTitle>
+                <CardDescription>
+                  Kontrol stok awal, pemakaian, dan stok akhir gudang hari ini.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const summary = getGudangSummary();
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="font-semibold text-blue-800">
+                          Total Stok Awal
+                        </div>
+                        <div className="text-2xl font-bold text-blue-900 mt-2">
+                          {summary.totalStokAwal.toLocaleString()} Unit
+                        </div>
                       </div>
-                      <div className="text-2xl font-bold text-blue-900 mt-2">
-                        {summary.totalStokAwal.toLocaleString()} Unit
+                      <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                        <div className="font-semibold text-orange-800">
+                          Total Pemakaian
+                        </div>
+                        <div className="text-2xl font-bold text-orange-900 mt-2">
+                          {summary.totalPemakaian.toLocaleString()} Unit
+                        </div>
+                      </div>
+                      <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                        <div className="font-semibold text-green-800">
+                          Total Stok Akhir
+                        </div>
+                        <div className="text-2xl font-bold text-green-900 mt-2">
+                          {summary.totalStokAkhir.toLocaleString()} Unit
+                        </div>
+                      </div>
+                      <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                        <div className="font-semibold text-purple-800">
+                          Jumlah Laporan
+                        </div>
+                        <div className="text-2xl font-bold text-purple-900 mt-2">
+                          {summary.jumlahLaporan}
+                        </div>
                       </div>
                     </div>
-                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                      <div className="font-semibold text-orange-800">
-                        Total Pemakaian
-                      </div>
-                      <div className="text-2xl font-bold text-orange-900 mt-2">
-                        {summary.totalPemakaian.toLocaleString()} Unit
-                      </div>
-                    </div>
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <div className="font-semibold text-green-800">
-                        Total Stok Akhir
-                      </div>
-                      <div className="text-2xl font-bold text-green-900 mt-2">
-                        {summary.totalStokAkhir.toLocaleString()} Unit
-                      </div>
-                    </div>
-                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                      <div className="font-semibold text-purple-800">
-                        Jumlah Laporan
-                      </div>
-                      <div className="text-2xl font-bold text-purple-900 mt-2">
-                        {summary.jumlahLaporan}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
-        )}
+                  );
+                })()}
+              </CardContent>
+            </Card>
+          )}
 
         {/* ✅ NEW: Summary Card untuk HRD - Add this after the PRODUKSI summary card */}
         {divisionType === "HRD" && (
@@ -4086,8 +4370,10 @@ export default function JournalPage() {
           </Card>
         )}
 
-        {/* Only render journal table if NOT in PEMASARAN division, or if in PEMASARAN but not in tab view */}
-        {divisionType !== "PEMASARAN" && renderJournalTable()}
+        {/* Only render journal table if NOT in PEMASARAN or PRODUKSI/BLENDING division */}
+        {divisionType !== "PEMASARAN" &&
+          !canAccessProduksi() &&
+          renderJournalTable()}
         {renderSummaryCard()}
       </div>
       {error && (

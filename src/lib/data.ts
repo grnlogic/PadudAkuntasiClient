@@ -9,6 +9,11 @@ import {
   divisionsAPI,
   usersAPI,
   entriesAPI,
+  notificationAPI,
+  perusahaanAPI,
+  salespersonAPI,
+  laporanPenjualanProdukAPI,
+  getSalespeople as apiGetSalespeople,
 } from "./api";
 import type {
   EntriHarian as ImportedEntriHarian,
@@ -22,6 +27,7 @@ import type {
   LaporanGudangHarian,
   CreateLaporanGudangRequest,
 } from "./api";
+import type { Notification } from "./api";
 
 // Keep interfaces for type safety
 export interface Account {
@@ -809,10 +815,10 @@ export const getLaporanGudang = async (): Promise<LaporanGudangHarian[]> => {
           valueType: laporan.account?.valueType || laporan.account?.value_type,
         },
         // ✅ FIXED: Support both camelCase and snake_case field names
-        stokAwal: laporan.stokAwal ?? laporan.stok_awal,
+        barangMasuk: laporan.barangMasuk ?? laporan.barang_masuk,
         pemakaian: laporan.pemakaian,
         stokAkhir: laporan.stokAkhir ?? laporan.stok_akhir,
-        kondisiGudang: laporan.kondisiGudang ?? laporan.kondisi_gudang,
+        keterangan: laporan.keterangan ?? laporan.kondisi_gudang,
         // ✅ ADD: Map pemakaian amount untuk PDF
         pemakaianAmount: laporan.pemakaian_amount ?? laporan.pemakaianAmount,
         createdBy: {
@@ -838,15 +844,15 @@ export const getLaporanGudang = async (): Promise<LaporanGudangHarian[]> => {
           ? {
               original: {
                 id: response.data[0].id,
-                stok_awal: response.data[0].stok_awal,
-                stok_akhir: response.data[0].stok_akhir,
-                kondisi_gudang: response.data[0].kondisi_gudang,
+                barang_masuk: response.data[0].barangMasuk,
+                stok_akhir: response.data[0].stokAkhir,
+                kondisi_gudang: response.data[0].keterangan,
               },
               mapped: {
                 id: mappedData[0].id,
-                stokAwal: mappedData[0].stokAwal,
+                barangMasuk: mappedData[0].barangMasuk,
                 stokAkhir: mappedData[0].stokAkhir,
-                kondisiGudang: mappedData[0].kondisiGudang,
+                keterangan: mappedData[0].keterangan,
               },
             }
           : null,
@@ -884,3 +890,136 @@ export const deleteLaporanGudang = async (id: number): Promise<boolean> => {
     return false;
   }
 };
+
+// ================= NOTIFICATION DATA =================
+export const getNotifications = async (): Promise<Notification[]> => {
+  try {
+    const response = await notificationAPI.getAll();
+    if (response.success && response.data) {
+      return response.data;
+    }
+    console.warn("⚠️ Failed to get notifications:", response);
+    return [];
+  } catch (error) {
+    console.error("❌ Error getting notifications:", error);
+    return [];
+  }
+};
+
+export const markNotificationAsRead = async (id: number): Promise<boolean> => {
+  try {
+    const response = await notificationAPI.markAsRead(id);
+    return response.success;
+  } catch (error) {
+    console.error("❌ Error marking notification as read:", error);
+    return false;
+  }
+};
+// ================== LAPORAN PENJUALAN PRODUK (BARU) ==================
+
+// Helper function untuk transform backend data ke frontend format
+const transformLaporanPenjualanProdukFromBackend = (backendData: any) => {
+  if (!backendData) return null;
+
+  console.log(
+    "🔍 TRANSFORM LAPORAN PENJUALAN PRODUK - Raw backend data:",
+    backendData
+  );
+
+  const transformed = {
+    id: backendData.id,
+    tanggalLaporan: backendData.tanggal_laporan,
+    namaPerusahaan: backendData.nama_perusahaan,
+    perusahaanId: backendData.perusahaan_id,
+    namaSalesperson: backendData.nama_salesperson,
+    salespersonId: backendData.salesperson_id,
+    namaAccount: backendData.nama_account,
+    productAccountId: backendData.product_account_id,
+    targetKuantitas: backendData.target_kuantitas,
+    realisasiKuantitas: backendData.realisasi_kuantitas,
+    keteranganKendala: backendData.keterangan_kendala,
+    createdByUsername: backendData.created_by_username,
+    createdAt: backendData.created_at,
+  };
+
+  console.log(
+    "✅ TRANSFORM LAPORAN PENJUALAN PRODUK - Transformed data:",
+    transformed
+  );
+
+  return transformed;
+};
+
+export const getLaporanPenjualanProduk = async () => {
+  console.log("🔍 GET LAPORAN PENJUALAN PRODUK - Fetching data...");
+
+  const response = await laporanPenjualanProdukAPI.getAll();
+  console.log("📡 GET LAPORAN PENJUALAN PRODUK - API Response:", response);
+
+  if (response.success && response.data && Array.isArray(response.data)) {
+    console.log(
+      "📊 GET LAPORAN PENJUALAN PRODUK - Raw data count:",
+      response.data.length
+    );
+    // Transform setiap item dari backend format ke frontend format
+    const transformedData = response.data
+      .map(transformLaporanPenjualanProdukFromBackend)
+      .filter(Boolean);
+    console.log(
+      "✅ GET LAPORAN PENJUALAN PRODUK - Transformed data count:",
+      transformedData.length
+    );
+    console.log(
+      "✅ GET LAPORAN PENJUALAN PRODUK - Final transformed data:",
+      transformedData
+    );
+    return transformedData;
+  }
+  console.log("⚠️ GET LAPORAN PENJUALAN PRODUK - No data or failed response");
+  return [];
+};
+
+export const saveLaporanPenjualanProduk = async (data: any) => {
+  const response = await laporanPenjualanProdukAPI.create(data);
+  if (!response.success)
+    throw new Error(response.error || "Gagal simpan laporan penjualan produk");
+  return response.data;
+};
+
+export const getPerusahaan = async () => {
+  const response = await perusahaanAPI.getAll();
+  if (response.success && response.data) return response.data;
+  return [];
+};
+
+export const getSalespeopleByPerusahaan = async (perusahaanId: number) => {
+  const response = await salespersonAPI.getByPerusahaan(perusahaanId);
+  if (response.success && response.data) return response.data;
+  return [];
+};
+
+export const getProductAccounts = async (divisionId?: number) => {
+  console.log("🎯 getProductAccounts called with divisionId:", divisionId);
+
+  // Always use division-specific endpoint if divisionId is provided
+  if (divisionId) {
+    console.log("🔍 Fetching products for divisionId:", divisionId);
+    console.log(
+      "📡 Calling endpoint: /api/v1/accounts/products/by-division/" + divisionId
+    );
+    const response = await accountsAPI.getProductsByDivision(divisionId);
+    console.log("📨 Raw API response:", response);
+    if (response.success && response.data) {
+      console.log("✅ Products fetched successfully:", response.data);
+      console.log("📊 Total products count:", response.data.length);
+      return response.data;
+    } else {
+      console.error("❌ Failed to fetch products:", response);
+    }
+  } else {
+    console.warn("⚠️ No divisionId provided, cannot fetch products");
+  }
+  return [];
+};
+
+export const getSalespeople = apiGetSalespeople;

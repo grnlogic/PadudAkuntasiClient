@@ -46,7 +46,7 @@ const DIVISIONS = [
   { id: "1", name: "DIVISI KEUANGAN & ADMINISTRASI" },
   { id: "2", name: "DIVISI PEMASARAN & PENJUALAN" },
   { id: "3", name: "DIVISI PRODUKSI" },
-  { id: "10", name: "DIVISI BLENDING" },
+  { id: "10", name: "DIVISI PERSEDIAAN_BAHAN_BAKU" },
   { id: "5", name: "DIVISI HRD" },
 ];
 
@@ -54,7 +54,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDivision, setFilterDivision] = useState("all");
-const [showAlert, setShowAlert] = useState(true);
+  const [showAlert, setShowAlert] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
   const [formData, setFormData] = useState({
@@ -108,7 +108,7 @@ const [showAlert, setShowAlert] = useState(true);
       "DIVISI KEUANGAN & ADMINISTRASI": "bg-blue-100 text-blue-800",
       "DIVISI PRODUKSI": "bg-yellow-100 text-yellow-800",
       "DIVISI PEMASARAN & PENJUALAN": "bg-green-100 text-green-800",
-      "DIVISI BLENDING": "bg-purple-100 text-purple-800",
+      "DIVISI PERSEDIAAN_BAHAN_BAKU": "bg-purple-100 text-purple-800",
       "DIVISI HRD": "bg-orange-100 text-orange-800",
     };
     return colors[division] || "bg-gray-100 text-gray-800";
@@ -289,35 +289,66 @@ const [showAlert, setShowAlert] = useState(true);
       </div>
 
       {success && showAlert && (
-  <Alert className="border-green-200 bg-green-50 flex items-center justify-between">
-    <div className="flex items-center gap-2">
-      <span className="text-green-600">
-        {/* Ikon sukses */}
-        <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 7.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L10 12.586l5.293-5.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-      </span>
-      <AlertDescription className="text-green-800">{success}</AlertDescription>
-    </div>
-    <button onClick={() => setShowAlert(false)} className="ml-4 text-green-600 hover:text-green-800">
-      &times;
-    </button>
-  </Alert>
-)}
-{error && showAlert && (
-  <Alert variant="destructive" className="flex items-center justify-between">
-    <div className="flex items-center gap-2">
-      <span className="text-red-600">
-        {/* Ikon error */}
-        <svg width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-4a1 1 0 112 0 1 1 0 01-2 0zm.293-7.707a1 1 0 011.414 0l.293.293.293-.293a1 1 0 111.414 1.414l-.293.293.293.293a1 1 0 01-1.414 1.414l-.293-.293-.293.293a1 1 0 01-1.414-1.414l.293-.293-.293-.293a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
-      </span>
-      <AlertDescription>{error}</AlertDescription>
-    </div>
-    <button onClick={() => setShowAlert(false)} className="ml-4 text-red-600 hover:text-red-800">
-      &times;
-    </button>
-  </Alert>
-)}
-
-      
+        <Alert className="border-green-200 bg-green-50 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-green-600">
+              {/* Ikon sukses */}
+              <svg
+                width="20"
+                height="20"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M16.707 7.293a1 1 0 010 1.414l-6 6a1 1 0 01-1.414 0l-3-3a1 1 0 111.414-1.414L10 12.586l5.293-5.293a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </span>
+            <AlertDescription className="text-green-800">
+              {success}
+            </AlertDescription>
+          </div>
+          <button
+            onClick={() => setShowAlert(false)}
+            className="ml-4 text-green-600 hover:text-green-800"
+          >
+            &times;
+          </button>
+        </Alert>
+      )}
+      {error && showAlert && (
+        <Alert
+          variant="destructive"
+          className="flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-red-600">
+              {/* Ikon error */}
+              <svg
+                width="20"
+                height="20"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-4a1 1 0 112 0 1 1 0 01-2 0zm.293-7.707a1 1 0 011.414 0l.293.293.293-.293a1 1 0 111.414 1.414l-.293.293.293.293a1 1 0 01-1.414 1.414l-.293-.293-.293.293a1 1 0 01-1.414-1.414l.293-.293-.293-.293a1 1 0 010-1.414z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </span>
+            <AlertDescription>{error}</AlertDescription>
+          </div>
+          <button
+            onClick={() => setShowAlert(false)}
+            className="ml-4 text-red-600 hover:text-red-800"
+          >
+            &times;
+          </button>
+        </Alert>
+      )}
 
       {/* Filters and Search */}
       <Card>

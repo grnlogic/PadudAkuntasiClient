@@ -87,7 +87,7 @@ export default function ChartOfAccountsPage() {
       "1": "1", // KEUANGAN & ADMINISTRASI
       "2": "2", // PEMASARAN & PENJUALAN
       "3": "3", // PRODUKSI
-      "10": "10", // BLENDING
+      "10": "10", // PERSEDIAAN_BAHAN_BAKU
       "5": "5", // HRD
     };
 

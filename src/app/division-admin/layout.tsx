@@ -1,39 +1,59 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Badge } from "@/components/ui/badge"
-import { Building2, Menu, BookOpen, PlusCircle, BarChart3, Settings, LogOut, User, Wrench, Archive } from "lucide-react"
-import { AuthGuard } from "@/components/auth-guard"
-import { getCurrentUser, setCurrentUser } from "@/lib/auth"
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
+import {
+  Building2,
+  Menu,
+  BookOpen,
+  PlusCircle,
+  BarChart3,
+  Settings,
+  LogOut,
+  User,
+  Wrench,
+  Archive,
+} from "lucide-react";
+import { AuthGuard } from "@/components/auth-guard";
+import { getCurrentUser, setCurrentUser } from "@/lib/auth";
+import NotificationBell from "@/components/notification-bell";
 
 const navigation = [
   { name: "Laporan Harian", href: "/division-admin/journal", icon: BookOpen },
-  { name: "Rak Akun Divisi", href: "/division-admin/account-rack", icon: Archive },
-  { name: "Riwayat Transaksi", href: "/division-admin/transaction", icon: PlusCircle },
+  {
+    name: "Rak Akun Divisi",
+    href: "/division-admin/account-rack",
+    icon: Archive,
+  },
+  {
+    name: "Riwayat Transaksi",
+    href: "/division-admin/transaction",
+    icon: PlusCircle,
+  },
   { name: "Laporan Divisi", href: "/division-admin/reports", icon: BarChart3 },
   { name: "Pengaturan", href: "/division-admin/settings", icon: Settings },
-]
+];
 
 export default function DivisionAdminLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const pathname = usePathname()
-  const router = useRouter()
-  const user = getCurrentUser()
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+  const user = getCurrentUser();
 
   const handleLogout = () => {
-    setCurrentUser(null)
-    router.push("/auth/login")
-  }
+    setCurrentUser(null);
+    router.push("/auth/login");
+  };
 
   const Sidebar = ({ mobile = false }) => (
     <div className="flex flex-col h-full">
@@ -41,28 +61,32 @@ export default function DivisionAdminLayout({
         <User className="h-8 w-8 text-blue-600" />
         <div>
           <h1 className="font-bold text-lg">Admin Divisi</h1>
-          <p className="text-sm text-gray-500">Operator {user?.division?.name}</p>
+          <p className="text-sm text-gray-500">
+            Operator {user?.division?.name}
+          </p>
         </div>
       </div>
 
       <nav className="flex-1 p-4 space-y-2">
         {navigation.map((item) => {
-          const Icon = item.icon
-          const isActive = pathname === item.href
+          const Icon = item.icon;
+          const isActive = pathname === item.href;
 
           return (
             <Link
               key={item.name}
               href={item.href}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                isActive ? "bg-blue-100 text-blue-700 font-medium" : "text-gray-700 hover:bg-gray-100"
+                isActive
+                  ? "bg-blue-100 text-blue-700 font-medium"
+                  : "text-gray-700 hover:bg-gray-100"
               }`}
               onClick={() => mobile && setSidebarOpen(false)}
             >
               <Icon className="h-5 w-5" />
               {item.name}
             </Link>
-          )
+          );
         })}
       </nav>
 
@@ -72,7 +96,9 @@ export default function DivisionAdminLayout({
             <Wrench className="h-4 w-4 text-blue-600" />
             <p className="text-xs text-blue-800 font-medium">Hak Operator</p>
           </div>
-          <p className="text-xs text-blue-700">Anda dapat membuat akun baru untuk operasional divisi</p>
+          <p className="text-xs text-blue-700">
+            Anda dapat membuat akun baru untuk operasional divisi
+          </p>
         </div>
         <Button
           variant="ghost"
@@ -84,7 +110,7 @@ export default function DivisionAdminLayout({
         </Button>
       </div>
     </div>
-  )
+  );
 
   return (
     <AuthGuard requiredRole="ADMIN_DIVISI">
@@ -116,8 +142,12 @@ export default function DivisionAdminLayout({
 
               <div className="flex items-center gap-2">
                 <Building2 className="h-6 w-6 text-blue-600" />
-                <span className="font-semibold text-gray-900">Sistem Akuntansi</span>
-                <Badge className="bg-blue-100 text-blue-800 text-xs">OPERATOR</Badge>
+                <span className="font-semibold text-gray-900">
+                  Sistem Akuntansi
+                </span>
+                <Badge className="bg-blue-100 text-blue-800 text-xs">
+                  OPERATOR
+                </Badge>
               </div>
             </div>
 
@@ -126,6 +156,7 @@ export default function DivisionAdminLayout({
                 <p className="text-sm font-medium">{user?.username}</p>
                 <p className="text-xs text-gray-500"> {user?.division?.name}</p>
               </div>
+              <NotificationBell />
             </div>
           </header>
 
@@ -134,5 +165,5 @@ export default function DivisionAdminLayout({
         </div>
       </div>
     </AuthGuard>
-  )
+  );
 }

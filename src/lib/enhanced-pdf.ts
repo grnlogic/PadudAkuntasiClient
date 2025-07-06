@@ -13,6 +13,7 @@ interface PDFReportData {
   };
   // ✅ NEW: Support for specialized division data
   laporanPenjualanSales?: any[];
+  laporanPenjualanProduk?: any[]; // ✅ ADD: Support for new product sales reports
   laporanProduksi?: any[];
   laporanGudang?: any[];
   users?: any[];
@@ -29,7 +30,11 @@ function transformBackendData(entry: any): any {
     hppAmount: entry.hpp_amount || entry.hppAmount,
     pemakaianAmount: entry.pemakaian_amount || entry.pemakaianAmount,
     stokAkhir: entry.stok_akhir || entry.stokAkhir,
-    stokAwal: entry.stok_awal || entry.stokAwal,
+    barangMasuk:
+      entry.barang_masuk ||
+      entry.barangMasuk ||
+      entry.stok_awal ||
+      entry.stokAwal,
     pemakaian:
       entry.pemakaian || entry.pemakaian_amount || entry.pemakaianAmount,
     hasilProduksi: entry.hasil_produksi || entry.hasilProduksi,
@@ -38,7 +43,7 @@ function transformBackendData(entry: any): any {
     hpBarangJadi: entry.hpp_barang_jadi || entry.hpBarangJadi,
     returPenjualan: entry.retur_penjualan || entry.returPenjualan,
     keteranganKendala: entry.keterangan_kendala || entry.keteranganKendala,
-    kondisiGudang: entry.kondisi_gudang || entry.kondisiGudang,
+    keterangan: entry.keterangan || entry.kondisi_gudang || entry.kondisiGudang,
     attendanceStatus: entry.attendance_status || entry.attendanceStatus,
     absentCount: entry.absent_count || entry.absentCount,
     overtimeHours: entry.overtime_hours || entry.overtimeHours,
@@ -90,12 +95,18 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
     return transformedEntries;
   }
 
-  // PEMASARAN: entries + laporanPenjualanSales
+  // PEMASARAN: entries + laporanPenjualanSales + laporanPenjualanProduk
   if (divisionName.includes("PEMASARAN")) {
     transformedEntries = filterEntriHarian(data.entries).map(
       transformBackendData
     );
-    if (data.laporanPenjualanSales) {
+
+    // Pastikan semua laporan sales ditambahkan
+    if (data.laporanPenjualanSales && data.laporanPenjualanSales.length > 0) {
+      console.log(
+        "Processing laporanPenjualanSales:",
+        data.laporanPenjualanSales.length
+      );
       const salesEntries = data.laporanPenjualanSales.map((sales: any) => {
         const transformed = transformBackendData(sales);
         return {
@@ -115,6 +126,56 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
       });
       transformedEntries.push(...salesEntries);
     }
+
+    // Pastikan semua laporan produk ditambahkan
+    if (data.laporanPenjualanProduk && data.laporanPenjualanProduk.length > 0) {
+      console.log(
+        "Processing laporanPenjualanProduk:",
+        data.laporanPenjualanProduk.length
+      );
+      const produkEntries = data.laporanPenjualanProduk.map((produk: any) => {
+        return {
+          id: `produk-${produk.id}`,
+          accountId:
+            produk.productAccountId?.toString() ||
+            produk.product_account_id?.toString(),
+          description: `${
+            produk.namaAccount || produk.nama_account || "Produk"
+          } - ${
+            produk.namaSalesperson || produk.nama_salesperson || "Unknown"
+          }`,
+          keterangan: `${
+            produk.namaPerusahaan || produk.nama_perusahaan || "Unknown Company"
+          } - Target: ${produk.targetKuantitas || 0}, Realisasi: ${
+            produk.realisasiKuantitas || 0
+          }`,
+          nilai: Number(produk.realisasiKuantitas) || 0,
+          targetAmount: Number(produk.targetKuantitas) || 0,
+          realisasiAmount: Number(produk.realisasiKuantitas) || 0,
+          keteranganKendala:
+            produk.keteranganKendala || produk.keterangan_kendala || "",
+          tanggalLaporan: produk.tanggalLaporan || produk.tanggal_laporan,
+          namaPerusahaan: produk.namaPerusahaan || produk.nama_perusahaan,
+          namaSalesperson: produk.namaSalesperson || produk.nama_salesperson,
+          namaAccount: produk.namaAccount || produk.nama_account,
+          // ✅ Tambahan fields untuk PDF
+          createdAt:
+            produk.tanggalLaporan ||
+            produk.tanggal_laporan ||
+            produk.created_at,
+          tanggal:
+            produk.tanggalLaporan ||
+            produk.tanggal_laporan ||
+            produk.created_at,
+        };
+      });
+      transformedEntries.push(...produkEntries);
+    }
+
+    console.log(
+      "Total transformed entries for PEMASARAN:",
+      transformedEntries.length
+    );
     return transformedEntries;
   }
 
@@ -145,40 +206,79 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
     return [];
   }
 
-  // GUDANG/BLENDING/DISTRIBUSI: HANYA laporanGudang (tidak gabung dengan entries)
+  // GUDANG/PERSEDIAAN_BAHAN_BAKU/DISTRIBUSI: HANYA laporanGudang (tidak gabung dengan entries)
   if (
     divisionName.includes("GUDANG") ||
+    divisionName.includes("PERSEDIAAN") ||
+    divisionName.includes("BAHAN BAKU") ||
     divisionName.includes("BLENDING") ||
     divisionName.includes("DISTRIBUSI")
   ) {
+    // ✅ ADD: Debug logging untuk troubleshooting
+    console.log("🔍 [PDF DEBUG] Division detected:", divisionName);
+    console.log("🔍 [PDF DEBUG] laporanGudang data:", data.laporanGudang);
+    console.log(
+      "🔍 [PDF DEBUG] laporanGudang length:",
+      data.laporanGudang?.length || 0
+    );
+    console.log("🔍 [PDF DEBUG] entries data:", data.entries);
+    console.log("🔍 [PDF DEBUG] entries length:", data.entries?.length || 0);
+    console.log("🔍 [PDF DEBUG] accounts data:", data.accounts);
+    console.log("🔍 [PDF DEBUG] accounts length:", data.accounts?.length || 0);
+
     // ✅ FIXED: Hanya gunakan laporanGudang, jangan gabung dengan entries untuk mencegah duplikasi
-    if (data.laporanGudang) {
+    if (data.laporanGudang && data.laporanGudang.length > 0) {
+      console.log(
+        "🔍 [PDF DEBUG] Using laporanGudang, length:",
+        data.laporanGudang.length
+      );
       const gudangEntries = data.laporanGudang.map((gudang: any) => {
         const transformed = transformBackendData(gudang);
-        return {
+        console.log("🔍 [PDF DEBUG] Original gudang entry:", gudang);
+        console.log("🔍 [PDF DEBUG] Transformed gudang entry:", transformed);
+
+        const mappedEntry = {
           ...transformed,
           id: `gudang-${gudang.id}`,
           // ✅ FIXED: Perbaiki mapping accountId untuk laporanGudang
           accountId:
-            gudang.account?.id?.toString() || 
-            gudang.account_id?.toString() || 
+            gudang.account?.id?.toString() ||
+            gudang.account_id?.toString() ||
             gudang.accountId?.toString(),
-          description: `Laporan Gudang - Stok: ${transformed.stokAkhir || 0}`,
-          nilai: Number(transformed.pemakaianAmount) || 0,
+          description:
+            transformed.keterangan || gudang.keterangan || `Laporan Gudang`,
+          nilai: Number(transformed.pemakaian) || Number(gudang.pemakaian) || 0,
           pemakaianAmount: Number(transformed.pemakaianAmount) || 0,
           stokAkhir: Number(transformed.stokAkhir) || 0,
-          stokAwal: Number(transformed.stokAwal) || 0,
+          barangMasuk: Number(transformed.barangMasuk) || 0,
           pemakaian: Number(transformed.pemakaian) || 0,
-          kondisiGudang: transformed.kondisiGudang || "",
+          keterangan: transformed.keterangan || "",
           // ✅ ADD: Include account object for easier lookup
           account: gudang.account,
         };
+        console.log("🔍 [PDF DEBUG] Final mapped entry:", mappedEntry);
+        return mappedEntry;
       });
-      console.log("[PDF BLENDING] gudangEntries only:", gudangEntries);
+      console.log(
+        "[PDF PERSEDIAAN_BAHAN_BAKU] gudangEntries only:",
+        gudangEntries
+      );
       return gudangEntries;
     }
+
     // Fallback ke entries jika tidak ada laporanGudang
-    return filterEntriHarian(data.entries).map(transformBackendData);
+    console.log(
+      "🔍 [PDF DEBUG] Fallback to entries, length:",
+      data.entries.length
+    );
+    const fallbackEntries = filterEntriHarian(data.entries).map(
+      transformBackendData
+    );
+    console.log(
+      "🔍 [PDF DEBUG] Fallback entries after filter:",
+      fallbackEntries
+    );
+    return fallbackEntries;
   }
 
   // HRD: entries HRD saja
@@ -223,6 +323,16 @@ export function previewEnhancedPDF(data: PDFReportData) {
 
 function generateEnhancedHTML(data: PDFReportData): string {
   const divisionType = data.divisionName.toUpperCase();
+
+  // ✅ ADD: Debug logging untuk troubleshooting
+  console.log("🔍 [PDF HTML DEBUG] Starting generateEnhancedHTML");
+  console.log("🔍 [PDF HTML DEBUG] Division:", divisionType);
+  console.log("🔍 [PDF HTML DEBUG] Date:", data.date);
+  console.log("🔍 [PDF HTML DEBUG] Raw data received:", data);
+
+  const allEntries = getAllTransformedEntries(data);
+  console.log("🔍 [PDF HTML DEBUG] All transformed entries:", allEntries);
+  console.log("🔍 [PDF HTML DEBUG] Entries count:", allEntries.length);
 
   return `
     <!DOCTYPE html>
@@ -571,18 +681,44 @@ function generateSummarySection(data: PDFReportData): string {
 
   // PEMASARAN Summary
   if (divisionName.includes("PEMASARAN")) {
-    const totalTarget = allEntries.reduce((sum, entry) => {
-      const target = entry.targetAmount || 0;
-      return sum + Number(target);
-    }, 0);
+    // ✅ Enhanced: Calculate from both laporanPenjualanSales and laporanPenjualanProduk
+    let totalTarget = 0;
+    let totalRealisasi = 0;
+    let totalRetur = 0;
+    let totalKendala = 0;
 
-    const totalRealisasi = allEntries.reduce((sum, entry) => {
-      const realisasi = entry.realisasiAmount || 0;
-      return sum + Number(realisasi);
-    }, 0);
+    // From regular entries (legacy)
+    allEntries.forEach((entry) => {
+      totalTarget += Number(entry.targetAmount) || 0;
+      totalRealisasi += Number(entry.realisasiAmount) || 0;
+    });
+
+    // ✅ NEW: From laporanPenjualanProduk (wizard data)
+    if (data.laporanPenjualanProduk) {
+      data.laporanPenjualanProduk.forEach((produk: any) => {
+        totalTarget += Number(produk.targetKuantitas) || 0;
+        totalRealisasi += Number(produk.realisasiKuantitas) || 0;
+        if (produk.keteranganKendala && produk.keteranganKendala.trim()) {
+          totalKendala += 1;
+        }
+      });
+    }
+
+    // From laporanPenjualanSales (legacy)
+    if (data.laporanPenjualanSales) {
+      data.laporanPenjualanSales.forEach((sales: any) => {
+        totalTarget += Number(sales.targetPenjualan) || 0;
+        totalRealisasi += Number(sales.realisasiPenjualan) || 0;
+        totalRetur += Number(sales.returPenjualan) || 0;
+      });
+    }
 
     const achievementRate =
       totalTarget > 0 ? (totalRealisasi / totalTarget) * 100 : 0;
+
+    const totalLaporan =
+      (data.laporanPenjualanSales?.length || 0) +
+      (data.laporanPenjualanProduk?.length || 0);
 
     return `
       <div class="summary-section pemasaran">
@@ -597,22 +733,54 @@ function generateSummarySection(data: PDFReportData): string {
           <tbody>
             <tr>
               <td>Total Target</td>
-              <td style="text-align: right;">${formatCurrency(totalTarget)}</td>
+              <td style="text-align: right;">${totalTarget.toLocaleString(
+                "id-ID"
+              )} Unit</td>
             </tr>
             <tr>
               <td>Total Realisasi</td>
-              <td style="text-align: right;">${formatCurrency(
-                totalRealisasi
-              )}</td>
+              <td style="text-align: right;">${totalRealisasi.toLocaleString(
+                "id-ID"
+              )} Unit</td>
             </tr>
+            ${
+              totalRetur > 0
+                ? `
+            <tr>
+              <td>Total Retur</td>
+              <td style="text-align: right;">${totalRetur.toLocaleString(
+                "id-ID"
+              )} Unit</td>
+            </tr>
+            `
+                : ""
+            }
             <tr>
               <td>Achievement Rate</td>
               <td style="text-align: right;">${achievementRate.toFixed(1)}%</td>
             </tr>
+            <tr>
+              <td>Total Laporan</td>
+              <td style="text-align: right;">${totalLaporan} Laporan</td>
+            </tr>
+            ${
+              totalKendala > 0
+                ? `
+            <tr>
+              <td>Laporan dengan Kendala</td>
+              <td style="text-align: right;">${totalKendala} Laporan</td>
+            </tr>
+            `
+                : ""
+            }
             <tr style="background-color: #ecf0f1; font-weight: bold;">
               <td>Status</td>
               <td style="text-align: right;">${
-                achievementRate >= 100 ? "Target Tercapai" : "Belum Tercapai"
+                achievementRate >= 100
+                  ? "Target Tercapai ✅"
+                  : achievementRate >= 80
+                  ? "Mendekati Target 🎯"
+                  : "Perlu Ditingkatkan 📈"
               }</td>
             </tr>
           </tbody>
@@ -672,17 +840,21 @@ function generateSummarySection(data: PDFReportData): string {
     `;
   }
 
-  // GUDANG/BLENDING Summary
-  if (divisionName.includes("GUDANG") || divisionName.includes("BLENDING")) {
+  // GUDANG/PERSEDIAAN_BAHAN_BAKU Summary
+  if (
+    divisionName.includes("GUDANG") ||
+    divisionName.includes("PERSEDIAAN") ||
+    divisionName.includes("BLENDING")
+  ) {
     // ✅ FIXED: Use same fallback logic as detail table
-    const totalStokAwal = allEntries.reduce((sum, entry) => {
-      const stokAwal = entry.stokAwal || 0;
-      return sum + Number(stokAwal);
+    const totalBarangMasuk = allEntries.reduce((sum, entry) => {
+      const barangMasuk = entry.barangMasuk || 0;
+      return sum + Number(barangMasuk);
     }, 0);
 
     const totalPemakaian = allEntries.reduce((sum, entry) => {
       // ✅ FIXED: Use same fallback as detail table
-      const pemakaian = entry.pemakaianAmount || entry.pemakaian || 0;
+      const pemakaian = entry.pemakaian || 0;
       return sum + Number(pemakaian);
     }, 0);
 
@@ -717,8 +889,8 @@ function generateSummarySection(data: PDFReportData): string {
           </thead>
           <tbody>
             <tr>
-              <td>Total Stok Awal</td>
-              <td style="text-align: right;">${totalStokAwal.toLocaleString(
+              <td>Total Barang Masuk</td>
+              <td style="text-align: right;">${totalBarangMasuk.toLocaleString(
                 "id-ID"
               )} unit</td>
             </tr>
@@ -821,22 +993,29 @@ function generateSummarySection(data: PDFReportData): string {
 function generateDetailsSection(data: PDFReportData): string {
   const divisionName = data.divisionName.toUpperCase();
   const allEntries = getAllTransformedEntries(data);
+
+  // ✅ ADD: Debug logging untuk troubleshooting
+  console.log("🔍 [PDF DETAILS DEBUG] Division:", divisionName);
+  console.log("🔍 [PDF DETAILS DEBUG] All entries received:", allEntries);
+  console.log("🔍 [PDF DETAILS DEBUG] Entries count:", allEntries.length);
+
   let headerColumns = "";
 
   if (divisionName.includes("KEUANGAN")) {
     headerColumns = "<th>Jenis Transaksi</th><th>Nominal</th>";
   } else if (divisionName.includes("PEMASARAN")) {
     headerColumns =
-      "<th>Target</th><th>Realisasi</th><th>Retur</th><th>Achievement</th><th>Kendala</th><th>Sales</th>";
+      "<th>Perusahaan</th><th>Salesperson</th><th>Produk</th><th>Target</th><th>Realisasi</th><th>Achievement</th><th>Kendala</th>";
   } else if (divisionName.includes("PRODUKSI")) {
     headerColumns =
       "<th>Hasil Produksi</th><th>Barang Gagal</th><th>Stock Barang Jadi</th><th>HPP</th><th>HP/Unit</th><th>Kendala</th>";
   } else if (
     divisionName.includes("GUDANG") ||
+    divisionName.includes("PERSEDIAAN") ||
     divisionName.includes("BLENDING")
   ) {
     headerColumns =
-      "<th>Stok Awal</th><th>Pemakaian</th><th>Stok Akhir</th><th>Kondisi Gudang</th>";
+      "<th>Barang Masuk</th><th>Pemakaian</th><th>Stok Akhir</th><th>Keterangan</th>";
   } else if (divisionName.includes("HRD")) {
     headerColumns =
       "<th>Status Kehadiran</th><th>Tidak Hadir</th><th>Shift</th><th>Jam Lembur</th>";
@@ -846,30 +1025,29 @@ function generateDetailsSection(data: PDFReportData): string {
 
   const rows = allEntries
     .map((entry, index) => {
-      // ✅ FIXED: Improved account lookup dengan multiple fallbacks
-      let account = data.accounts.find((acc) => acc.id === entry.accountId);
-      
-      // Fallback: coba dengan string/number conversion
-      if (!account) {
-        account = data.accounts.find((acc) => acc.id?.toString() === entry.accountId?.toString());
-      }
-      
+      // ✅ FIXED: Improved account lookup dengan multiple fallbacks yang lebih comprehensive
+      let account = data.accounts.find((acc) => {
+        return (
+          acc.id?.toString() === entry.accountId?.toString() ||
+          acc.id === entry.accountId ||
+          acc.accountId?.toString() === entry.accountId?.toString()
+        );
+      });
+
       // Fallback: gunakan account dari entry jika ada (untuk laporanGudang)
       if (!account && entry.account) {
         account = entry.account;
       }
-      
-      // Debug log untuk troubleshooting
+
+      // Jika masih tidak ketemu, buat fallback
       if (!account) {
-        console.warn(`[PDF] Account not found for entry:`, {
-          entryId: entry.id,
-          entryAccountId: entry.accountId,
-          entryAccountIdType: typeof entry.accountId,
-          availableAccountIds: data.accounts.map(acc => ({ id: acc.id, type: typeof acc.id })),
-          entry: entry
-        });
+        account = {
+          id: entry.accountId,
+          accountCode: "N/A",
+          accountName: entry.namaAccount || "Unknown Account",
+        };
       }
-      
+
       let dataCells = "";
       if (divisionName.includes("KEUANGAN")) {
         const transactionType = entry.transactionType || "-";
@@ -886,19 +1064,42 @@ function generateDetailsSection(data: PDFReportData): string {
       } else if (divisionName.includes("PEMASARAN")) {
         const target = entry.targetAmount || 0;
         const realisasi = entry.realisasiAmount || 0;
-        const retur = entry.returPenjualan || 0;
         const achievement =
           target > 0 ? ((realisasi / target) * 100).toFixed(1) + "%" : "-";
         const kendala = entry.keteranganKendala || "-";
-        const sales =
-          entry.salesperson?.username || entry.salesperson?.nama || "-";
+
+        // ✅ Enhanced: Handle both legacy sales data and new product data
+        const perusahaan =
+          entry.namaPerusahaan || entry.salesperson?.perusahaan?.nama || "-";
+        const salesperson =
+          entry.namaSalesperson ||
+          entry.salesperson?.username ||
+          entry.salesperson?.nama ||
+          "-";
+        const produk = entry.namaAccount || account?.accountName || "Produk";
+
         dataCells = `
-        <td style="text-align: right;">${formatCurrency(target)}</td>
-        <td style="text-align: right;">${formatCurrency(realisasi)}</td>
-        <td style="text-align: right;">${formatCurrency(retur)}</td>
-        <td style="text-align: center;">${achievement}</td>
-        <td style="text-align: left;">${kendala}</td>
-        <td style="text-align: left;">${sales}</td>
+        <td style="text-align: left;">${perusahaan}</td>
+        <td style="text-align: left;">${salesperson}</td>
+        <td style="text-align: left;">${produk}</td>
+        <td style="text-align: right;">${target.toLocaleString(
+          "id-ID"
+        )} Unit</td>
+        <td style="text-align: right;">${realisasi.toLocaleString(
+          "id-ID"
+        )} Unit</td>
+        <td style="text-align: center; ${
+          achievement.includes("-")
+            ? ""
+            : achievement.includes("100") || parseFloat(achievement) >= 100
+            ? "color: green; font-weight: bold;"
+            : parseFloat(achievement) >= 80
+            ? "color: orange; font-weight: bold;"
+            : "color: red;"
+        }">${achievement}</td>
+        <td style="text-align: left; ${
+          kendala !== "-" ? "color: red; font-style: italic;" : ""
+        }">${kendala}</td>
       `;
       } else if (divisionName.includes("PRODUKSI")) {
         const hasil = entry.hasilProduksi || 0;
@@ -920,17 +1121,21 @@ function generateDetailsSection(data: PDFReportData): string {
       `;
       } else if (
         divisionName.includes("GUDANG") ||
+        divisionName.includes("PERSEDIAAN") ||
         divisionName.includes("BLENDING")
       ) {
-        const stokAwal = entry.stokAwal || 0;
-        const pemakaian = entry.pemakaianAmount || entry.pemakaian || 0;
+        const barangMasuk = entry.barangMasuk || 0;
+        const pemakaian = entry.pemakaian || 0;
         const stokAkhir = entry.stokAkhir || 0;
-        const kondisi = entry.kondisiGudang || "-";
+        const keterangan = entry.keterangan || "-";
+
         dataCells = `
-        <td style="text-align: right;">${stokAwal.toLocaleString("id-ID")}</td>
+        <td style="text-align: right;">${barangMasuk.toLocaleString(
+          "id-ID"
+        )}</td>
         <td style="text-align: right;">${pemakaian.toLocaleString("id-ID")}</td>
         <td style="text-align: right;">${stokAkhir.toLocaleString("id-ID")}</td>
-        <td style="text-align: left;">${kondisi}</td>
+        <td style="text-align: left;">${keterangan}</td>
       `;
       } else if (divisionName.includes("HRD")) {
         const status = entry.attendanceStatus || "-";

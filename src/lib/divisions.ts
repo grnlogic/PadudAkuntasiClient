@@ -26,8 +26,8 @@ const defaultDivisions: Division[] = [
   },
   {
     id: "10",
-    name: "BLENDING",
-    description: "Divisi blending",
+    name: "PERSEDIAAN_BAHAN_BAKU",
+    description: "Divisi PERSEDIAAN_BAHAN_BAKU",
     isActive: true,
     createdAt: new Date().toISOString(),
   },

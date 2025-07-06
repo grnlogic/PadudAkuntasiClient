@@ -185,7 +185,7 @@ export default function ReportsPage() {
     if (
       divisionName?.includes("gudang") ||
       divisionName?.includes("warehouse") ||
-      divisionName?.includes("Blending")
+      divisionName?.includes("PERSEDIAAN_BAHAN_BAKU")
     )
       return "GUDANG";
     if (

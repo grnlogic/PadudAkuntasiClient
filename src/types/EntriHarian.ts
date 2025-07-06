@@ -36,7 +36,7 @@ export interface EntriHarian {
   stockBarangJadi?: number;
   hpBarangJadi?: number;
 
-  // ✅ NEW: Gudang fields for BLENDING - Updated field names
+  // ✅ NEW: Gudang fields for PERSEDIAAN_BAHAN_BAKU - Updated field names
   stokAwal?: number;
   pemakaian?: number;
   kondisiGudang?: string;
@@ -71,7 +71,7 @@ export interface CreateEntriHarianRequest {
   attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
   absentCount?: number;
   shift?: "REGULER" | "LEMBUR";
-  // ✅ NEW: Gudang fields for BLENDING - Updated field names
+  // ✅ NEW: Gudang fields for PERSEDIAAN_BAHAN_BAKU - Updated field names
   stokAwal?: number;
   pemakaian?: number;
   kondisiGudang?: string;

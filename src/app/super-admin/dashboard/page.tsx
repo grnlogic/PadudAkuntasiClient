@@ -32,8 +32,14 @@ import {
   Eye,
   Filter,
   Calendar,
+  Bell,
+  X,
 } from "lucide-react";
 import { getAccounts, getUsers, getEntriHarian } from "@/lib/data";
+import { notificationAPI } from "@/lib/api";
+import ModernNotificationBell from "@/components/modern-notification-bell";
+import { Input } from "@/components/ui/input";
+import { toastSuccess, toastError } from "@/lib/toast-utils";
 
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState({
@@ -272,7 +278,7 @@ export default function SuperAdminDashboard() {
       "KEUANGAN & ADMINISTRASI": "bg-blue-100 text-blue-800",
       "PEMASARAN & PENJUALAN": "bg-green-100 text-green-800",
       PRODUKSI: "bg-yellow-100 text-yellow-800",
-      "BLENDING": "bg-purple-100 text-purple-800",
+      PERSEDIAAN_BAHAN_BAKU: "bg-purple-100 text-purple-800",
       HRD: "bg-orange-100 text-orange-800",
     };
     return colors[divisionName] || "bg-gray-100 text-gray-800";
@@ -367,15 +373,247 @@ export default function SuperAdminDashboard() {
     setAppliedDivision("all");
   };
 
+  function SendNotificationForm() {
+    const [message, setMessage] = useState("");
+    const [linkUrl, setLinkUrl] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSend = async () => {
+      if (!message.trim()) return;
+
+      setIsLoading(true);
+      try {
+        // ✅ FIXED: Gunakan notificationAPI yang konsisten dengan pola lainnya
+        const response = await notificationAPI.send(message, linkUrl);
+
+        if (!response.success) {
+          throw new Error(response.error || "Gagal mengirim notifikasi");
+        }
+
+        toastSuccess.custom(
+          "🎉 Notifikasi berhasil dikirim ke semua pengguna!"
+        );
+        setMessage("");
+        setLinkUrl("");
+      } catch (e: any) {
+        console.error("Error sending notification:", e);
+        toastError.custom(e.message || "Gagal mengirim notifikasi");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    return (
+      <>
+        <style jsx>{`
+          .notification-form {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 24px;
+            color: white;
+            box-shadow: 0 20px 50px rgba(102, 126, 234, 0.3);
+          }
+
+          .form-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+          }
+
+          .form-subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            margin-bottom: 20px;
+          }
+
+          .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 14px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+          }
+
+          .form-input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+          }
+
+          .form-input:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+          }
+
+          .form-textarea {
+            resize: vertical;
+            min-height: 80px;
+            font-family: inherit;
+          }
+
+          .form-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-top: 16px;
+          }
+
+          .send-button {
+            background: rgba(255, 255, 255, 0.9);
+            color: #667eea;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+          }
+
+          .send-button:hover:not(:disabled) {
+            background: white;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+          }
+
+          .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+          }
+
+          .clear-button {
+            background: transparent;
+            color: rgba(255, 255, 255, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+          }
+
+          .clear-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.5);
+          }
+
+          .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(102, 126, 234, 0.3);
+            border-radius: 50%;
+            border-top: 2px solid #667eea;
+            animation: spin 1s linear infinite;
+          }
+
+          @keyframes spin {
+            0% {
+              transform: rotate(0deg);
+            }
+            100% {
+              transform: rotate(360deg);
+            }
+          }
+
+          .char-count {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            text-align: right;
+            margin-top: -8px;
+            margin-bottom: 12px;
+          }
+        `}</style>
+
+        <div className="notification-form">
+          <div className="form-title">
+            <Bell size={24} />
+            Kirim Notifikasi Broadcast
+          </div>
+          <div className="form-subtitle">
+            Kirim pesan penting ke semua pengguna sistem secara bersamaan
+          </div>
+
+          <textarea
+            className="form-input form-textarea"
+            placeholder="Tulis pesan notifikasi di sini... (contoh: Sistem akan maintenance pada hari Minggu jam 02:00 - 04:00 WIB)"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            maxLength={200}
+          />
+          <div className="char-count">{message.length}/200 karakter</div>
+
+          <input
+            type="url"
+            className="form-input"
+            placeholder="🔗 Link terkait (opsional) - contoh: https://example.com/info"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+          />
+
+          <div className="form-actions">
+            <button
+              className="send-button"
+              onClick={handleSend}
+              disabled={!message.trim() || isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <div className="loading-spinner" />
+                  Mengirim...
+                </>
+              ) : (
+                <>
+                  <Bell size={16} />
+                  Kirim ke Semua Pengguna
+                </>
+              )}
+            </button>
+
+            {(message || linkUrl) && !isLoading && (
+              <button
+                className="clear-button"
+                onClick={() => {
+                  setMessage("");
+                  setLinkUrl("");
+                }}
+              >
+                <X size={16} />
+                Bersihkan
+              </button>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">
-          Menara Kontrol - Dashboard Pemantauan
-        </h1>
-        <p className="text-gray-600 mt-2">
-          Pantau seluruh aktivitas dari semua divisi secara real-time
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Menara Kontrol - Dashboard Pemantauan
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Pantau seluruh aktivitas dari semua divisi secara real-time
+          </p>
+        </div>
+        <ModernNotificationBell />
       </div>
 
       {/* Stats Grid */}
@@ -683,6 +921,8 @@ export default function SuperAdminDashboard() {
           </p>
         </CardContent>
       </Card>
+
+      <SendNotificationForm />
     </div>
   );
 }

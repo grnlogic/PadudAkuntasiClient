@@ -13,6 +13,25 @@ interface SimplePDFReportData {
     totalPengeluaran: number;
     totalSaldoAkhir: number;
   };
+
+  // ✅ NEW: Data untuk divisi Produksi
+  laporanProduksiData?: Array<{
+    accountName: string;
+    hasilProduksi: number;
+    barangGagal: number;
+    stockBarangJadi: number;
+    hpBarangJadi: number;
+    keteranganKendala: string;
+  }>;
+
+  // ✅ NEW: Data untuk divisi Blending/Gudang
+  laporanBlendingData?: Array<{
+    accountName: string;
+    barangMasuk: number;
+    pemakaian: number;
+    stokAkhir: number;
+    keteranganGudang: string;
+  }>;
 }
 
 // Re-export functions from simple-pdf

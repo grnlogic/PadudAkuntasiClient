@@ -13,6 +13,25 @@ interface SimplePDFReportData {
     totalPengeluaran: number;
     totalSaldoAkhir: number;
   };
+
+  // ✅ NEW: Data untuk divisi Produksi
+  laporanProduksiData?: Array<{
+    accountName: string;
+    hasilProduksi: number;
+    barangGagal: number;
+    stockBarangJadi: number;
+    hpBarangJadi: number;
+    keteranganKendala: string;
+  }>;
+
+  // ✅ NEW: Data untuk divisi Blending/Gudang
+  laporanBlendingData?: Array<{
+    accountName: string;
+    barangMasuk: number;
+    pemakaian: number;
+    stokAkhir: number;
+    keteranganGudang: string;
+  }>;
 }
 
 export const generateSimplePDF = (data: SimplePDFReportData) => {
@@ -425,70 +444,50 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
           </table>
         </div>
         `
-            : data.divisionName.includes("PRODUKSI")
+            : data.laporanProduksiData && data.laporanProduksiData.length > 0
             ? `
+        <!-- ✅ NEW: Production Data Table -->
         <div class="summary-section">
-          <div class="summary-title">RINGKASAN PRODUKSI HARIAN</div>
+          <div class="summary-title">DETAIL LAPORAN PRODUKSI</div>
           <table class="summary-table">
             <thead>
               <tr>
-                <th>Metrik</th>
-                <th>Nilai</th>
+                <th>Produk</th>
+                <th>Hasil Produksi</th>
+                <th>Barang Gagal</th>
+                <th>Stock Barang Jadi</th>
+                <th>HP Barang Jadi</th>
+                <th>Keterangan</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>Total Produksi</td>
-                <td>${data.entries
-                  .reduce((sum, entry) => {
-                    return sum + Number(entry.nilai);
-                  }, 0)
-                  .toLocaleString("id-ID")} unit</td>
-              </tr>
-              <tr>
-                <td>Total HPP</td>
-                <td>${formatCurrency(
-                  data.entries.reduce((sum, entry) => {
-                    const hpp = (entry as any).hppAmount || 0;
-                    return sum + Number(hpp);
-                  }, 0)
-                )}</td>
-              </tr>
-              <tr>
-                <td>HPP per Unit</td>
-                <td>${(() => {
-                  const totalProduksi = data.entries.reduce((sum, entry) => {
-                    return sum + Number(entry.nilai);
-                  }, 0);
-                  const totalHPP = data.entries.reduce((sum, entry) => {
-                    const hpp = (entry as any).hppAmount || 0;
-                    return sum + Number(hpp);
-                  }, 0);
-                  const hppPerUnit =
-                    totalProduksi > 0 ? totalHPP / totalProduksi : 0;
-                  return formatCurrency(hppPerUnit);
-                })()}</td>
-              </tr>
-              <tr style="background-color: #ecf0f1; font-weight: bold;">
-                <td>Status Efisiensi</td>
-                <td>${(() => {
-                  const totalProduksi = data.entries.reduce((sum, entry) => {
-                    return sum + Number(entry.nilai);
-                  }, 0);
-                  const totalHPP = data.entries.reduce((sum, entry) => {
-                    const hpp = (entry as any).hppAmount || 0;
-                    return sum + Number(hpp);
-                  }, 0);
-                  const hppPerUnit =
-                    totalProduksi > 0 ? totalHPP / totalProduksi : 0;
-                  return hppPerUnit < 5000 ? "Efisien" : "Perlu Review";
-                })()}</td>
-              </tr>
+              ${data.laporanProduksiData
+                .map(
+                  (item) => `
+                <tr>
+                  <td>${item.accountName}</td>
+                  <td style="text-align: right;">${item.hasilProduksi.toLocaleString(
+                    "id-ID"
+                  )}</td>
+                  <td style="text-align: right;">${item.barangGagal.toLocaleString(
+                    "id-ID"
+                  )}</td>
+                  <td style="text-align: right;">${item.stockBarangJadi.toLocaleString(
+                    "id-ID"
+                  )}</td>
+                  <td style="text-align: right;">${formatCurrency(
+                    item.hpBarangJadi
+                  )}</td>
+                  <td>${item.keteranganKendala || "-"}</td>
+                </tr>
+              `
+                )
+                .join("")}
             </tbody>
           </table>
         </div>
         `
-            : data.divisionName.includes("GUDANG")
+            : data.laporanBlendingData && data.laporanBlendingData.length > 0
             ? `
         <div class="summary-section">
           <div class="summary-title">RINGKASAN INVENTORI HARIAN</div>
@@ -546,6 +545,148 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
             </tbody>
           </table>
         </div>
+        
+        <!-- ✅ NEW: Blending Data Table -->
+        ${
+          data.laporanBlendingData && data.laporanBlendingData.length > 0
+            ? `
+        <div class="summary-section">
+          <div class="summary-title">DETAIL LAPORAN BLENDING/GUDANG</div>
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>Bahan Baku</th>
+                <th>Barang Masuk</th>
+                <th>Pemakaian</th>
+                <th>Stok Akhir</th>
+                <th>Keterangan</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.laporanBlendingData
+                .map(
+                  (item) => `
+                <tr>
+                  <td>${item.accountName}</td>
+                  <td style="text-align: right;">${item.barangMasuk.toLocaleString(
+                    "id-ID"
+                  )}</td>
+                  <td style="text-align: right;">${item.pemakaian.toLocaleString(
+                    "id-ID"
+                  )}</td>
+                  <td style="text-align: right;">${item.stokAkhir.toLocaleString(
+                    "id-ID"
+                  )}</td>
+                  <td>${item.keteranganGudang || "-"}</td>
+                </tr>
+              `
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>
+        `
+            : ""
+        }
+        `
+            : data.divisionName.includes("BLENDING")
+            ? `
+        <div class="summary-section">
+          <div class="summary-title">RINGKASAN BLENDING HARIAN</div>
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>Metrik</th>
+                <th>Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Total Barang Masuk</td>
+                <td>${
+                  data.laporanBlendingData
+                    ? data.laporanBlendingData
+                        .reduce((sum, item) => sum + item.barangMasuk, 0)
+                        .toLocaleString("id-ID")
+                    : "0"
+                } unit</td>
+              </tr>
+              <tr>
+                <td>Total Pemakaian</td>
+                <td>${
+                  data.laporanBlendingData
+                    ? data.laporanBlendingData
+                        .reduce((sum, item) => sum + item.pemakaian, 0)
+                        .toLocaleString("id-ID")
+                    : "0"
+                } unit</td>
+              </tr>
+              <tr>
+                <td>Total Stok Akhir</td>
+                <td>${
+                  data.laporanBlendingData
+                    ? data.laporanBlendingData
+                        .reduce((sum, item) => sum + item.stokAkhir, 0)
+                        .toLocaleString("id-ID")
+                    : "0"
+                } unit</td>
+              </tr>
+              <tr style="background-color: #ecf0f1; font-weight: bold;">
+                <td>Status Stok</td>
+                <td>${(() => {
+                  if (!data.laporanBlendingData) return "Tidak ada data";
+                  const lowStockCount = data.laporanBlendingData.filter(
+                    (item) => item.stokAkhir < 100
+                  ).length;
+                  return lowStockCount > 0 ? "Perlu Restock" : "Stok Aman";
+                })()}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- ✅ NEW: Blending Data Table -->
+        ${
+          data.laporanBlendingData && data.laporanBlendingData.length > 0
+            ? `
+        <div class="summary-section">
+          <div class="summary-title">DETAIL LAPORAN BLENDING</div>
+          <table class="summary-table">
+            <thead>
+              <tr>
+                <th>Bahan Baku</th>
+                <th>Barang Masuk</th>
+                <th>Pemakaian</th>
+                <th>Stok Akhir</th>
+                <th>Keterangan</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.laporanBlendingData
+                .map(
+                  (item) => `
+                <tr>
+                  <td>${item.accountName}</td>
+                  <td style="text-align: right;">${item.barangMasuk.toLocaleString(
+                    "id-ID"
+                  )}</td>
+                  <td style="text-align: right;">${item.pemakaian.toLocaleString(
+                    "id-ID"
+                  )}</td>
+                  <td style="text-align: right;">${item.stokAkhir.toLocaleString(
+                    "id-ID"
+                  )}</td>
+                  <td>${item.keteranganGudang || "-"}</td>
+                </tr>
+              `
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>
+        `
+            : ""
+        }
         `
             : data.divisionName.includes("HRD")
             ? `
@@ -650,12 +791,14 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
                     : ""
                 }
                 ${
-                  data.divisionName.includes("PRODUKSI")
+                  data.laporanProduksiData &&
+                  data.laporanProduksiData.length > 0
                     ? "<th>Produksi</th><th>HPP</th><th>HPP/Unit</th>"
                     : ""
                 }
                 ${
-                  data.divisionName.includes("GUDANG")
+                  data.laporanBlendingData &&
+                  data.laporanBlendingData.length > 0
                     ? "<th>Pemakaian</th><th>Stok Akhir</th><th>Status</th>"
                     : ""
                 }
@@ -717,7 +860,10 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
                       )}</td>
                       <td style="text-align: center;">${achievement}</td>
                     `;
-                  } else if (data.divisionName.includes("PRODUKSI")) {
+                  } else if (
+                    data.laporanProduksiData &&
+                    data.laporanProduksiData.length > 0
+                  ) {
                     const produksi = entry.nilai || 0;
                     const hpp = (entry as any).hppAmount || 0;
                     const hppPerUnit = produksi > 0 ? hpp / produksi : 0;
@@ -730,7 +876,10 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
                         hppPerUnit
                       )}</td>
                     `;
-                  } else if (data.divisionName.includes("GUDANG")) {
+                  } else if (
+                    data.laporanBlendingData &&
+                    data.laporanBlendingData.length > 0
+                  ) {
                     const pemakaian = (entry as any).pemakaianAmount || 0;
                     const stokAkhir = (entry as any).stokAkhir || 0;
                     const status =

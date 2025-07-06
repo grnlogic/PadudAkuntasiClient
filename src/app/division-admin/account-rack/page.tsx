@@ -119,7 +119,7 @@ export default function AccountRackPage() {
       "KEUANGAN & ADMINISTRASI": "1",
       "PEMASARAN & PENJUALAN": "2",
       PRODUKSI: "3",
-      BLENDING: "10",
+      PERSEDIAAN_BAHAN_BAKU: "10",
       HRD: "5",
     };
 

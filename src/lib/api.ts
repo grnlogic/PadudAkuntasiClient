@@ -167,6 +167,22 @@ export const accountsAPI = {
       method: "DELETE",
     });
   },
+
+  getProducts: async () => {
+    console.log(
+      "🚨 WARNING: Using generic /products endpoint (should not be used for division-specific data)"
+    );
+    return apiRequest<Account[]>("/api/v1/accounts/products");
+  },
+
+  getProductsByDivision: async (divisionId: number) => {
+    const endpoint = `/api/v1/accounts/products/by-division/${divisionId}?t=${Date.now()}`;
+    console.log(
+      "✅ Calling correct division-specific endpoint with cache busting:",
+      endpoint
+    );
+    return apiRequest<Account[]>(endpoint);
+  },
 };
 
 // Users API (untuk yang belum ada endpoint)
@@ -485,18 +501,39 @@ export async function getSalespeople(): Promise<Salesperson[]> {
 }
 
 // CREATE salesperson
-export async function createSalesperson(nama: string): Promise<Salesperson> {
+export async function createSalesperson(
+  nama: string,
+  perusahaanId?: number,
+  divisionId?: number
+): Promise<Salesperson> {
   const token = getToken();
   if (!token) throw new Error("User belum login atau token tidak ditemukan");
+
+  // ✅ ENHANCED: Support untuk manual creation dengan default values
+  const requestBody = {
+    nama,
+    perusahaanId: perusahaanId || 1, // Default ke PJP jika tidak ada
+    divisionId: divisionId || 6, // Default ke DIVISI PEMASARAN & PENJUALAN
+    status: "AKTIF",
+  };
+
+  console.log("🔍 CREATE SALESPERSON - Request body:", requestBody);
+
   const res = await fetch(`${BASE_URL}/api/v1/salespeople`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ nama }),
+    body: JSON.stringify(requestBody),
   });
-  if (!res.ok) throw new Error("Gagal menambah salesperson");
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("❌ CREATE SALESPERSON - Error:", errorText);
+    throw new Error("Gagal menambah salesperson: " + errorText);
+  }
+
   return res.json();
 }
 
@@ -592,10 +629,10 @@ export const laporanProduksiAPI = {
 export interface CreateLaporanGudangRequest {
   tanggalLaporan: string; // format: 'YYYY-MM-DD'
   accountId: number;
-  stokAwal?: number; // ✅ OPTIONAL - bisa kosong
+  stokAwal?: number; // Field name that form sends (was 'barangMasuk')
   pemakaian?: number;
   stokAkhir?: number;
-  kondisiGudang?: string;
+  kondisiGudang?: string; // Field name that form sends (was 'keterangan')
 }
 
 export interface LaporanGudangHarian {
@@ -611,10 +648,10 @@ export interface LaporanGudangHarian {
     accountName: string;
     valueType: string;
   };
-  stokAwal?: number;
+  barangMasuk?: number;
   pemakaian?: number;
   stokAkhir?: number;
-  kondisiGudang?: string;
+  keterangan?: string;
   createdBy: {
     id: number;
     username: string;
@@ -625,19 +662,6 @@ export interface LaporanGudangHarian {
     };
   };
   createdAt: string;
-  stok_awal?: number;
-  stok_akhir?: number;
-  kondisi_gudang?: string;
-  created_by?: {
-    id: number;
-    username: string;
-    role: string;
-    division: {
-      id: number;
-      name: string;
-    };
-  };
-  created_at?: string;
 }
 
 //Api LaporanGudang
@@ -657,10 +681,11 @@ export const laporanGudangAPI = {
     const formattedData = {
       tanggalLaporan: data.tanggalLaporan.slice(0, 10), // pastikan hanya YYYY-MM-DD
       accountId: Number(data.accountId),
-      stokAwal: data.stokAwal ? Number(data.stokAwal) : null,
+      // Map field names correctly from form to API
+      barangMasuk: data.stokAwal ? Number(data.stokAwal) : null, // Form sends 'stokAwal'
       pemakaian: data.pemakaian ? Number(data.pemakaian) : null,
       stokAkhir: data.stokAkhir ? Number(data.stokAkhir) : null,
-      kondisiGudang: data.kondisiGudang || null,
+      keterangan: data.kondisiGudang || null, // Form sends 'kondisiGudang'
     };
     console.log(
       "📤 LAPORAN GUDANG API - Formatted data to send:",
@@ -682,4 +707,138 @@ export const laporanGudangAPI = {
       method: "DELETE",
     });
   },
+};
+
+// ✅ NEW: Notification interface
+export interface Notification {
+  id: number;
+  message: string;
+  isRead: boolean;
+  linkUrl?: string;
+  createdAt: string;
+  user?: {
+    id: number;
+    username: string;
+  };
+}
+
+// ✅ NEW: Notification API
+export const notificationAPI = {
+  getAll: async () => {
+    const response = await apiRequest<Notification[]>("/api/v1/notifications");
+    if (response.success && response.data) {
+      // ✅ Ensure proper data mapping with logging
+      console.log("🔔 RAW NOTIFICATION RESPONSE:", response.data);
+
+      const mappedNotifications = response.data.map((notif: any) => ({
+        id: notif.id,
+        message: notif.message,
+        isRead: notif.isRead || notif.read || false, // Handle both field names
+        linkUrl: notif.linkUrl,
+        createdAt: notif.createdAt || notif.created_at, // Handle both field names
+        user: notif.user,
+      }));
+
+      console.log("🔔 MAPPED NOTIFICATIONS:", mappedNotifications);
+      return { success: true, data: mappedNotifications };
+    }
+    return response;
+  },
+
+  markAsRead: async (id: number) => {
+    return apiRequest(`/api/v1/notifications/${id}/read`, {
+      method: "PUT",
+    });
+  },
+
+  send: async (message: string, linkUrl?: string) => {
+    console.log("🔔 NOTIFICATION API - Sending notification:", {
+      message,
+      linkUrl,
+    });
+
+    // ✅ Validate required fields
+    if (!message || message.trim() === "") {
+      throw new Error("VALIDATION_ERROR: Message is required");
+    }
+
+    const formattedData = {
+      message: message.trim(),
+      linkUrl: linkUrl?.trim() || null,
+    };
+
+    return apiRequest<any>("/api/v1/notifications/send", {
+      method: "POST",
+      body: JSON.stringify(formattedData),
+    });
+  },
+};
+
+// ================== PERUSAHAAN ==================
+export interface Perusahaan {
+  id: number;
+  nama: string;
+}
+
+export const perusahaanAPI = {
+  getAll: async () => apiRequest<Perusahaan[]>("/api/v1/perusahaan"),
+  create: async (data: { nama: string }) =>
+    apiRequest<Perusahaan>("/api/v1/perusahaan", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+// ================== SALESPERSON BY PERUSAHAAN ==================
+export const salespersonAPI = {
+  getByPerusahaan: async (perusahaanId: number) =>
+    apiRequest<any[]>(`/api/v1/salespeople/by-perusahaan/${perusahaanId}`),
+};
+
+// ================== LAPORAN PENJUALAN PRODUK ==================
+export interface LaporanPenjualanProduk {
+  id: number;
+  tanggalLaporan: string;
+  namaPerusahaan: string;
+  perusahaanId: number;
+  namaSalesperson: string;
+  salespersonId: number;
+  namaAccount: string;
+  productAccountId: number;
+  targetKuantitas: number;
+  realisasiKuantitas: number;
+  keteranganKendala?: string;
+  createdByUsername: string;
+  createdAt: string;
+}
+
+// Backend interface untuk reference
+interface BackendLaporanPenjualanProduk {
+  id: number;
+  tanggal_laporan: string;
+  nama_perusahaan: string;
+  perusahaan_id: number;
+  nama_salesperson: string;
+  salesperson_id: number;
+  nama_account: string;
+  product_account_id: number;
+  target_kuantitas: number;
+  realisasi_kuantitas: number;
+  keterangan_kendala?: string;
+  created_by_username: string;
+  created_at: string;
+}
+
+export const laporanPenjualanProdukAPI = {
+  create: async (data: any) =>
+    apiRequest<LaporanPenjualanProduk>("/api/v1/laporan-penjualan-produk", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  getAll: async () =>
+    apiRequest<LaporanPenjualanProduk[]>("/api/v1/laporan-penjualan-produk"),
+  filter: async (params: any) =>
+    apiRequest<LaporanPenjualanProduk[]>(
+      `/api/v1/laporan-penjualan-produk/filter?${new URLSearchParams(params)}`
+    ),
 };

@@ -27,6 +27,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logout, getCurrentUser } from "@/lib/auth";
 import AuthGuard from "@/components/AuthGuard";
+import NotificationBell from "@/components/notification-bell";
 
 const navigation = [
   {
@@ -159,9 +160,7 @@ export default function SuperAdminLayout({
                 <Search className="h-3 w-3 mr-2" />
                 Cari Menu
               </Button>
-              <Button variant="ghost" size="sm" className="p-2">
-                <Bell className="h-4 w-4" />
-              </Button>
+              <NotificationBell />
             </div>
           </div>
 
@@ -196,7 +195,11 @@ export default function SuperAdminLayout({
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`font-medium ${isActive ? "text-white" : ""}`}>
+                      <p
+                        className={`font-medium ${
+                          isActive ? "text-white" : ""
+                        }`}
+                      >
                         {item.name}
                       </p>
                       <p
@@ -247,7 +250,7 @@ export default function SuperAdminLayout({
                   <span>Memory: 62%</span>
                   <span>Disk: 78%</span>
                 </div>
-                
+
                 <div className="space-y-2 border-t pt-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-600">Backend API:</span>
@@ -255,14 +258,14 @@ export default function SuperAdminLayout({
                       Online
                     </Badge>
                   </div>
-                  
+
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-600">Database:</span>
                     <Badge className="bg-green-100 text-green-800 text-xs">
                       Connected
                     </Badge>
                   </div>
-                  
+
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-600">Server:</span>
                     <Badge className="bg-green-100 text-green-800 text-xs">
