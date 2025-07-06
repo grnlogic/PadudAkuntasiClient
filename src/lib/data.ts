@@ -926,20 +926,21 @@ const transformLaporanPenjualanProdukFromBackend = (backendData: any) => {
     backendData
   );
 
+  // ✅ FIXED: Backend menggunakan camelCase, bukan snake_case
   const transformed = {
     id: backendData.id,
-    tanggalLaporan: backendData.tanggal_laporan,
-    namaPerusahaan: backendData.nama_perusahaan,
-    perusahaanId: backendData.perusahaan_id,
-    namaSalesperson: backendData.nama_salesperson,
-    salespersonId: backendData.salesperson_id,
-    namaAccount: backendData.nama_account,
-    productAccountId: backendData.product_account_id,
-    targetKuantitas: backendData.target_kuantitas,
-    realisasiKuantitas: backendData.realisasi_kuantitas,
-    keteranganKendala: backendData.keterangan_kendala,
-    createdByUsername: backendData.created_by_username,
-    createdAt: backendData.created_at,
+    tanggalLaporan: backendData.tanggalLaporan,
+    namaPerusahaan: backendData.namaPerusahaan,
+    perusahaanId: backendData.perusahaanId,
+    namaSalesperson: backendData.namaSalesperson,
+    salespersonId: backendData.salespersonId,
+    namaAccount: backendData.namaAccount,
+    productAccountId: backendData.productAccountId,
+    targetKuantitas: backendData.targetKuantitas,
+    realisasiKuantitas: backendData.realisasiKuantitas,
+    keteranganKendala: backendData.keteranganKendala,
+    createdByUsername: backendData.createdByUsername,
+    createdAt: backendData.createdAt,
   };
 
   console.log(

@@ -812,21 +812,21 @@ export interface LaporanPenjualanProduk {
   createdAt: string;
 }
 
-// Backend interface untuk reference
+// Backend interface untuk reference - FIXED: Backend menggunakan camelCase  
 interface BackendLaporanPenjualanProduk {
   id: number;
-  tanggal_laporan: string;
-  nama_perusahaan: string;
-  perusahaan_id: number;
-  nama_salesperson: string;
-  salesperson_id: number;
-  nama_account: string;
-  product_account_id: number;
-  target_kuantitas: number;
-  realisasi_kuantitas: number;
-  keterangan_kendala?: string;
-  created_by_username: string;
-  created_at: string;
+  tanggalLaporan: string;
+  namaPerusahaan: string;
+  perusahaanId: number;
+  namaSalesperson: string;
+  salespersonId: number;
+  namaAccount: string;
+  productAccountId: number;
+  targetKuantitas: number;
+  realisasiKuantitas: number;
+  keteranganKendala?: string;
+  createdByUsername: string;
+  createdAt: string;
 }
 
 export const laporanPenjualanProdukAPI = {
