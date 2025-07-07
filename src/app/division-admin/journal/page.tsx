@@ -273,15 +273,24 @@ export default function JournalPage() {
     getPerusahaan().then(setPerusahaanList);
   }, [selectedDate]);
 
-  // ✅ NEW: Fungsi untuk menghitung summary keuangan
+  // ✅ FIXED: Fungsi untuk menghitung summary keuangan
   const calculateKeuanganSummary = (
     entries: EntriHarian[],
     accounts: Account[]
   ) => {
-    // Dapatkan semua accountId yang BUKAN piutang
+    console.log("🔍 KEUANGAN SUMMARY DEBUG - Input:", {
+      entriesCount: entries.length,
+      accountsCount: accounts.length,
+      sampleEntry: entries[0],
+      sampleAccount: accounts[0],
+    });
+
+    // ✅ FIXED: Better filtering logic
     const piutangAccountIds = accounts
       .filter((acc) => acc.accountName.toLowerCase().includes("piutang"))
       .map((acc) => acc.id);
+
+    console.log("📋 Piutang Account IDs:", piutangAccountIds);
 
     const summary = {
       totalPenerimaan: 0,
@@ -289,35 +298,60 @@ export default function JournalPage() {
       totalSaldoAkhir: 0,
     };
 
-    // Hanya proses transaksi harian (bukan piutang)
-    const transaksiHarian = entries.filter(
-      (entry: any) => !piutangAccountIds.includes(entry.accountId) // Bukan akun piutang
-    );
+    // ✅ FIXED: Filter transaksi harian (yang bukan piutang dan accountId tidak kosong)
+    const transaksiHarian = entries.filter((entry: any) => {
+      const hasValidAccountId = entry.accountId && entry.accountId !== "";
+      const isNotPiutang = !piutangAccountIds.includes(entry.accountId);
+      const hasTransactionType =
+        entry.transactionType &&
+        ["PENERIMAAN", "PENGELUARAN", "SALDO_AKHIR"].includes(
+          entry.transactionType
+        );
 
-    transaksiHarian.forEach((entry: any) => {
-      // ✅ FIXED: Use transactionType from mapped entry
-      if (entry.transactionType === "PENERIMAAN") {
-        summary.totalPenerimaan += Number(entry.nilai) || 0;
-      } else if (entry.transactionType === "PENGELUARAN") {
-        summary.totalPengeluaran += Number(entry.nilai) || 0;
-      } else if (entry.transactionType === "SALDO_AKHIR") {
-        const saldoValue = Number(entry.saldoAkhir) || Number(entry.nilai) || 0;
-        summary.totalSaldoAkhir = saldoValue; // Ambil saldo akhir terakhir
-      }
+      console.log("🔍 Entry filter check:", {
+        entryId: entry.id,
+        accountId: entry.accountId,
+        hasValidAccountId,
+        isNotPiutang,
+        hasTransactionType,
+        transactionType: entry.transactionType,
+        passed: hasValidAccountId && isNotPiutang && hasTransactionType,
+      });
+
+      return hasValidAccountId && isNotPiutang && hasTransactionType;
     });
 
-    console.log("🔍 KEUANGAN SUMMARY CALCULATION:", {
-      totalEntries: entries.length,
-      transaksiHarianCount: transaksiHarian.length,
-      summary,
-      entries: transaksiHarian.map((e: any) => ({
+    console.log("📊 Filtered transaksi harian:", {
+      totalFiltered: transaksiHarian.length,
+      entries: transaksiHarian.map((e) => ({
         id: e.id,
+        accountId: e.accountId,
         transactionType: e.transactionType,
         nilai: e.nilai,
-        accountName: accounts.find((a) => a.id === e.accountId)?.accountName,
       })),
     });
 
+    transaksiHarian.forEach((entry: any) => {
+      const nilai = Number(entry.nilai) || 0;
+
+      if (entry.transactionType === "PENERIMAAN") {
+        summary.totalPenerimaan += nilai;
+      } else if (entry.transactionType === "PENGELUARAN") {
+        summary.totalPengeluaran += nilai;
+      } else if (entry.transactionType === "SALDO_AKHIR") {
+        const saldoValue = Number(entry.saldoAkhir) || nilai;
+        summary.totalSaldoAkhir += saldoValue;
+      }
+
+      console.log("💰 Processing entry:", {
+        id: entry.id,
+        type: entry.transactionType,
+        nilai,
+        runningTotal: summary,
+      });
+    });
+
+    console.log("✅ FINAL KEUANGAN SUMMARY:", summary);
     return summary;
   };
 
@@ -509,32 +543,39 @@ export default function JournalPage() {
           (entry: { accountId: string }) => accountIds.includes(entry.accountId)
         );
 
-        // ✅ Map piutang dan utang data dengan format tanggal yang benar
+        // ✅ FIXED: Enhanced mapping untuk piutang entries
         const mappedPiutangEntries = (piutangData || [])
           .filter((p: any) => {
-            const transaksiDateMap = p.tanggalTransaksi; // ✅ Gunakan tanggalTransaksi
-            if (!transaksiDateMap) return false;
-            const dateStr = transaksiDateMap.toString();
+            const transaksiDate = p.tanggalTransaksi;
+            if (!transaksiDate) return false;
+
+            const dateStr = transaksiDate.toString();
             return (
               dateStr.startsWith(selectedDate) ||
               dateStr.includes(selectedDate) ||
               dateStr.split("T")[0] === selectedDate
             );
           })
-          .map((p: any) => ({
-            id: `piutang-${p.id}`,
-            accountId: p.account?.id?.toString(), // ✅ Sudah benar
-            createdAt: p.tanggalTransaksi || p.createdAt, // ✅ Gunakan tanggalTransaksi
-            nilai: Number(p.nominal) || 0,
-            description: p.keterangan || "",
-            transactionType: p.tipeTransaksi, // ✅ Gunakan tipeTransaksi
-            kategori: p.kategori,
-            // ✅ ADD: Required EntriHarian fields
-            keterangan: p.keterangan || "",
-            date: p.tanggalTransaksi || p.createdAt, // ✅ Gunakan tanggalTransaksi
-            tanggal: p.tanggalTransaksi || p.createdAt, // ✅ Gunakan tanggalTransaksi
-            createdBy: p.user?.username || "system", // ✅ Gunakan user.username
-          }));
+          .map((p: any) => {
+            console.log("🔍 MAPPING PIUTANG ENTRY:", p);
+
+            const mapped = {
+              id: `piutang-${p.id}`,
+              accountId: p.account?.id?.toString() || "", // ✅ CRITICAL: Make sure this is not empty
+              createdAt: p.tanggalTransaksi || p.createdAt,
+              nilai: Number(p.nominal) || 0,
+              description: p.keterangan || "",
+              transactionType: p.tipeTransaksi,
+              kategori: p.kategori,
+              keterangan: p.keterangan || "",
+              date: p.tanggalTransaksi || p.createdAt,
+              tanggal: p.tanggalTransaksi || p.createdAt,
+              createdBy: p.user?.username || "system",
+            };
+
+            console.log("✅ MAPPED PIUTANG ENTRY:", mapped);
+            return mapped;
+          });
 
         const mappedUtangEntries = (utangData || [])
           .filter((u: any) => {
@@ -2728,165 +2769,205 @@ export default function JournalPage() {
 
   // Fungsi untuk render tabel jurnal sesuai divisi
   function renderJournalTable() {
-    switch (divisionType) {
-      case "PRODUKSI":
-        return (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Waktu</TableHead>
-                <TableHead>Kode Akun</TableHead>
-                <TableHead>Nama Akun</TableHead>
-                <TableHead>Hasil Produksi</TableHead>
-                <TableHead>Barang Gagal</TableHead>
-                <TableHead>Stock Barang Jadi</TableHead>
-                <TableHead>HP Barang Jadi</TableHead>
-                <TableHead>Kendala</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {laporanProduksi.map((laporan) => (
-                <TableRow key={laporan.id}>
-                  <TableCell>
-                    {laporan.createdAt
-                      ? new Date(laporan.createdAt).toLocaleTimeString(
-                          "id-ID",
-                          { hour: "2-digit", minute: "2-digit" }
-                        )
-                      : "-"}
-                  </TableCell>
-                  <TableCell>{laporan.account?.accountCode || "-"}</TableCell>
-                  <TableCell>{laporan.account?.accountName || "-"}</TableCell>
-                  <TableCell>{laporan.hasilProduksi ?? "-"}</TableCell>
-                  <TableCell>{laporan.barangGagal ?? "-"}</TableCell>
-                  <TableCell>{laporan.stockBarangJadi ?? "-"}</TableCell>
-                  <TableCell>{laporan.hpBarangJadi ?? "-"}</TableCell>
-                  <TableCell>{laporan.keteranganKendala || "-"}</TableCell>
+    // Untuk divisi selain PEMASARAN dan PRODUKSI/BLENDING
+    if (
+      divisionType === "KEUANGAN" ||
+      divisionType === "GENERAL" ||
+      divisionType === "HRD"
+    ) {
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-gray-600" />
+              Jurnal Harian - {selectedDate}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>No</TableHead>
+                  <TableHead>Akun</TableHead>
+                  <TableHead>Keterangan</TableHead>
+                  <TableHead>Jenis Transaksi</TableHead>
+                  <TableHead>Nilai</TableHead>
+                  <TableHead>Waktu</TableHead>
+                  <TableHead>Aksi</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        );
-      case "PERSEDIAAN_BAHAN_BAKU":
-        return (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Waktu</TableHead>
-                <TableHead>Kode Akun</TableHead>
-                <TableHead>Nama Akun</TableHead>
-                <TableHead>Stok Awal</TableHead>
-                <TableHead>Pemakaian</TableHead>
-                <TableHead>Stok Akhir</TableHead>
-                <TableHead>Kondisi Gudang</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {laporanGudang.map((laporan) => (
-                <TableRow key={laporan.id}>
-                  <TableCell>
-                    {laporan.createdAt
-                      ? new Date(laporan.createdAt).toLocaleTimeString(
-                          "id-ID",
-                          { hour: "2-digit", minute: "2-digit" }
-                        )
-                      : "-"}
-                  </TableCell>
-                  <TableCell>{laporan.account?.accountCode || "-"}</TableCell>
-                  <TableCell>{laporan.account?.accountName || "-"}</TableCell>
-                  <TableCell>{laporan.barangMasuk ?? "-"}</TableCell>
-                  <TableCell>{laporan.pemakaian ?? "-"}</TableCell>
-                  <TableCell>{laporan.stokAkhir ?? "-"}</TableCell>
-                  <TableCell>{laporan.keterangan || "-"}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        );
-      case "HRD":
-        return (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Waktu</TableHead>
-                <TableHead>Kode Akun</TableHead>
-                <TableHead>Nama Akun</TableHead>
-                <TableHead>Status Kehadiran</TableHead>
-                <TableHead>Jumlah Tidak Hadir</TableHead>
-                <TableHead>Shift</TableHead>
-                <TableHead>Kendala</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {existingEntries.map((entry) => {
-                const account = accounts.find(
-                  (acc) => acc.id === entry.accountId
-                );
-                return (
-                  <TableRow key={entry.id}>
-                    <TableCell>
-                      {entry.createdAt
-                        ? new Date(entry.createdAt).toLocaleTimeString(
-                            "id-ID",
-                            { hour: "2-digit", minute: "2-digit" }
-                          )
-                        : "-"}
-                    </TableCell>
-                    <TableCell>{account?.accountCode || "-"}</TableCell>
-                    <TableCell>{account?.accountName || "-"}</TableCell>
-                    <TableCell>
-                      {(entry as any).attendanceStatus || "-"}
-                    </TableCell>
-                    <TableCell>{(entry as any).absentCount ?? "-"}</TableCell>
-                    <TableCell>{(entry as any).shift || "-"}</TableCell>
-                    <TableCell>
-                      {(entry as any).keteranganKendala || "-"}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        );
-      default:
-        // Pemasaran, Keuangan, General
-        return (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Waktu</TableHead>
-                <TableHead>Kode Akun</TableHead>
-                <TableHead>Nama Akun</TableHead>
-                <TableHead>Keterangan</TableHead>
-                <TableHead>Nilai</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {existingEntries.map((entry) => {
-                const account = accounts.find(
-                  (acc) => acc.id === entry.accountId
-                );
-                return (
-                  <TableRow key={entry.id}>
-                    <TableCell>
-                      {entry.createdAt
-                        ? new Date(entry.createdAt).toLocaleTimeString(
-                            "id-ID",
-                            { hour: "2-digit", minute: "2-digit" }
-                          )
-                        : "-"}
-                    </TableCell>
-                    <TableCell>{account?.accountCode || "-"}</TableCell>
-                    <TableCell>{account?.accountName || "-"}</TableCell>
-                    <TableCell>{entry.description || "-"}</TableCell>
-                    <TableCell>{formatCurrency(entry.nilai || 0)}</TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        );
+              </TableHeader>
+              <TableBody>
+                {existingEntries.map((entry, index) => {
+                  const account = accounts.find(
+                    (a) => a.id === entry.accountId
+                  );
+                  return (
+                    <TableRow key={entry.id}>
+                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>
+                        <div className="font-medium">
+                          {account?.accountCode || "N/A"}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {account?.accountName || "Akun tidak ditemukan"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {entry.description || entry.keterangan}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {(entry as any).transactionType ||
+                            (entry as any).piutangType ||
+                            (entry as any).utangType ||
+                            "REGULAR"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {formatCurrency(getDisplayValue(entry))}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(entry.createdAt).toLocaleTimeString("id-ID", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeExistingEntry(entry.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            {existingEntries.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                Belum ada entri jurnal untuk tanggal {selectedDate}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      );
     }
+
+    // Untuk divisi PRODUKSI
+    if (divisionType === "PRODUKSI") {
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-gray-600" />
+              Laporan Produksi Harian - {selectedDate}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Waktu</TableHead>
+                  <TableHead>Kode Akun</TableHead>
+                  <TableHead>Nama Akun</TableHead>
+                  <TableHead>Hasil Produksi</TableHead>
+                  <TableHead>Barang Gagal</TableHead>
+                  <TableHead>Stock Barang Jadi</TableHead>
+                  <TableHead>HP Barang Jadi</TableHead>
+                  <TableHead>Kendala</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {laporanProduksi.map((laporan) => (
+                  <TableRow key={laporan.id}>
+                    <TableCell>
+                      {laporan.createdAt
+                        ? new Date(laporan.createdAt).toLocaleTimeString(
+                            "id-ID",
+                            { hour: "2-digit", minute: "2-digit" }
+                          )
+                        : "-"}
+                    </TableCell>
+                    <TableCell>{laporan.account?.accountCode || "-"}</TableCell>
+                    <TableCell>{laporan.account?.accountName || "-"}</TableCell>
+                    <TableCell>{laporan.hasilProduksi ?? "-"}</TableCell>
+                    <TableCell>{laporan.barangGagal ?? "-"}</TableCell>
+                    <TableCell>{laporan.stockBarangJadi ?? "-"}</TableCell>
+                    <TableCell>{laporan.hpBarangJadi ?? "-"}</TableCell>
+                    <TableCell>{laporan.keteranganKendala || "-"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {laporanProduksi.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                Belum ada laporan produksi untuk tanggal {selectedDate}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Untuk divisi PERSEDIAAN_BAHAN_BAKU
+    if (divisionType === "PERSEDIAAN_BAHAN_BAKU") {
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-gray-600" />
+              Laporan Gudang Harian - {selectedDate}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Waktu</TableHead>
+                  <TableHead>Kode Akun</TableHead>
+                  <TableHead>Nama Akun</TableHead>
+                  <TableHead>Stok Awal</TableHead>
+                  <TableHead>Pemakaian</TableHead>
+                  <TableHead>Stok Akhir</TableHead>
+                  <TableHead>Kondisi Gudang</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {laporanGudang.map((laporan) => (
+                  <TableRow key={laporan.id}>
+                    <TableCell>
+                      {laporan.createdAt
+                        ? new Date(laporan.createdAt).toLocaleTimeString(
+                            "id-ID",
+                            { hour: "2-digit", minute: "2-digit" }
+                          )
+                        : "-"}
+                    </TableCell>
+                    <TableCell>{laporan.account?.accountCode || "-"}</TableCell>
+                    <TableCell>{laporan.account?.accountName || "-"}</TableCell>
+                    <TableCell>{laporan.barangMasuk ?? "-"}</TableCell>
+                    <TableCell>{laporan.pemakaian ?? "-"}</TableCell>
+                    <TableCell>{laporan.stokAkhir ?? "-"}</TableCell>
+                    <TableCell>{laporan.keterangan || "-"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {laporanGudang.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                Belum ada laporan gudang untuk tanggal {selectedDate}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return null;
   }
 
   // Fungsi untuk render summary card sesuai divisi
@@ -3052,590 +3133,387 @@ export default function JournalPage() {
           <>
             {/* TAB MENU KEUANGAN */}
             <div className="flex gap-2 mb-4">
-              <button
-                className={`px-4 py-2 rounded-t font-semibold border-b-2 transition-all ${
-                  selectedTransactionType === "KAS"
-                    ? "border-blue-600 text-blue-700 bg-white"
-                    : "border-transparent text-gray-500 bg-gray-100 hover:bg-gray-200"
-                }`}
-                onClick={() => setSelectedTransactionType("KAS")}
-                type="button"
-              >
-                💰 Kas
-              </button>
-              <button
-                className={`px-4 py-2 rounded-t font-semibold border-b-2 transition-all ${
-                  selectedTransactionType === "PIUTANG"
-                    ? "border-green-600 text-green-700 bg-white"
-                    : "border-transparent text-gray-500 bg-gray-100 hover:bg-gray-200"
-                }`}
-                onClick={() => setSelectedTransactionType("PIUTANG")}
-                type="button"
-              >
-                👤 Piutang
-              </button>
-              <button
-                className={`px-4 py-2 rounded-t font-semibold border-b-2 transition-all ${
-                  selectedTransactionType === "UTANG"
-                    ? "border-red-600 text-red-700 bg-white"
-                    : "border-transparent text-gray-500 bg-gray-100 hover:bg-gray-200"
-                }`}
-                onClick={() => setSelectedTransactionType("UTANG")}
-                type="button"
-              >
-                💳 Utang
-              </button>
+              {["KAS", "PIUTANG", "UTANG"].map((type) => (
+                <button
+                  key={type}
+                  className={`px-4 py-2 rounded-t font-semibold border-b-2 transition-all ${
+                    selectedTransactionType === type
+                      ? "border-blue-600 text-blue-700 bg-white"
+                      : "border-transparent text-gray-500 bg-gray-100 hover:bg-gray-200"
+                  }`}
+                  onClick={() => setSelectedTransactionType(type as any)}
+                  type="button"
+                >
+                  {type.charAt(0) + type.slice(1).toLowerCase()}
+                </button>
+              ))}
             </div>
 
             {/* === FORM INPUT KEUANGAN BERDASARKAN TAB === */}
-            <>
-              {/* FORM INPUT KEUANGAN BERDASARKAN TAB */}
-              {selectedTransactionType === "KAS" && (
-                <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <DollarSign className="h-5 w-5" />
-                      Form Entri Kas Multiple
-                    </CardTitle>
-                    <CardDescription>
-                      Tambahkan beberapa entri kas sekaligus sebelum menyimpan.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {/* Multiple Entries List untuk KAS */}
-                    {journalRows.map((row, index) => (
-                      <div
-                        key={row.id}
-                        className="mb-6 p-4 border rounded-lg bg-blue-50"
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-blue-600" />
+                  Form Input {selectedTransactionType}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* Render form sesuai tab yang dipilih */}
+                {selectedTransactionType === "KAS" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Pilih Akun Kas
+                      </label>
+                      <Select
+                        value={journalRows[0].accountId}
+                        onValueChange={(value) =>
+                          updateRow(journalRows[0].id, "accountId", value)
+                        }
                       >
-                        <div className="flex items-center justify-between mb-4">
-                          <h4 className="font-semibold text-blue-700">
-                            Entri Kas #{index + 1}
-                          </h4>
-                          {journalRows.length > 1 && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeRow(row.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              Hapus
-                            </Button>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <Label>Akun Kas</Label>
-                            <Select
-                              value={row.accountId}
-                              onValueChange={(value) =>
-                                updateRow(row.id, "accountId", value)
-                              }
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Pilih akun kas" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {accounts
-                                  .filter((account) =>
-                                    account.accountName
-                                      .toLowerCase()
-                                      .includes("kas")
-                                  )
-                                  .map((account) => (
-                                    <SelectItem
-                                      key={account.id}
-                                      value={account.id}
-                                    >
-                                      {getAccountDisplay(account.id)}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label>Jenis Transaksi Kas</Label>
-                            <Select
-                              value={row.transactionType || ""}
-                              onValueChange={(value) =>
-                                updateRow(row.id, "transactionType", value)
-                              }
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Pilih jenis transaksi" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="PENERIMAAN">
-                                  <span className="flex items-center gap-2">
-                                    <span className="text-green-600">⬆️</span>{" "}
-                                    Penerimaan
-                                  </span>
-                                </SelectItem>
-                                <SelectItem value="PENGELUARAN">
-                                  <span className="flex items-center gap-2">
-                                    <span className="text-red-600">⬇️</span>{" "}
-                                    Pengeluaran
-                                  </span>
-                                </SelectItem>
-                                <SelectItem value="SALDO_AKHIR">
-                                  <span className="flex items-center gap-2">
-                                    <span className="text-purple-600">💰</span>{" "}
-                                    Saldo Akhir
-                                  </span>
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label>Nominal</Label>
-                            <Input
-                              type="number"
-                              placeholder="Rp 0"
-                              value={row.nominal}
-                              onChange={(e) =>
-                                updateRow(row.id, "nominal", e.target.value)
-                              }
-                              className="mt-1"
-                              min="0"
-                              step="1000"
-                            />
-                          </div>
-                          <div>
-                            <Label>Keterangan</Label>
-                            <Input
-                              placeholder="Deskripsi transaksi kas"
-                              value={row.keterangan}
-                              onChange={(e) =>
-                                updateRow(row.id, "keterangan", e.target.value)
-                              }
-                              className="mt-1"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-
-              {selectedTransactionType === "PIUTANG" && (
-                <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Users className="h-5 w-5" />
-                      Form Entri Piutang Multiple
-                    </CardTitle>
-                    <CardDescription>
-                      Tambahkan beberapa entri piutang sekaligus sebelum
-                      menyimpan.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {/* Multiple Entries List untuk PIUTANG */}
-                    {journalRows.map((row, index) => (
-                      <div
-                        key={row.id}
-                        className="mb-6 p-4 border rounded-lg bg-green-50"
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih akun kas..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {accounts
+                            .filter((acc) =>
+                              acc.accountName.toLowerCase().includes("kas")
+                            )
+                            .map((account) => (
+                              <SelectItem key={account.id} value={account.id}>
+                                {getAccountDisplay(account.id)}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Jenis Transaksi
+                      </label>
+                      <Select
+                        value={journalRows[0].transactionType || ""}
+                        onValueChange={(value) =>
+                          updateRow(journalRows[0].id, "transactionType", value)
+                        }
                       >
-                        <div className="flex items-center justify-between mb-4">
-                          <h4 className="font-semibold text-green-700">
-                            Entri Piutang #{index + 1}
-                          </h4>
-                          {journalRows.length > 1 && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeRow(row.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              Hapus
-                            </Button>
-                          )}
-                        </div>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih jenis transaksi..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="PENERIMAAN">
+                            💰 Penerimaan Kas
+                          </SelectItem>
+                          <SelectItem value="PENGELUARAN">
+                            💸 Pengeluaran Kas
+                          </SelectItem>
+                          <SelectItem value="SALDO_AKHIR">
+                            💵 Saldo Akhir Kas
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        {journalRows[0].transactionType === "SALDO_AKHIR"
+                          ? "Saldo Akhir"
+                          : "Nominal"}
+                      </label>
+                      <Input
+                        type="number"
+                        placeholder="Rp 0"
+                        value={
+                          journalRows[0].transactionType === "SALDO_AKHIR"
+                            ? journalRows[0].saldoAkhir
+                            : journalRows[0].nominal
+                        }
+                        onChange={(e) =>
+                          updateRow(
+                            journalRows[0].id,
+                            journalRows[0].transactionType === "SALDO_AKHIR"
+                              ? "saldoAkhir"
+                              : "nominal",
+                            e.target.value
+                          )
+                        }
+                        className="mt-1"
+                        min="0"
+                        step="1000"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Keterangan
+                      </label>
+                      <Input
+                        placeholder="Deskripsi transaksi kas"
+                        value={journalRows[0].keterangan}
+                        onChange={(e) =>
+                          updateRow(
+                            journalRows[0].id,
+                            "keterangan",
+                            e.target.value
+                          )
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <Label>Akun Piutang</Label>
-                            <Select
-                              value={row.accountId}
-                              onValueChange={(value) =>
-                                updateRow(row.id, "accountId", value)
-                              }
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Pilih akun piutang" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {accounts
-                                  .filter((account) =>
-                                    account.accountName
-                                      .toLowerCase()
-                                      .includes("piutang")
-                                  )
-                                  .map((account) => (
-                                    <SelectItem
-                                      key={account.id}
-                                      value={account.id}
-                                    >
-                                      {getAccountDisplay(account.id)}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label>Tipe Piutang</Label>
-                            <Select
-                              value={row.transactionType || ""}
-                              onValueChange={(value) =>
-                                updateRow(row.id, "transactionType", value)
-                              }
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Pilih tipe piutang" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="PIUTANG_BARU">
-                                  <span className="flex items-center gap-2">
-                                    <span className="text-blue-600">🆕</span>{" "}
-                                    Piutang Baru
-                                  </span>
-                                </SelectItem>
-                                <SelectItem value="PIUTANG_TERTAGIH">
-                                  <span className="flex items-center gap-2">
-                                    <span className="text-emerald-600">✅</span>{" "}
-                                    Piutang Tertagih
-                                  </span>
-                                </SelectItem>
-                                <SelectItem value="PIUTANG_MACET">
-                                  <span className="flex items-center gap-2">
-                                    <span className="text-orange-600">⚠️</span>{" "}
-                                    Piutang Macet
-                                  </span>
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label>Kategori Piutang</Label>
-                            <Select
-                              value={row.kategori || ""}
-                              onValueChange={(value) =>
-                                updateRow(row.id, "kategori", value)
-                              }
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Pilih kategori piutang" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="KARYAWAN">
-                                  👤 Karyawan
-                                </SelectItem>
-                                <SelectItem value="TOKO">🏪 Toko</SelectItem>
-                                <SelectItem value="BAHAN_BAKU">
-                                  📦 Bahan Baku
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label>Nominal</Label>
-                            <Input
-                              type="number"
-                              placeholder="Rp 0"
-                              value={row.nominal}
-                              onChange={(e) =>
-                                updateRow(row.id, "nominal", e.target.value)
-                              }
-                              className="mt-1"
-                              min="0"
-                              step="1000"
-                            />
-                          </div>
-                          <div className="md:col-span-2">
-                            <Label>Keterangan</Label>
-                            <Input
-                              placeholder="Deskripsi transaksi piutang"
-                              value={row.keterangan}
-                              onChange={(e) =>
-                                updateRow(row.id, "keterangan", e.target.value)
-                              }
-                              className="mt-1"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-
-              {selectedTransactionType === "UTANG" && (
-                <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Package className="h-5 w-5" />
-                      Form Entri Utang Multiple
-                    </CardTitle>
-                    <CardDescription>
-                      Tambahkan beberapa entri utang sekaligus sebelum
-                      menyimpan.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {/* Multiple Entries List untuk UTANG */}
-                    {journalRows.map((row, index) => (
-                      <div
-                        key={row.id}
-                        className="mb-6 p-4 border rounded-lg bg-red-50"
+                {selectedTransactionType === "PIUTANG" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Pilih Akun Piutang
+                      </label>
+                      <Select
+                        value={journalRows[0].accountId}
+                        onValueChange={(value) =>
+                          updateRow(journalRows[0].id, "accountId", value)
+                        }
                       >
-                        <div className="flex items-center justify-between mb-4">
-                          <h4 className="font-semibold text-red-700">
-                            Entri Utang #{index + 1}
-                          </h4>
-                          {journalRows.length > 1 && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeRow(row.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              Hapus
-                            </Button>
-                          )}
-                        </div>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih akun piutang..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {accounts
+                            .filter((acc) =>
+                              acc.accountName.toLowerCase().includes("piutang")
+                            )
+                            .map((account) => (
+                              <SelectItem key={account.id} value={account.id}>
+                                {getAccountDisplay(account.id)}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Jenis Transaksi Piutang
+                      </label>
+                      <Select
+                        value={journalRows[0].piutangType || ""}
+                        onValueChange={(value) =>
+                          updateRow(journalRows[0].id, "piutangType", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih jenis piutang..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="PIUTANG_BARU">
+                            📈 Piutang Baru
+                          </SelectItem>
+                          <SelectItem value="PIUTANG_TERTAGIH">
+                            💰 Piutang Tertagih
+                          </SelectItem>
+                          <SelectItem value="PIUTANG_MACET">
+                            ❌ Piutang Macet
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Kategori Piutang
+                      </label>
+                      <Select
+                        value={journalRows[0].kategori || ""}
+                        onValueChange={(value) =>
+                          updateRow(journalRows[0].id, "kategori", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih kategori..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="KARYAWAN">👥 Karyawan</SelectItem>
+                          <SelectItem value="TOKO">🏪 Toko</SelectItem>
+                          <SelectItem value="BAHAN_BAKU">
+                            📦 Bahan Baku
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Nominal Piutang
+                      </label>
+                      <Input
+                        type="number"
+                        placeholder="Rp 0"
+                        value={journalRows[0].nominal}
+                        onChange={(e) =>
+                          updateRow(
+                            journalRows[0].id,
+                            "nominal",
+                            e.target.value
+                          )
+                        }
+                        className="mt-1"
+                        min="0"
+                        step="1000"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium mb-2">
+                        Keterangan Piutang
+                      </label>
+                      <Input
+                        placeholder="Deskripsi transaksi piutang"
+                        value={journalRows[0].keterangan}
+                        onChange={(e) =>
+                          updateRow(
+                            journalRows[0].id,
+                            "keterangan",
+                            e.target.value
+                          )
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <Label>Akun Utang</Label>
-                            <Select
-                              value={row.accountId}
-                              onValueChange={(value) =>
-                                updateRow(row.id, "accountId", value)
-                              }
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Pilih akun utang" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {accounts
-                                  .filter((account) =>
-                                    account.accountName
-                                      .toLowerCase()
-                                      .includes("utang")
-                                  )
-                                  .map((account) => (
-                                    <SelectItem
-                                      key={account.id}
-                                      value={account.id}
-                                    >
-                                      {getAccountDisplay(account.id)}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label>Tipe Utang</Label>
-                            <Select
-                              value={row.transactionType || ""}
-                              onValueChange={(value) =>
-                                updateRow(row.id, "transactionType", value)
-                              }
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Pilih tipe utang" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="UTANG_BARU">
-                                  <span className="flex items-center gap-2">
-                                    <span className="text-red-600">🆕</span>{" "}
-                                    Utang Baru
-                                  </span>
-                                </SelectItem>
-                                <SelectItem value="UTANG_DIBAYAR">
-                                  <span className="flex items-center gap-2">
-                                    <span className="text-green-600">✅</span>{" "}
-                                    Utang Dibayar
-                                  </span>
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label>Kategori Utang</Label>
-                            <Select
-                              value={row.utangKategori || ""}
-                              onValueChange={(value) =>
-                                updateRow(row.id, "utangKategori", value)
-                              }
-                            >
-                              <SelectTrigger className="mt-1">
-                                <SelectValue placeholder="Pilih kategori utang" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="BAHAN_BAKU">
-                                  📦 Bahan Baku
-                                </SelectItem>
-                                <SelectItem value="BANK_HM">
-                                  🏦 Bank HM
-                                </SelectItem>
-                                <SelectItem value="BANK_HENRY">
-                                  🏦 Bank Henry
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div>
-                            <Label>Nominal</Label>
-                            <Input
-                              type="number"
-                              placeholder="Rp 0"
-                              value={row.nominal}
-                              onChange={(e) =>
-                                updateRow(row.id, "nominal", e.target.value)
-                              }
-                              className="mt-1"
-                              min="0"
-                              step="1000"
-                            />
-                          </div>
-                          <div className="md:col-span-2">
-                            <Label>Keterangan</Label>
-                            <Input
-                              placeholder="Deskripsi transaksi utang"
-                              value={row.keterangan}
-                              onChange={(e) =>
-                                updateRow(row.id, "keterangan", e.target.value)
-                              }
-                              className="mt-1"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
-              <div className="flex gap-2 pt-4 border-t mt-4">
-                <Button
-                  variant="outline"
-                  onClick={addNewRow}
-                  className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Tambah Baris Entri
-                </Button>
-                <Button
-                  onClick={saveJournalEntries}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                  disabled={loading}
-                >
-                  {loading
-                    ? "Menyimpan..."
-                    : `SAVE ${journalRows.length} ENTRI KEUANGAN`}
-                </Button>
-              </div>
+                {selectedTransactionType === "UTANG" && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Pilih Akun Utang
+                      </label>
+                      <Select
+                        value={journalRows[0].accountId}
+                        onValueChange={(value) =>
+                          updateRow(journalRows[0].id, "accountId", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih akun utang..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {accounts
+                            .filter((acc) =>
+                              acc.accountName.toLowerCase().includes("utang")
+                            )
+                            .map((account) => (
+                              <SelectItem key={account.id} value={account.id}>
+                                {getAccountDisplay(account.id)}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Jenis Transaksi Utang
+                      </label>
+                      <Select
+                        value={journalRows[0].utangType || ""}
+                        onValueChange={(value) =>
+                          updateRow(journalRows[0].id, "utangType", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih jenis utang..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="UTANG_BARU">
+                            📈 Utang Baru
+                          </SelectItem>
+                          <SelectItem value="UTANG_DIBAYAR">
+                            💰 Utang Dibayar
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Kategori Utang
+                      </label>
+                      <Select
+                        value={journalRows[0].utangKategori || ""}
+                        onValueChange={(value) =>
+                          updateRow(journalRows[0].id, "utangKategori", value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih kategori..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="BAHAN_BAKU">
+                            📦 Bahan Baku
+                          </SelectItem>
+                          <SelectItem value="BANK_HM">🏦 Bank HM</SelectItem>
+                          <SelectItem value="BANK_HENRY">
+                            🏦 Bank Henry
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        Nominal Utang
+                      </label>
+                      <Input
+                        type="number"
+                        placeholder="Rp 0"
+                        value={journalRows[0].nominal}
+                        onChange={(e) =>
+                          updateRow(
+                            journalRows[0].id,
+                            "nominal",
+                            e.target.value
+                          )
+                        }
+                        className="mt-1"
+                        min="0"
+                        step="1000"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium mb-2">
+                        Keterangan Utang
+                      </label>
+                      <Input
+                        placeholder="Deskripsi transaksi utang"
+                        value={journalRows[0].keterangan}
+                        onChange={(e) =>
+                          updateRow(
+                            journalRows[0].id,
+                            "keterangan",
+                            e.target.value
+                          )
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                )}
 
-              {/* Summary untuk KEUANGAN */}
-              {journalRows.length > 1 && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  {(() => {
-                    const validRows = journalRows.filter((row) => {
-                      return (
-                        row.accountId &&
-                        row.nominal &&
-                        Number.parseFloat(row.nominal) > 0
-                      );
-                    });
-
-                    const invalidCount = journalRows.length - validRows.length;
-
-                    return (
+                {/* Tombol Save untuk semua tab */}
+                <div className="flex gap-2 mt-6">
+                  <Button
+                    onClick={saveJournalEntries}
+                    disabled={loading}
+                    className={`${divisionStyle.bg} ${divisionStyle.hover} text-white`}
+                  >
+                    {loading ? (
                       <>
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-sm text-blue-800">
-                            📝 <strong>Ringkasan:</strong> Akan menyimpan{" "}
-                            {journalRows.length} entri keuangan sekaligus
-                          </p>
-                          <div className="flex gap-2">
-                            <Badge
-                              variant="outline"
-                              className="text-green-700 bg-green-50 border-green-200"
-                            >
-                              ✅ {validRows.length} Valid
-                            </Badge>
-                            {invalidCount > 0 && (
-                              <Badge
-                                variant="outline"
-                                className="text-red-700 bg-red-50 border-red-200"
-                              >
-                                ⚠️ {invalidCount} Belum Lengkap
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Preview Entri KEUANGAN */}
-                        <div className="space-y-2">
-                          {journalRows.map((row, index) => {
-                            const account = getSelectedAccount(row.accountId);
-                            const isValid = validRows.includes(row);
-
-                            return (
-                              <div
-                                key={row.id}
-                                className={`flex items-center gap-2 text-xs p-2 rounded border ${
-                                  isValid
-                                    ? "bg-green-50 border-green-200"
-                                    : "bg-red-50 border-red-200"
-                                }`}
-                              >
-                                <span
-                                  className={`font-medium ${
-                                    isValid ? "text-green-600" : "text-red-600"
-                                  }`}
-                                >
-                                  #{index + 1}
-                                </span>
-                                <span className="text-gray-800">
-                                  {account
-                                    ? `${account.accountCode} - ${account.accountName}`
-                                    : "Akun belum dipilih"}
-                                </span>
-                                {row.transactionType && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {row.transactionType}
-                                  </Badge>
-                                )}
-                                {row.nominal && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {formatCurrency(Number(row.nominal))}
-                                  </Badge>
-                                )}
-                                {!isValid && (
-                                  <Badge
-                                    variant="outline"
-                                    className="text-xs text-red-600 bg-red-100"
-                                  >
-                                    ⚠️ Data belum lengkap
-                                  </Badge>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
+                        <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                        Menyimpan...
                       </>
-                    );
-                  })()}
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        Simpan {selectedTransactionType}
+                      </>
+                    )}
+                  </Button>
                 </div>
-              )}
-              {/* TABEL KEUANGAN DIHILANGKAN */}
-            </>
+              </CardContent>
+            </Card>
           </>
         ) : divisionType === "PEMASARAN" ? (
           <>
@@ -4098,13 +3976,9 @@ export default function JournalPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <span className="text-blue-600">💰</span>
-                Ringkasan Kas
+                <DollarSign className="h-5 w-5 text-blue-600" />
+                Ringkasan Kas Harian
               </CardTitle>
-              <p className="text-sm text-gray-600">
-                Rekap kas untuk tanggal{" "}
-                {new Date(selectedDate).toLocaleDateString("id-ID")}
-              </p>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -4166,27 +4040,23 @@ export default function JournalPage() {
                   </div>
                   <p className="text-2xl font-bold text-blue-900 mt-2">
                     {formatCurrency(
-                      (() => {
-                        const saldo = existingEntries
-                          .filter(
-                            (entry) =>
-                              (
-                                accounts.find((a) => a.id === entry.accountId)
-                                  ?.accountName || ""
-                              )
-                                .toLowerCase()
-                                .includes("kas") &&
-                              (entry as any).transactionType === "SALDO_AKHIR"
-                          )
-                          .reduce(
-                            (sum, entry) =>
-                              sum +
-                              (Number((entry as any).saldoAkhir) ||
-                                Number(entry.nilai)),
-                            0
-                          );
-                        return saldo;
-                      })()
+                      existingEntries
+                        .filter(
+                          (entry) =>
+                            (
+                              accounts.find((a) => a.id === entry.accountId)
+                                ?.accountName || ""
+                            )
+                              .toLowerCase()
+                              .includes("kas") &&
+                            (entry as any).transactionType === "SALDO_AKHIR"
+                        )
+                        .reduce(
+                          (sum, entry) =>
+                            sum +
+                            Number((entry as any).saldoAkhir || entry.nilai),
+                          0
+                        )
                     )}
                   </p>
                 </div>
@@ -4200,19 +4070,15 @@ export default function JournalPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <span className="text-yellow-600">💳</span>
-                Ringkasan Piutang
+                <TrendingUp className="h-5 w-5 text-orange-600" />
+                Ringkasan Piutang Harian
               </CardTitle>
-              <p className="text-sm text-gray-600">
-                Rekap piutang untuk tanggal{" "}
-                {new Date(selectedDate).toLocaleDateString("id-ID")}
-              </p>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <div className="flex items-center gap-2">
-                    <span className="text-blue-600">🆕</span>
+                    <span className="text-blue-600">📈</span>
                     <h3 className="font-semibold text-blue-800">
                       Piutang Baru
                     </h3>
@@ -4223,7 +4089,7 @@ export default function JournalPage() {
                 </div>
                 <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                   <div className="flex items-center gap-2">
-                    <span className="text-green-600">✅</span>
+                    <span className="text-green-600">💰</span>
                     <h3 className="font-semibold text-green-800">
                       Piutang Tertagih
                     </h3>
@@ -4232,22 +4098,22 @@ export default function JournalPage() {
                     {formatCurrency(piutangSummary.tertagih)}
                   </p>
                 </div>
-                <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                <div className="p-4 bg-red-50 rounded-lg border border-red-200">
                   <div className="flex items-center gap-2">
-                    <span className="text-orange-600">⚠️</span>
-                    <h3 className="font-semibold text-orange-800">
+                    <span className="text-red-600">❌</span>
+                    <h3 className="font-semibold text-red-800">
                       Piutang Macet
                     </h3>
                   </div>
-                  <p className="text-2xl font-bold text-orange-900 mt-2">
+                  <p className="text-2xl font-bold text-red-900 mt-2">
                     {formatCurrency(piutangSummary.macet)}
                   </p>
                 </div>
                 <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
                   <div className="flex items-center gap-2">
-                    <span className="text-purple-600">💰</span>
+                    <span className="text-purple-600">💵</span>
                     <h3 className="font-semibold text-purple-800">
-                      Saldo Akhir Piutang
+                      Saldo Piutang
                     </h3>
                   </div>
                   <p className="text-2xl font-bold text-purple-900 mt-2">

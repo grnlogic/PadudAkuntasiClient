@@ -462,18 +462,45 @@ export const getEntriHarianByDate = async (
 
     // ✅ FIXED: Enhanced transformation with robust HRD field mapping
     const transformEntryFromBackend = (entry: any): EntriHarian => {
+      // ✅ FIXED: Better accountId mapping
+      const accountId =
+        entry.account?.id?.toString() ||
+        entry.accountId?.toString() ||
+        entry.account_id?.toString() ||
+        "";
+
+      // ✅ FIXED: Better date mapping
+      const dateValue =
+        entry.tanggalLaporan ||
+        entry.tanggal_laporan ||
+        entry.date ||
+        entry.tanggal ||
+        entry.createdAt ||
+        "";
+
       return {
         id: entry.id?.toString() || Date.now().toString(),
-        accountId:
-          entry.accountId?.toString() || entry.account_id?.toString() || "",
-        tanggal: entry.tanggal || entry.date || "",
-        date: entry.date || entry.tanggal || "",
+        accountId: accountId, // ✅ FIXED
+        tanggal: dateValue, // ✅ FIXED
+        date: dateValue, // ✅ FIXED
         nilai: Number(entry.nilai) || 0,
         description: entry.description || entry.keterangan || "",
-        createdBy: entry.createdBy || entry.created_by || "system",
+        createdBy:
+          entry.user?.username ||
+          entry.createdBy ||
+          entry.created_by ||
+          "system",
         createdAt:
           entry.createdAt || entry.created_at || new Date().toISOString(),
         keterangan: entry.description || entry.keterangan || "",
+
+        // ✅ FIXED: Enhanced transaction type mapping
+        ...(entry.transactionType && {
+          transactionType: entry.transactionType,
+        }),
+        ...(entry.transaction_type && {
+          transactionType: entry.transaction_type,
+        }),
 
         // ✅ ADD: HRD field mapping with both camelCase and snake_case support
         ...(entry.attendanceStatus && {
@@ -499,12 +526,6 @@ export const getEntriHarianByDate = async (
         }),
 
         // ✅ ADD: Other specialized fields mapping
-        ...(entry.transactionType && {
-          transactionType: entry.transactionType,
-        }),
-        ...(entry.transaction_type && {
-          transactionType: entry.transaction_type,
-        }),
         ...(entry.targetAmount !== undefined && {
           targetAmount: Number(entry.targetAmount),
         }),
