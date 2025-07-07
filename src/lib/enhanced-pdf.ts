@@ -531,11 +531,127 @@ function generateEnhancedHTML(data: PDFReportData): string {
 }
 
 function generateSummarySection(data: PDFReportData): string {
-  const { summary, divisionName, laporanProduksi, laporanBlendingData } = data;
+  const { summary, divisionName, laporanProduksi, laporanBlendingData, entries, accounts } = data;
+  const allEntries = getAllTransformedEntries(data);
 
-  // ✅ FIXED: Hapus hardcoded summary inventori untuk PRODUKSI dan BLENDING
+  console.log("🔍 [PDF SUMMARY DEBUG] Division:", divisionName);
+  console.log("🔍 [PDF SUMMARY DEBUG] All entries count:", allEntries.length);
+  console.log("🔍 [PDF SUMMARY DEBUG] Summary data:", summary);
+
+  // ✅ KEUANGAN: Conditional summary berdasarkan jenis transaksi yang ada
+  if (divisionName.includes("KEUANGAN")) {
+    // Check jenis transaksi yang ada di entries
+    const hasKas = allEntries.some(entry => 
+      entry.transactionType === "PENERIMAAN" || 
+      entry.transactionType === "PENGELUARAN" || 
+      entry.transactionType === "SALDO_AKHIR"
+    );
+    const hasPiutang = allEntries.some(entry => 
+      entry.transactionType === "PIUTANG_BARU" || 
+      entry.transactionType === "PIUTANG_TERTAGIH" || 
+      entry.transactionType === "PIUTANG_MACET"
+    );
+    const hasUtang = allEntries.some(entry => 
+      entry.transactionType === "UTANG_BARU" || 
+      entry.transactionType === "UTANG_DIBAYAR"
+    );
+
+    console.log("🔍 [PDF KEUANGAN DEBUG] Transaction types:", { hasKas, hasPiutang, hasUtang });
+
+    let summaryHTML = "";
+
+    // ✅ KAS Summary (hanya jika ada transaksi kas)
+    if (hasKas && summary && (summary.totalPenerimaan > 0 || summary.totalPengeluaran > 0 || summary.totalSaldoAkhir > 0)) {
+      summaryHTML += `
+        <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+          <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">💰 RINGKASAN KAS HARIAN</h3>
+          <table class="summary-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Metrik</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Penerimaan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalPenerimaan.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Pengeluaran</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalPengeluaran.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalSaldoAkhir.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Bersih</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${(summary.totalPenerimaan - summary.totalPengeluaran).toLocaleString()}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // ✅ PIUTANG Summary (hanya jika ada transaksi piutang)
+    if (hasPiutang) {
+      const piutangBaru = allEntries.filter(entry => entry.transactionType === "PIUTANG_BARU").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const piutangTertagih = allEntries.filter(entry => entry.transactionType === "PIUTANG_TERTAGIH").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const piutangMacet = allEntries.filter(entry => entry.transactionType === "PIUTANG_MACET").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const saldoAkhirPiutang = allEntries.filter(entry => entry.transactionType === "SALDO_AKHIR").reduce((sum, entry) => sum + (entry.saldoAkhir || entry.nilai || 0), 0);
+
+      summaryHTML += `
+        <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+          <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">📊 RINGKASAN PIUTANG HARIAN</h3>
+          <table class="summary-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Kategori</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Piutang Baru</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${piutangBaru.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Piutang Tertagih</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${piutangTertagih.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Piutang Macet</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${piutangMacet.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir Piutang</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${saldoAkhirPiutang.toLocaleString()}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // ✅ UTANG Summary (hanya jika ada transaksi utang)
+    if (hasUtang) {
+      const utangBaru = allEntries.filter(entry => entry.transactionType === "UTANG_BARU").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const utangDibayar = allEntries.filter(entry => entry.transactionType === "UTANG_DIBAYAR").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const bahanBaku = allEntries.filter(entry => entry.kategori === "BAHAN_BAKU").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const bankTotal = allEntries.filter(entry => entry.kategori === "BANK_HM" || entry.kategori === "BANK_HENRY").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+
+      summaryHTML += `
+        <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+          <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">💳 RINGKASAN UTANG HARIAN</h3>
+          <table class="summary-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Kategori</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Utang Baru</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${utangBaru.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Utang Dibayar</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${utangDibayar.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Bahan Baku</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${bahanBaku.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Bank (HM + Henry)</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${bankTotal.toLocaleString()}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // ✅ Return hasil: Jika tidak ada transaksi apapun, return empty string
+    if (!hasKas && !hasPiutang && !hasUtang) {
+      console.log("⚠️ [PDF KEUANGAN DEBUG] No transactions found, no summary displayed");
+      return "";
+    }
+
+    return summaryHTML;
+  }
+
+  // ✅ Divisi lainnya tetap sama seperti sebelumnya...
+  
+  // PRODUKSI: Summary produksi
   if (divisionName.includes("PRODUKSI")) {
-    // Cek apakah ada data produksi
     if (laporanProduksi && laporanProduksi.length > 0) {
       const totalHasil = laporanProduksi.reduce(
         (sum: number, item: any) => sum + (Number(item.hasilProduksi) || 0),
@@ -581,14 +697,25 @@ function generateSummarySection(data: PDFReportData): string {
           </table>
         </div>
       `;
-    } else {
-      // Tidak ada data produksi, return empty
-      return "";
     }
+    // ✅ FIXED: Tampilkan summary default untuk PRODUKSI tanpa data
+    return `
+      <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+        <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">📊 RINGKASAN PRODUKSI HARIAN</h3>
+        <div style="text-align: center; padding: 20px; color: #666;">
+          <p>Belum ada data produksi pada tanggal ini</p>
+          <p style="font-size: 14px;">Total Entri: ${allEntries.length}</p>
+        </div>
+      </div>
+    `;
   }
 
-  // ✅ BLENDING: Summary yang relevan dan akurat
-  if (divisionName.includes("BLENDING")) {
+  // ✅ BLENDING: Summary blending
+  if (
+    divisionName.includes("BLENDING") ||
+    divisionName.includes("PERSEDIAAN") ||
+    divisionName.includes("GUDANG")
+  ) {
     if (laporanBlendingData && laporanBlendingData.length > 0) {
       const totalMasuk = laporanBlendingData.reduce(
         (sum: number, item: any) => sum + (Number(item.barangMasuk) || 0),
@@ -613,7 +740,7 @@ function generateSummarySection(data: PDFReportData): string {
 
       return `
         <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
-          <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">📦 RINGKASAN BLENDING HARIAN</h3>
+          <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">📦 RINGKASAN BLENDING/GUDANG HARIAN</h3>
           <table class="summary-table" style="width: 100%; border-collapse: collapse;">
             <thead>
               <tr style="background-color: #f5f5f5;">
@@ -636,17 +763,27 @@ function generateSummarySection(data: PDFReportData): string {
           </table>
         </div>
       `;
-    } else {
-      // Tidak ada data blending, return empty
-      return "";
     }
+    // ✅ FIXED: Tampilkan summary default untuk BLENDING/GUDANG tanpa data
+    return `
+      <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+        <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">📦 RINGKASAN BLENDING/GUDANG HARIAN</h3>
+        <div style="text-align: center; padding: 20px; color: #666;">
+          <p>Belum ada data blending/gudang pada tanggal ini</p>
+          <p style="font-size: 14px;">Total Entri: ${allEntries.length}</p>
+        </div>
+      </div>
+    `;
   }
 
-  // Keep existing summary logic for KEUANGAN and other divisions
-  if (
-    summary &&
-    (summary.totalPenerimaan > 0 || summary.totalPengeluaran > 0)
-  ) {
+  // ✅ KEUANGAN: Summary keuangan - FIXED: Tampilkan meskipun nilai 0
+  if (divisionName.includes("KEUANGAN")) {
+    const safeSummary = summary || {
+      totalPenerimaan: 0,
+      totalPengeluaran: 0,
+      totalSaldoAkhir: 0,
+    };
+
     return `
       <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
         <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">💰 RINGKASAN KEUANGAN HARIAN</h3>
@@ -658,17 +795,162 @@ function generateSummarySection(data: PDFReportData): string {
             </tr>
           </thead>
           <tbody>
-            <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Penerimaan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalPenerimaan.toLocaleString()}</td></tr>
-            <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Pengeluaran</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalPengeluaran.toLocaleString()}</td></tr>
-            <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalSaldoAkhir.toLocaleString()}</td></tr>
+            <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Penerimaan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${safeSummary.totalPenerimaan.toLocaleString()}</td></tr>
+            <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Pengeluaran</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${safeSummary.totalPengeluaran.toLocaleString()}</td></tr>
+            <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${safeSummary.totalSaldoAkhir.toLocaleString()}</td></tr>
+            <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Entri</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${
+              allEntries.length
+            } transaksi</td></tr>
           </tbody>
         </table>
       </div>
     `;
   }
 
-  // Return empty string for all other cases
-  return "";
+  // ✅ PEMASARAN: Summary pemasaran
+  if (divisionName.includes("PEMASARAN")) {
+    let totalTarget = 0;
+    let totalRealisasi = 0;
+    let totalLaporan = 0;
+
+    // Hitung dari laporan penjualan sales
+    if (data.laporanPenjualanSales) {
+      data.laporanPenjualanSales.forEach((sales: any) => {
+        totalTarget += Number(sales.targetAmount || sales.targetPenjualan || 0);
+        totalRealisasi += Number(
+          sales.realisasiAmount || sales.realisasiPenjualan || 0
+        );
+      });
+      totalLaporan += data.laporanPenjualanSales.length;
+    }
+
+    // Hitung dari laporan penjualan produk
+    if (data.laporanPenjualanProduk) {
+      data.laporanPenjualanProduk.forEach((produk: any) => {
+        totalTarget += Number(produk.targetKuantitas || 0);
+        totalRealisasi += Number(produk.realisasiKuantitas || 0);
+      });
+      totalLaporan += data.laporanPenjualanProduk.length;
+    }
+
+    // Hanya tampilkan jika ada data
+    if (totalLaporan > 0) {
+      const achievement =
+        totalTarget > 0 ? (totalRealisasi / totalTarget) * 100 : 0;
+      const status =
+        achievement >= 100
+          ? "Target Tercapai"
+          : achievement >= 80
+          ? "Hampir Tercapai"
+          : "Perlu Peningkatan";
+
+      return `
+        <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+          <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">🎯 RINGKASAN PEMASARAN HARIAN</h3>
+          <table class="summary-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Metrik</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Target</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalTarget.toLocaleString()} unit</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Realisasi</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalRealisasi.toLocaleString()} unit</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Achievement Rate</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${achievement.toFixed(
+                1
+              )}%</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Status</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: ${
+                achievement >= 100
+                  ? "green"
+                  : achievement >= 80
+                  ? "orange"
+                  : "red"
+              };">${status}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Laporan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalLaporan} entri</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    
+    return ""; // Tidak ada data, tidak tampilkan summary
+  }
+
+  // HRD: Summary HRD
+  if (divisionName.includes("HRD")) {
+    if (allEntries.some(entry => entry.attendanceStatus)) {
+      let totalKaryawan = 0;
+      let hadirCount = 0;
+      let tidakHadirCount = 0;
+      let totalAbsentCount = 0;
+
+      allEntries.forEach((entry) => {
+        if (entry.attendanceStatus) {
+          totalKaryawan++;
+          if (entry.attendanceStatus === "HADIR") {
+            hadirCount++;
+          } else {
+            tidakHadirCount++;
+          }
+        }
+        if (entry.absentCount) {
+          totalAbsentCount += Number(entry.absentCount);
+        }
+      });
+
+      const attendanceRate =
+        totalKaryawan > 0 ? (hadirCount / totalKaryawan) * 100 : 0;
+
+      return `
+        <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+          <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">👥 RINGKASAN HRD HARIAN</h3>
+          <table class="summary-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Metrik</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Karyawan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalKaryawan} orang</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Karyawan Hadir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${hadirCount} orang</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Karyawan Tidak Hadir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${tidakHadirCount} orang</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Absen</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalAbsentCount} orang</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Tingkat Kehadiran</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: ${
+                attendanceRate >= 90
+                  ? "green"
+                  : attendanceRate >= 80
+                  ? "orange"
+                  : "red"
+              };">${attendanceRate.toFixed(1)}%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    return ""; // Tidak ada data, tidak tampilkan summary
+  }
+
+  // ✅ DEFAULT: Summary umum untuk divisi lainnya
+  return `
+    <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+      <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">📊 RINGKASAN TRANSAKSI HARIAN</h3>
+      <table class="summary-table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="background-color: #f5f5f5;">
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Metrik</th>
+            <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Nilai</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style="border: 1px solid #ddd; padding: 8px;">Divisi</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${divisionName}</td></tr>
+          <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Entri</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${allEntries.length} transaksi</td></tr>
+          <tr><td style="border: 1px solid #ddd; padding: 8px;">Tanggal Laporan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${data.date}</td></tr>
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 function generateDetailsSection(data: PDFReportData): string {

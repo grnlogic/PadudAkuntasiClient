@@ -58,7 +58,6 @@ export interface CreateEntriHarianRequest {
   // ✅ NEW: Pemasaran Sales fields
   salesUserId?: number;
   returPenjualan?: number;
-  keteranganKendala?: string;
   // ✅ Produksi fields
   hasilProduksi?: number;
   barangGagal?: number;

@@ -812,7 +812,7 @@ export interface LaporanPenjualanProduk {
   createdAt: string;
 }
 
-// Backend interface untuk reference - FIXED: Backend menggunakan camelCase  
+// Backend interface untuk reference - FIXED: Backend menggunakan camelCase
 interface BackendLaporanPenjualanProduk {
   id: number;
   tanggalLaporan: string;
