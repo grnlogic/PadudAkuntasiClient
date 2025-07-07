@@ -16,6 +16,8 @@ interface PDFReportData {
   laporanPenjualanProduk?: any[]; // ✅ ADD: Support for new product sales reports
   laporanProduksi?: any[];
   laporanGudang?: any[];
+  laporanBlendingData?: any[]; // ✅ ADD: Support for blending data
+  laporanProduksiData?: any[]; // ✅ ADD: Support for production data
   users?: any[];
   salespeople?: any[];
 }
@@ -529,476 +531,143 @@ function generateEnhancedHTML(data: PDFReportData): string {
 }
 
 function generateSummarySection(data: PDFReportData): string {
-  const divisionName = data.divisionName.toUpperCase();
+  const { summary, divisionName, laporanProduksi, laporanBlendingData } = data;
 
-  // ✅ FIXED: Gunakan data yang sudah ditransform
-  const allEntries = getAllTransformedEntries(data);
-
-  // KEUANGAN Summary
-  if (data.summary) {
-    // Ringkasan transaksi keuangan
-    let piutangSummary = "";
-    let utangSummary = "";
-    if (divisionName.includes("KEUANGAN")) {
-      // Hitung total piutang dari data yang sudah ditransform
-      const totalPiutangBaru = allEntries
-        .filter((entry) => entry.transactionType === "PIUTANG_BARU")
-        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
-      const totalPiutangTertagih = allEntries
-        .filter((entry) => entry.transactionType === "PIUTANG_TERTAGIH")
-        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
-      const totalPiutangMacet = allEntries
-        .filter((entry) => entry.transactionType === "PIUTANG_MACET")
-        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
-      const totalSaldoAkhirPiutang = allEntries
-        .filter((entry) => entry.transactionType === "SALDO_AKHIR")
-        .reduce(
-          (sum, entry) => sum + Number(entry.saldoAkhir || entry.nilai || 0),
-          0
-        );
-
-      piutangSummary = `
-        <div class="summary-title" style="margin-top:24px;">RINGKASAN PIUTANG</div>
-        <table class="summary-table">
-          <thead>
-            <tr>
-              <th>Kategori</th>
-              <th style="text-align: right;">Jumlah</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Piutang Baru</td>
-              <td style="text-align: right;">${formatCurrency(
-                totalPiutangBaru
-              )}</td>
-            </tr>
-            <tr>
-              <td>Piutang Tertagih</td>
-              <td style="text-align: right;">${formatCurrency(
-                totalPiutangTertagih
-              )}</td>
-            </tr>
-            <tr>
-              <td>Piutang Macet</td>
-              <td style="text-align: right;">${formatCurrency(
-                totalPiutangMacet
-              )}</td>
-            </tr>
-            <tr>
-              <td>Saldo Akhir Piutang</td>
-              <td style="text-align: right;">${formatCurrency(
-                totalSaldoAkhirPiutang
-              )}</td>
-            </tr>
-          </tbody>
-        </table>
-      `;
-
-      // ✅ FIXED: Hitung total utang dari data yang sudah ditransform
-      const totalUtangBaru = allEntries
-        .filter((entry) => entry.transactionType === "UTANG_BARU")
-        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
-      const totalUtangDibayar = allEntries
-        .filter((entry) => entry.transactionType === "UTANG_DIBAYAR")
-        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
-      const totalBahanBaku = allEntries
-        .filter((entry) => entry.kategori === "BAHAN_BAKU")
-        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
-      const totalBank = allEntries
-        .filter(
-          (entry) =>
-            entry.kategori === "BANK_HM" || entry.kategori === "BANK_HENRY"
-        )
-        .reduce((sum, entry) => sum + Number(entry.nilai || 0), 0);
-
-      utangSummary = `
-        <div class="summary-title" style="margin-top:24px;">RINGKASAN UTANG</div>
-        <table class="summary-table">
-          <thead>
-            <tr>
-              <th>Kategori</th>
-              <th style="text-align: right;">Jumlah</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Utang Baru</td>
-              <td style="text-align: right;">${formatCurrency(
-                totalUtangBaru
-              )}</td>
-            </tr>
-            <tr>
-              <td>Utang Dibayar</td>
-              <td style="text-align: right;">${formatCurrency(
-                totalUtangDibayar
-              )}</td>
-            </tr>
-            <tr>
-              <td>Bahan Baku</td>
-              <td style="text-align: right;">${formatCurrency(
-                totalBahanBaku
-              )}</td>
-            </tr>
-            <tr>
-              <td>Bank (HM + Henry)</td>
-              <td style="text-align: right;">${formatCurrency(totalBank)}</td>
-            </tr>
-          </tbody>
-        </table>
-      `;
-    }
-    return `
-      <div class="summary-section keuangan">
-        <div class="summary-title">RINGKASAN TRANSAKSI KEUANGAN</div>
-        <table class="summary-table">
-          <thead>
-            <tr>
-              <th>Keterangan</th>
-              <th style="text-align: right;">Jumlah</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Total Penerimaan</td>
-              <td style="text-align: right;">${formatCurrency(
-                data.summary.totalPenerimaan
-              )}</td>
-            </tr>
-            <tr>
-              <td>Total Pengeluaran</td>
-              <td style="text-align: right;">${formatCurrency(
-                data.summary.totalPengeluaran
-              )}</td>
-            </tr>
-            <tr>
-              <td>Total Saldo Akhir</td>
-              <td style="text-align: right;">${formatCurrency(
-                data.summary.totalSaldoAkhir
-              )}</td>
-            </tr>
-            <tr style="background-color: #ecf0f1; font-weight: bold;">
-              <td>Saldo Bersih</td>
-              <td style="text-align: right;">${formatCurrency(
-                data.summary.totalPenerimaan - data.summary.totalPengeluaran
-              )}</td>
-            </tr>
-          </tbody>
-        </table>
-        ${piutangSummary}
-        ${utangSummary}
-      </div>
-    `;
-  }
-
-  // PEMASARAN Summary
-  if (divisionName.includes("PEMASARAN")) {
-    // ✅ Enhanced: Calculate from both laporanPenjualanSales and laporanPenjualanProduk
-    let totalTarget = 0;
-    let totalRealisasi = 0;
-    let totalRetur = 0;
-    let totalKendala = 0;
-
-    // From regular entries (legacy)
-    allEntries.forEach((entry) => {
-      totalTarget += Number(entry.targetAmount) || 0;
-      totalRealisasi += Number(entry.realisasiAmount) || 0;
-    });
-
-    // ✅ NEW: From laporanPenjualanProduk (wizard data)
-    if (data.laporanPenjualanProduk) {
-      data.laporanPenjualanProduk.forEach((produk: any) => {
-        totalTarget += Number(produk.targetKuantitas) || 0;
-        totalRealisasi += Number(produk.realisasiKuantitas) || 0;
-        if (produk.keteranganKendala && produk.keteranganKendala.trim()) {
-          totalKendala += 1;
-        }
-      });
-    }
-
-    // From laporanPenjualanSales (legacy)
-    if (data.laporanPenjualanSales) {
-      data.laporanPenjualanSales.forEach((sales: any) => {
-        totalTarget += Number(sales.targetPenjualan) || 0;
-        totalRealisasi += Number(sales.realisasiPenjualan) || 0;
-        totalRetur += Number(sales.returPenjualan) || 0;
-      });
-    }
-
-    const achievementRate =
-      totalTarget > 0 ? (totalRealisasi / totalTarget) * 100 : 0;
-
-    const totalLaporan =
-      (data.laporanPenjualanSales?.length || 0) +
-      (data.laporanPenjualanProduk?.length || 0);
-
-    return `
-      <div class="summary-section pemasaran">
-        <div class="summary-title">RINGKASAN PERFORMANCE PEMASARAN</div>
-        <table class="summary-table">
-          <thead>
-            <tr>
-              <th>Metrik</th>
-              <th style="text-align: right;">Nilai</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Total Target</td>
-              <td style="text-align: right;">${totalTarget.toLocaleString(
-                "id-ID"
-              )} Unit</td>
-            </tr>
-            <tr>
-              <td>Total Realisasi</td>
-              <td style="text-align: right;">${totalRealisasi.toLocaleString(
-                "id-ID"
-              )} Unit</td>
-            </tr>
-            ${
-              totalRetur > 0
-                ? `
-            <tr>
-              <td>Total Retur</td>
-              <td style="text-align: right;">${totalRetur.toLocaleString(
-                "id-ID"
-              )} Unit</td>
-            </tr>
-            `
-                : ""
-            }
-            <tr>
-              <td>Achievement Rate</td>
-              <td style="text-align: right;">${achievementRate.toFixed(1)}%</td>
-            </tr>
-            <tr>
-              <td>Total Laporan</td>
-              <td style="text-align: right;">${totalLaporan} Laporan</td>
-            </tr>
-            ${
-              totalKendala > 0
-                ? `
-            <tr>
-              <td>Laporan dengan Kendala</td>
-              <td style="text-align: right;">${totalKendala} Laporan</td>
-            </tr>
-            `
-                : ""
-            }
-            <tr style="background-color: #ecf0f1; font-weight: bold;">
-              <td>Status</td>
-              <td style="text-align: right;">${
-                achievementRate >= 100
-                  ? "Target Tercapai ✅"
-                  : achievementRate >= 80
-                  ? "Mendekati Target 🎯"
-                  : "Perlu Ditingkatkan 📈"
-              }</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    `;
-  }
-
-  // PRODUKSI Summary
+  // ✅ FIXED: Hapus hardcoded summary inventori untuk PRODUKSI dan BLENDING
   if (divisionName.includes("PRODUKSI")) {
-    const totalProduksi = allEntries.reduce((sum, entry) => {
-      return sum + Number(entry.nilai || 0);
-    }, 0);
+    // Cek apakah ada data produksi
+    if (laporanProduksi && laporanProduksi.length > 0) {
+      const totalHasil = laporanProduksi.reduce(
+        (sum: number, item: any) => sum + (Number(item.hasilProduksi) || 0),
+        0
+      );
+      const totalGagal = laporanProduksi.reduce(
+        (sum: number, item: any) => sum + (Number(item.barangGagal) || 0),
+        0
+      );
+      const totalStok = laporanProduksi.reduce(
+        (sum: number, item: any) => sum + (Number(item.stockBarangJadi) || 0),
+        0
+      );
+      const totalHPP = laporanProduksi.reduce(
+        (sum: number, item: any) => sum + (Number(item.hpBarangJadi) || 0),
+        0
+      );
+      const efisiensi =
+        totalHasil > 0 ? (totalHasil / (totalHasil + totalGagal)) * 100 : 0;
 
-    // GUNAKAN hpBarangJadi jika ada, fallback ke hppAmount
-    const totalHPP = allEntries.reduce((sum, entry) => {
-      const hpp = entry.hpBarangJadi || entry.hppAmount || 0;
-      return sum + Number(hpp);
-    }, 0);
-
-    const hppPerUnit = totalProduksi > 0 ? totalHPP / totalProduksi : 0;
-
-    return `
-      <div class="summary-section produksi">
-        <div class="summary-title">RINGKASAN PRODUKSI HARIAN</div>
-        <table class="summary-table">
-          <thead>
-            <tr>
-              <th>Metrik</th>
-              <th style="text-align: right;">Nilai</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Total Produksi</td>
-              <td style="text-align: right;">${totalProduksi.toLocaleString(
-                "id-ID"
-              )} unit</td>
-            </tr>
-            <tr>
-              <td>Total HPP</td>
-              <td style="text-align: right;">${formatCurrency(totalHPP)}</td>
-            </tr>
-            <tr>
-              <td>HPP per Unit</td>
-              <td style="text-align: right;">${formatCurrency(hppPerUnit)}</td>
-            </tr>
-            <tr style="background-color: #ecf0f1; font-weight: bold;">
-              <td>Status Efisiensi</td>
-              <td style="text-align: right;">${
-                hppPerUnit < 5000 ? "Efisien" : "Perlu Review"
-              }</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    `;
+      return `
+        <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+          <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">📊 RINGKASAN PRODUKSI HARIAN</h3>
+          <table class="summary-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Metrik</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Hasil Produksi</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalHasil.toLocaleString()} unit</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Barang Gagal</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalGagal.toLocaleString()} unit</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Stok Barang Jadi</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalStok.toLocaleString()} unit</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total HPP Barang Jadi</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${totalHPP.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Efisiensi Produksi</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${efisiensi.toFixed(
+                1
+              )}%</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Entri Laporan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${
+                laporanProduksi.length
+              } item</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      // Tidak ada data produksi, return empty
+      return "";
+    }
   }
 
-  // GUDANG/PERSEDIAAN_BAHAN_BAKU Summary
+  // ✅ BLENDING: Summary yang relevan dan akurat
+  if (divisionName.includes("BLENDING")) {
+    if (laporanBlendingData && laporanBlendingData.length > 0) {
+      const totalMasuk = laporanBlendingData.reduce(
+        (sum: number, item: any) => sum + (Number(item.barangMasuk) || 0),
+        0
+      );
+      const totalPakai = laporanBlendingData.reduce(
+        (sum: number, item: any) => sum + (Number(item.pemakaian) || 0),
+        0
+      );
+      const totalStok = laporanBlendingData.reduce(
+        (sum: number, item: any) => sum + (Number(item.stokAkhir) || 0),
+        0
+      );
+      const rataStok =
+        laporanBlendingData.length > 0
+          ? totalStok / laporanBlendingData.length
+          : 0;
+      const itemStokRendah = laporanBlendingData.filter(
+        (item: any) => Number(item.stokAkhir || 0) < 100
+      ).length;
+      const statusGudang = itemStokRendah > 0 ? "Perlu Perhatian" : "Stok Aman";
+
+      return `
+        <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+          <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">📦 RINGKASAN BLENDING HARIAN</h3>
+          <table class="summary-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background-color: #f5f5f5;">
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Metrik</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Barang Masuk</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalMasuk.toLocaleString()} unit</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Pemakaian</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalPakai.toLocaleString()} unit</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Stok Akhir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalStok.toLocaleString()} unit</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Rata-rata Stok</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${rataStok.toFixed(
+                1
+              )} unit</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Item Stok Rendah (&lt;100)</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${itemStokRendah} item</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Status Gudang</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: ${
+                statusGudang === "Stok Aman" ? "green" : "orange"
+              };">${statusGudang}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      // Tidak ada data blending, return empty
+      return "";
+    }
+  }
+
+  // Keep existing summary logic for KEUANGAN and other divisions
   if (
-    divisionName.includes("GUDANG") ||
-    divisionName.includes("PERSEDIAAN") ||
-    divisionName.includes("BLENDING")
+    summary &&
+    (summary.totalPenerimaan > 0 || summary.totalPengeluaran > 0)
   ) {
-    // ✅ FIXED: Use same fallback logic as detail table
-    const totalBarangMasuk = allEntries.reduce((sum, entry) => {
-      const barangMasuk = entry.barangMasuk || 0;
-      return sum + Number(barangMasuk);
-    }, 0);
-
-    const totalPemakaian = allEntries.reduce((sum, entry) => {
-      // ✅ FIXED: Use same fallback as detail table
-      const pemakaian = entry.pemakaian || 0;
-      return sum + Number(pemakaian);
-    }, 0);
-
-    const totalStokAkhir = allEntries.reduce((sum, entry) => {
-      const stokAkhir = entry.stokAkhir || 0;
-      return sum + Number(stokAkhir);
-    }, 0);
-
-    const validEntries = allEntries.filter((entry) => entry.stokAkhir != null);
-    const avgStok =
-      validEntries.length > 0
-        ? validEntries.reduce((sum, entry) => {
-            const stok = entry.stokAkhir || 0;
-            return sum + Number(stok);
-          }, 0) / validEntries.length
-        : 0;
-
-    const lowStockCount = allEntries.filter((entry) => {
-      const stok = entry.stokAkhir || 0;
-      return Number(stok) < 100;
-    }).length;
-
     return `
-      <div class="summary-section gudang">
-        <div class="summary-title">RINGKASAN INVENTORI HARIAN</div>
-        <table class="summary-table">
+      <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+        <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">💰 RINGKASAN KEUANGAN HARIAN</h3>
+        <table class="summary-table" style="width: 100%; border-collapse: collapse;">
           <thead>
-            <tr>
-              <th>Metrik</th>
-              <th style="text-align: right;">Nilai</th>
+            <tr style="background-color: #f5f5f5;">
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Metrik</th>
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Nilai</th>
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>Total Barang Masuk</td>
-              <td style="text-align: right;">${totalBarangMasuk.toLocaleString(
-                "id-ID"
-              )} unit</td>
-            </tr>
-            <tr>
-              <td>Total Pemakaian</td>
-              <td style="text-align: right;">${totalPemakaian.toLocaleString(
-                "id-ID"
-              )} unit</td>
-            </tr>
-            <tr>
-              <td>Total Stok Akhir</td>
-              <td style="text-align: right;">${totalStokAkhir.toLocaleString(
-                "id-ID"
-              )} unit</td>
-            </tr>
-            <tr>
-              <td>Rata-rata Stok</td>
-              <td style="text-align: right;">${avgStok.toLocaleString(
-                "id-ID"
-              )} unit</td>
-            </tr>
-            <tr>
-              <td>Item Stok Rendah</td>
-              <td style="text-align: right;">${lowStockCount} item</td>
-            </tr>
-            <tr style="background-color: #ecf0f1; font-weight: bold;">
-              <td>Status Gudang</td>
-              <td style="text-align: right;">${
-                lowStockCount > 0 ? "Perlu Restock" : "Stok Aman"
-              }</td>
-            </tr>
+            <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Penerimaan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalPenerimaan.toLocaleString()}</td></tr>
+            <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Pengeluaran</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalPengeluaran.toLocaleString()}</td></tr>
+            <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalSaldoAkhir.toLocaleString()}</td></tr>
           </tbody>
         </table>
       </div>
     `;
   }
 
-  // HRD Summary
-  if (divisionName.includes("HRD")) {
-    const totalKaryawan = allEntries.length;
-    const hadirCount = allEntries.filter((entry) => {
-      const status = entry.attendanceStatus;
-      return status === "HADIR";
-    }).length;
-
-    const attendanceRate =
-      totalKaryawan > 0 ? (hadirCount / totalKaryawan) * 100 : 0;
-
-    const totalOvertime = allEntries.reduce((sum, entry) => {
-      const overtime = entry.overtimeHours || 0;
-      return sum + Number(overtime);
-    }, 0);
-
-    return `
-      <div class="summary-section hrd">
-        <div class="summary-title">RINGKASAN KEHADIRAN HARIAN</div>
-        <table class="summary-table">
-          <thead>
-            <tr>
-              <th>Metrik</th>
-              <th style="text-align: right;">Nilai</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Total Karyawan</td>
-              <td style="text-align: right;">${totalKaryawan} orang</td>
-            </tr>
-            <tr>
-              <td>Karyawan Hadir</td>
-              <td style="text-align: right;">${hadirCount} orang</td>
-            </tr>
-            <tr>
-              <td>Tingkat Kehadiran</td>
-              <td style="text-align: right;">${attendanceRate.toFixed(1)}%</td>
-            </tr>
-            <tr>
-              <td>Total Jam Lembur</td>
-              <td style="text-align: right;">${totalOvertime} jam</td>
-            </tr>
-            <tr style="background-color: #ecf0f1; font-weight: bold;">
-              <td>Status Kehadiran</td>
-              <td style="text-align: right;">${
-                attendanceRate >= 90
-                  ? "Excellent"
-                  : attendanceRate >= 80
-                  ? "Good"
-                  : "Needs Improvement"
-              }</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    `;
-  }
-
+  // Return empty string for all other cases
   return "";
 }
 

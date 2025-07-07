@@ -564,6 +564,7 @@ export default function LaporanProduksiBlendingForm({
                 pemakaian: Number(item.pemakaian || 0),
                 stokAkhir: Number(item.stokAkhir || item.stok_akhir || 0),
                 keteranganGudang:
+                  item.keterangan || // ✅ Tambahkan ini sebagai prioritas pertama
                   item.kondisiGudang ||
                   item.kondisi_gudang ||
                   item.keteranganGudang ||
@@ -1095,6 +1096,68 @@ export default function LaporanProduksiBlendingForm({
           </Card>
         )}
 
+        {/* ✅ ADD: Summary Card Section untuk Blending */}
+        {activeTab === "blending" && (
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle>Ringkasan Laporan Blending</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-muted rounded-lg p-4 flex flex-col items-center shadow-sm">
+                  <span className="text-xs text-muted-foreground mb-1">
+                    Total Entri
+                  </span>
+                  <span className="text-xl font-bold">
+                    {laporanBlendingData.length}
+                  </span>
+                </div>
+                <div className="bg-muted rounded-lg p-4 flex flex-col items-center shadow-sm">
+                  <span className="text-xs text-muted-foreground mb-1">
+                    Total Barang Masuk
+                  </span>
+                  <span className="text-xl font-bold">
+                    {laporanBlendingData.reduce(
+                      (acc, item) =>
+                        acc +
+                        (Number(
+                          item.stokAwal ||
+                            item.stok_awal ||
+                            item.barangMasuk ||
+                            item.barang_masuk
+                        ) || 0),
+                      0
+                    )}
+                  </span>
+                </div>
+                <div className="bg-muted rounded-lg p-4 flex flex-col items-center shadow-sm">
+                  <span className="text-xs text-muted-foreground mb-1">
+                    Total Pemakaian
+                  </span>
+                  <span className="text-xl font-bold">
+                    {laporanBlendingData.reduce(
+                      (acc, item) => acc + (Number(item.pemakaian) || 0),
+                      0
+                    )}
+                  </span>
+                </div>
+                <div className="bg-muted rounded-lg p-4 flex flex-col items-center shadow-sm">
+                  <span className="text-xs text-muted-foreground mb-1">
+                    Total Stok Akhir
+                  </span>
+                  <span className="text-xl font-bold">
+                    {laporanBlendingData.reduce(
+                      (acc, item) =>
+                        acc + (Number(item.stokAkhir || item.stok_akhir) || 0),
+                      0
+                    )}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* ✅ PDF Export Buttons - Moved to top */}
         <div className="flex justify-end gap-2 mb-4">
           <Button
@@ -1292,7 +1355,11 @@ export default function LaporanProduksiBlendingForm({
                                 "-"}
                             </TableCell>
                             <TableCell>
-                              {item.barangMasuk || item.barang_masuk || "-"}
+                              {item.stokAwal ||
+                                item.stok_awal ||
+                                item.barangMasuk ||
+                                item.barang_masuk ||
+                                "-"}
                             </TableCell>
                             <TableCell>{item.pemakaian || "-"}</TableCell>
                             <TableCell>

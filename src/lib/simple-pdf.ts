@@ -223,7 +223,6 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
         Dicetak pada: ${new Date().toLocaleString("id-ID")}
       </div>
       
-        {/* ✅ ENHANCED: Division-specific summary */}
         ${
           data.summary
             ? `
@@ -489,62 +488,7 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
         `
             : data.laporanBlendingData && data.laporanBlendingData.length > 0
             ? `
-        <div class="summary-section">
-          <div class="summary-title">RINGKASAN INVENTORI HARIAN</div>
-          <table class="summary-table">
-            <thead>
-              <tr>
-                <th>Metrik</th>
-                <th>Nilai</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Total Pemakaian</td>
-                <td>${data.entries
-                  .reduce((sum, entry) => {
-                    const pemakaian = (entry as any).pemakaianAmount || 0;
-                    return sum + Number(pemakaian);
-                  }, 0)
-                  .toLocaleString("id-ID")} unit</td>
-              </tr>
-              <tr>
-                <td>Rata-rata Stok</td>
-                <td>${(() => {
-                  const validEntries = data.entries.filter(
-                    (entry) => (entry as any).stokAkhir != null
-                  );
-                  if (validEntries.length === 0) return "0 unit";
-                  const avgStok =
-                    validEntries.reduce((sum, entry) => {
-                      const stok = (entry as any).stokAkhir || 0;
-                      return sum + Number(stok);
-                    }, 0) / validEntries.length;
-                  return avgStok.toLocaleString("id-ID") + " unit";
-                })()}</td>
-              </tr>
-              <tr>
-                <td>Item Stok Rendah</td>
-                <td>${
-                  data.entries.filter((entry) => {
-                    const stok = (entry as any).stokAkhir || 0;
-                    return Number(stok) < 100;
-                  }).length
-                } item</td>
-              </tr>
-              <tr style="background-color: #ecf0f1; font-weight: bold;">
-                <td>Status Gudang</td>
-                <td>${(() => {
-                  const lowStockCount = data.entries.filter((entry) => {
-                    const stok = (entry as any).stokAkhir || 0;
-                    return Number(stok) < 100;
-                  }).length;
-                  return lowStockCount > 0 ? "Perlu Restock" : "Stok Aman";
-                })()}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+
         
         <!-- ✅ NEW: Blending Data Table -->
         ${
@@ -591,59 +535,7 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
         `
             : data.divisionName.includes("BLENDING")
             ? `
-        <div class="summary-section">
-          <div class="summary-title">RINGKASAN BLENDING HARIAN</div>
-          <table class="summary-table">
-            <thead>
-              <tr>
-                <th>Metrik</th>
-                <th>Nilai</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Total Barang Masuk</td>
-                <td>${
-                  data.laporanBlendingData
-                    ? data.laporanBlendingData
-                        .reduce((sum, item) => sum + item.barangMasuk, 0)
-                        .toLocaleString("id-ID")
-                    : "0"
-                } unit</td>
-              </tr>
-              <tr>
-                <td>Total Pemakaian</td>
-                <td>${
-                  data.laporanBlendingData
-                    ? data.laporanBlendingData
-                        .reduce((sum, item) => sum + item.pemakaian, 0)
-                        .toLocaleString("id-ID")
-                    : "0"
-                } unit</td>
-              </tr>
-              <tr>
-                <td>Total Stok Akhir</td>
-                <td>${
-                  data.laporanBlendingData
-                    ? data.laporanBlendingData
-                        .reduce((sum, item) => sum + item.stokAkhir, 0)
-                        .toLocaleString("id-ID")
-                    : "0"
-                } unit</td>
-              </tr>
-              <tr style="background-color: #ecf0f1; font-weight: bold;">
-                <td>Status Stok</td>
-                <td>${(() => {
-                  if (!data.laporanBlendingData) return "Tidak ada data";
-                  const lowStockCount = data.laporanBlendingData.filter(
-                    (item) => item.stokAkhir < 100
-                  ).length;
-                  return lowStockCount > 0 ? "Perlu Restock" : "Stok Aman";
-                })()}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+
         
         <!-- ✅ NEW: Blending Data Table -->
         ${
