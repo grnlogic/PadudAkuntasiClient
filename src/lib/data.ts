@@ -478,12 +478,18 @@ export const getEntriHarianByDate = async (
         entry.createdAt ||
         "";
 
+      // ✅ FIXED: Untuk HRD, gunakan absentCount sebagai nilai utama
+      const nilai =
+        entry.divisionType === "HRD"
+          ? Number(entry.absentCount || entry.absent_count || 0)
+          : Number(entry.nilai) || 0;
+
       return {
         id: entry.id?.toString() || Date.now().toString(),
         accountId: accountId, // ✅ FIXED
         tanggal: dateValue, // ✅ FIXED
         date: dateValue, // ✅ FIXED
-        nilai: Number(entry.nilai) || 0,
+        nilai: nilai,
         description: entry.description || entry.keterangan || "",
         createdBy:
           entry.user?.username ||

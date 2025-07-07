@@ -531,7 +531,14 @@ function generateEnhancedHTML(data: PDFReportData): string {
 }
 
 function generateSummarySection(data: PDFReportData): string {
-  const { summary, divisionName, laporanProduksi, laporanBlendingData, entries, accounts } = data;
+  const {
+    summary,
+    divisionName,
+    laporanProduksi,
+    laporanBlendingData,
+    entries,
+    accounts,
+  } = data;
   const allEntries = getAllTransformedEntries(data);
 
   console.log("🔍 [PDF SUMMARY DEBUG] Division:", divisionName);
@@ -541,27 +548,40 @@ function generateSummarySection(data: PDFReportData): string {
   // ✅ KEUANGAN: Conditional summary berdasarkan jenis transaksi yang ada
   if (divisionName.includes("KEUANGAN")) {
     // Check jenis transaksi yang ada di entries
-    const hasKas = allEntries.some(entry => 
-      entry.transactionType === "PENERIMAAN" || 
-      entry.transactionType === "PENGELUARAN" || 
-      entry.transactionType === "SALDO_AKHIR"
+    const hasKas = allEntries.some(
+      (entry) =>
+        entry.transactionType === "PENERIMAAN" ||
+        entry.transactionType === "PENGELUARAN" ||
+        entry.transactionType === "SALDO_AKHIR"
     );
-    const hasPiutang = allEntries.some(entry => 
-      entry.transactionType === "PIUTANG_BARU" || 
-      entry.transactionType === "PIUTANG_TERTAGIH" || 
-      entry.transactionType === "PIUTANG_MACET"
+    const hasPiutang = allEntries.some(
+      (entry) =>
+        entry.transactionType === "PIUTANG_BARU" ||
+        entry.transactionType === "PIUTANG_TERTAGIH" ||
+        entry.transactionType === "PIUTANG_MACET"
     );
-    const hasUtang = allEntries.some(entry => 
-      entry.transactionType === "UTANG_BARU" || 
-      entry.transactionType === "UTANG_DIBAYAR"
+    const hasUtang = allEntries.some(
+      (entry) =>
+        entry.transactionType === "UTANG_BARU" ||
+        entry.transactionType === "UTANG_DIBAYAR"
     );
 
-    console.log("🔍 [PDF KEUANGAN DEBUG] Transaction types:", { hasKas, hasPiutang, hasUtang });
+    console.log("🔍 [PDF KEUANGAN DEBUG] Transaction types:", {
+      hasKas,
+      hasPiutang,
+      hasUtang,
+    });
 
     let summaryHTML = "";
 
     // ✅ KAS Summary (hanya jika ada transaksi kas)
-    if (hasKas && summary && (summary.totalPenerimaan > 0 || summary.totalPengeluaran > 0 || summary.totalSaldoAkhir > 0)) {
+    if (
+      hasKas &&
+      summary &&
+      (summary.totalPenerimaan > 0 ||
+        summary.totalPengeluaran > 0 ||
+        summary.totalSaldoAkhir > 0)
+    ) {
       summaryHTML += `
         <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
           <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">💰 RINGKASAN KAS HARIAN</h3>
@@ -576,7 +596,9 @@ function generateSummarySection(data: PDFReportData): string {
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Penerimaan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalPenerimaan.toLocaleString()}</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Pengeluaran</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalPengeluaran.toLocaleString()}</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalSaldoAkhir.toLocaleString()}</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Bersih</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${(summary.totalPenerimaan - summary.totalPengeluaran).toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Bersih</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${(
+                summary.totalPenerimaan - summary.totalPengeluaran
+              ).toLocaleString()}</td></tr>
             </tbody>
           </table>
         </div>
@@ -585,10 +607,21 @@ function generateSummarySection(data: PDFReportData): string {
 
     // ✅ PIUTANG Summary (hanya jika ada transaksi piutang)
     if (hasPiutang) {
-      const piutangBaru = allEntries.filter(entry => entry.transactionType === "PIUTANG_BARU").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      const piutangTertagih = allEntries.filter(entry => entry.transactionType === "PIUTANG_TERTAGIH").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      const piutangMacet = allEntries.filter(entry => entry.transactionType === "PIUTANG_MACET").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      const saldoAkhirPiutang = allEntries.filter(entry => entry.transactionType === "SALDO_AKHIR").reduce((sum, entry) => sum + (entry.saldoAkhir || entry.nilai || 0), 0);
+      const piutangBaru = allEntries
+        .filter((entry) => entry.transactionType === "PIUTANG_BARU")
+        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const piutangTertagih = allEntries
+        .filter((entry) => entry.transactionType === "PIUTANG_TERTAGIH")
+        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const piutangMacet = allEntries
+        .filter((entry) => entry.transactionType === "PIUTANG_MACET")
+        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const saldoAkhirPiutang = allEntries
+        .filter((entry) => entry.transactionType === "SALDO_AKHIR")
+        .reduce(
+          (sum, entry) => sum + (entry.saldoAkhir || entry.nilai || 0),
+          0
+        );
 
       summaryHTML += `
         <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
@@ -613,10 +646,21 @@ function generateSummarySection(data: PDFReportData): string {
 
     // ✅ UTANG Summary (hanya jika ada transaksi utang)
     if (hasUtang) {
-      const utangBaru = allEntries.filter(entry => entry.transactionType === "UTANG_BARU").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      const utangDibayar = allEntries.filter(entry => entry.transactionType === "UTANG_DIBAYAR").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      const bahanBaku = allEntries.filter(entry => entry.kategori === "BAHAN_BAKU").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      const bankTotal = allEntries.filter(entry => entry.kategori === "BANK_HM" || entry.kategori === "BANK_HENRY").reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const utangBaru = allEntries
+        .filter((entry) => entry.transactionType === "UTANG_BARU")
+        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const utangDibayar = allEntries
+        .filter((entry) => entry.transactionType === "UTANG_DIBAYAR")
+        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const bahanBaku = allEntries
+        .filter((entry) => entry.kategori === "BAHAN_BAKU")
+        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      const bankTotal = allEntries
+        .filter(
+          (entry) =>
+            entry.kategori === "BANK_HM" || entry.kategori === "BANK_HENRY"
+        )
+        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
 
       summaryHTML += `
         <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
@@ -641,7 +685,9 @@ function generateSummarySection(data: PDFReportData): string {
 
     // ✅ Return hasil: Jika tidak ada transaksi apapun, return empty string
     if (!hasKas && !hasPiutang && !hasUtang) {
-      console.log("⚠️ [PDF KEUANGAN DEBUG] No transactions found, no summary displayed");
+      console.log(
+        "⚠️ [PDF KEUANGAN DEBUG] No transactions found, no summary displayed"
+      );
       return "";
     }
 
@@ -649,7 +695,7 @@ function generateSummarySection(data: PDFReportData): string {
   }
 
   // ✅ Divisi lainnya tetap sama seperti sebelumnya...
-  
+
   // PRODUKSI: Summary produksi
   if (divisionName.includes("PRODUKSI")) {
     if (laporanProduksi && laporanProduksi.length > 0) {
@@ -873,29 +919,45 @@ function generateSummarySection(data: PDFReportData): string {
         </div>
       `;
     }
-    
+
     return ""; // Tidak ada data, tidak tampilkan summary
   }
 
   // HRD: Summary HRD
   if (divisionName.includes("HRD")) {
-    if (allEntries.some(entry => entry.attendanceStatus)) {
+    if (allEntries.some((entry) => entry.attendanceStatus)) {
+      // ✅ FIXED: Hitung berdasarkan absentCount, bukan count entries
       let totalKaryawan = 0;
       let hadirCount = 0;
       let tidakHadirCount = 0;
+      let sakitCount = 0;
+      let izinCount = 0;
       let totalAbsentCount = 0;
+      let lemburCount = 0;
 
       allEntries.forEach((entry) => {
         if (entry.attendanceStatus) {
-          totalKaryawan++;
-          if (entry.attendanceStatus === "HADIR") {
-            hadirCount++;
-          } else {
-            tidakHadirCount++;
+          // ✅ FIXED: Total karyawan = sum of absentCount
+          const absentCount = Number(entry.absentCount) || 0;
+          totalKaryawan += absentCount;
+          totalAbsentCount += absentCount;
+
+          const attendanceStatus = entry.attendanceStatus;
+          const shift = entry.shift;
+
+          if (attendanceStatus === "HADIR") {
+            hadirCount += absentCount;
+          } else if (attendanceStatus === "TIDAK_HADIR") {
+            tidakHadirCount += absentCount;
+          } else if (attendanceStatus === "SAKIT") {
+            sakitCount += absentCount;
+          } else if (attendanceStatus === "IZIN") {
+            izinCount += absentCount;
           }
-        }
-        if (entry.absentCount) {
-          totalAbsentCount += Number(entry.absentCount);
+
+          if (shift === "LEMBUR") {
+            lemburCount += absentCount;
+          }
         }
       });
 
@@ -916,14 +978,19 @@ function generateSummarySection(data: PDFReportData): string {
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Karyawan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalKaryawan} orang</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Karyawan Hadir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${hadirCount} orang</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Karyawan Tidak Hadir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${tidakHadirCount} orang</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Absen</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalAbsentCount} orang</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Karyawan Sakit</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${sakitCount} orang</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Karyawan Izin</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${izinCount} orang</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Shift Lembur</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${lemburCount} orang</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Tingkat Kehadiran</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: ${
                 attendanceRate >= 90
                   ? "green"
                   : attendanceRate >= 80
                   ? "orange"
                   : "red"
-              };">${attendanceRate.toFixed(1)}%</td></tr>
+              }">${attendanceRate.toFixed(1)}%</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Laporan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${
+                allEntries.length
+              } entri</td></tr>
             </tbody>
           </table>
         </div>
@@ -981,7 +1048,7 @@ function generateDetailsSection(data: PDFReportData): string {
       "<th>Barang Masuk</th><th>Pemakaian</th><th>Stok Akhir</th><th>Keterangan</th>";
   } else if (divisionName.includes("HRD")) {
     headerColumns =
-      "<th>Status Kehadiran</th><th>Tidak Hadir</th><th>Shift</th><th>Jam Lembur</th>";
+      "<th>Status Kehadiran</th><th>Tidak Hadir</th><th>Shift</th>";
   } else {
     headerColumns = "<th>Nilai</th>";
   }
@@ -1104,12 +1171,10 @@ function generateDetailsSection(data: PDFReportData): string {
         const status = entry.attendanceStatus || "-";
         const absentCount = entry.absentCount || 0;
         const shift = entry.shift || "-";
-        const overtime = entry.overtimeHours || 0;
         dataCells = `
         <td style="text-align: center;">${status}</td>
         <td style="text-align: center;">${absentCount} orang</td>
         <td style="text-align: center;">${shift}</td>
-        <td style="text-align: right;">${overtime} jam</td>
       `;
       } else {
         dataCells = `

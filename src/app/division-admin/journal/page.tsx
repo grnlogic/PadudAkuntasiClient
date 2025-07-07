@@ -2705,7 +2705,7 @@ export default function JournalPage() {
     return { baru, tertagih, macet, saldoAkhir };
   };
 
-  // ✅ NEW: Get HRD summary
+  // ✅ NEW: Get HRD summary - FIXED
   const getHRDSummary = () => {
     let totalKaryawan = 0;
     let hadirCount = 0;
@@ -2722,26 +2722,26 @@ export default function JournalPage() {
         (entry as any).absentCount ||
         (entry as any).shift
       ) {
-        totalKaryawan += 1;
+        // ✅ FIXED: Total karyawan = sum of absentCount, bukan count entries
+        const absentCount = Number((entry as any).absentCount) || 0;
+        totalKaryawan += absentCount;
+        totalAbsentCount += absentCount;
 
         const attendanceStatus = (entry as any).attendanceStatus;
-        const absentCount = (entry as any).absentCount || 0;
         const shift = (entry as any).shift;
 
         if (attendanceStatus === "HADIR") {
-          hadirCount += 1;
+          hadirCount += absentCount;
         } else if (attendanceStatus === "TIDAK_HADIR") {
-          tidakHadirCount += 1;
+          tidakHadirCount += absentCount;
         } else if (attendanceStatus === "SAKIT") {
-          sakitCount += 1;
+          sakitCount += absentCount;
         } else if (attendanceStatus === "IZIN") {
-          izinCount += 1;
+          izinCount += absentCount;
         }
 
-        totalAbsentCount += absentCount;
-
         if (shift === "LEMBUR") {
-          lemburCount += 1;
+          lemburCount += absentCount;
         }
       }
     });
@@ -2823,8 +2823,14 @@ export default function JournalPage() {
                             "REGULAR"}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        {formatCurrency(getDisplayValue(entry))}
+                      <TableCell className="font-medium">
+                        {/* ✅ FIXED: Untuk HRD, tampilkan absentCount bukan nilai */}
+                        {divisionType === "HRD"
+                          ? `${(entry as any).absentCount || 0} orang`
+                          : account?.valueType === "NOMINAL" ||
+                            account?.id === "SALES"
+                          ? formatCurrency(entry.nilai)
+                          : `${entry.nilai.toLocaleString("id-ID")} unit`}
                       </TableCell>
                       <TableCell>
                         {new Date(entry.createdAt).toLocaleTimeString("id-ID", {
@@ -3278,8 +3284,10 @@ export default function JournalPage() {
                         </SelectTrigger>
                         <SelectContent>
                           {accounts
-                            .filter((acc) =>
-                              acc.accountName.toLowerCase().includes("piutang")
+                            .filter((account) =>
+                              account.accountName
+                                .toLowerCase()
+                                .includes("piutang")
                             )
                             .map((account) => (
                               <SelectItem key={account.id} value={account.id}>
@@ -3829,7 +3837,18 @@ export default function JournalPage() {
                                       ? `${account.accountCode} - ${account.accountName}`
                                       : "Akun belum dipilih"}
                                   </span>
-                                  {row.nominal && (
+                                  {/* Tampilkan absentCount untuk HRD */}
+                                  {divisionType === "HRD" &&
+                                    row.absentCount && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs"
+                                      >
+                                        {row.absentCount} orang
+                                      </Badge>
+                                    )}
+                                  {/* Tampilkan nominal untuk selain HRD */}
+                                  {divisionType !== "HRD" && row.nominal && (
                                     <Badge
                                       variant="outline"
                                       className="text-xs"
@@ -4210,71 +4229,77 @@ export default function JournalPage() {
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <span className="text-indigo-600">👥</span>
-                Ringkasan Kehadiran Hari Ini
+                <Users className="h-5 w-5 text-indigo-600" />
+                Ringkasan Kehadiran Karyawan -{" "}
+                {new Date(selectedDate).toLocaleDateString("id-ID")}
               </CardTitle>
-              <CardDescription>
-                Kontrol kehadiran karyawan, tingkat kehadiran, dan shift lembur
-                hari ini.
-              </CardDescription>
             </CardHeader>
             <CardContent>
-              {(() => {
-                const summary = getHRDSummary();
-                return (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="font-semibold text-blue-800">
-                        Total Karyawan
-                      </div>
-                      <div className="text-2xl font-bold text-blue-900 mt-2">
-                        {summary.totalKaryawan} orang
-                      </div>
-                    </div>
-                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                      <div className="font-semibold text-green-800">
-                        Tingkat Kehadiran
-                      </div>
-                      <div className="text-2xl font-bold text-green-900 mt-2">
-                        {summary.attendanceRate.toFixed(1)}%
-                      </div>
-                      <div className="text-sm text-green-700 mt-1">
-                        Hadir: {summary.hadirCount} | Tidak:{" "}
-                        {summary.tidakHadirCount +
-                          summary.sakitCount +
-                          summary.izinCount}
-                      </div>
-                    </div>
-                    <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
-                      <div className="font-semibold text-purple-800">
-                        Shift Lembur
-                      </div>
-                      <div className="text-2xl font-bold text-purple-900 mt-2">
-                        {summary.lemburCount} orang
-                      </div>
-                      <div className="text-sm text-purple-700 mt-1">
-                        Reguler: {summary.totalKaryawan - summary.lemburCount}{" "}
-                        orang
-                      </div>
-                    </div>
-                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                      <div className="font-semibold text-orange-800">
-                        Status Kehadiran
-                      </div>
-                      <div className="text-2xl font-bold text-orange-900 mt-2">
-                        {summary.attendanceRate >= 90
-                          ? "Excellent"
-                          : summary.attendanceRate >= 80
-                          ? "Good"
-                          : "Needs Improvement"}
-                      </div>
-                      <div className="text-sm text-orange-700 mt-1">
-                        {summary.jumlahLaporan} laporan hari ini
-                      </div>
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* ✅ FIXED: Total Karyawan dari absentCount */}
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-blue-600" />
+                    <h3 className="font-semibold text-blue-800">
+                      Total Karyawan
+                    </h3>
                   </div>
-                );
-              })()}
+                  <p className="text-2xl font-bold text-blue-900 mt-2">
+                    {(() => {
+                      const summary = getHRDSummary();
+                      return `${summary.totalKaryawan} orang`;
+                    })()}
+                  </p>
+                </div>
+
+                {/* Total Hadir */}
+                <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-green-600" />
+                    <h3 className="font-semibold text-green-800">Hadir</h3>
+                  </div>
+                  <p className="text-2xl font-bold text-green-900 mt-2">
+                    {(() => {
+                      const summary = getHRDSummary();
+                      return `${summary.hadirCount} orang`;
+                    })()}
+                  </p>
+                </div>
+
+                {/* Total Tidak Hadir */}
+                <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-red-600" />
+                    <h3 className="font-semibold text-red-800">Tidak Hadir</h3>
+                  </div>
+                  <p className="text-2xl font-bold text-red-900 mt-2">
+                    {(() => {
+                      const summary = getHRDSummary();
+                      return `${
+                        summary.tidakHadirCount +
+                        summary.sakitCount +
+                        summary.izinCount
+                      } orang`;
+                    })()}
+                  </p>
+                </div>
+
+                {/* Tingkat Kehadiran */}
+                <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-purple-600" />
+                    <h3 className="font-semibold text-purple-800">
+                      Tingkat Kehadiran
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-purple-900 mt-2">
+                    {(() => {
+                      const summary = getHRDSummary();
+                      return `${summary.attendanceRate.toFixed(1)}%`;
+                    })()}
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}
