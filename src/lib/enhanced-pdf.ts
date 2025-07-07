@@ -483,12 +483,40 @@ function generateEnhancedHTML(data: PDFReportData): string {
           border-top: 1px solid #ecf0f1;
           padding-top: 20px;
         }
+
+        /* Signature Section */
+        .signature-section {
+          margin-top: 40px;
+          page-break-inside: avoid;
+        }
+        
+        .signature-section table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        
+        .signature-section td {
+          vertical-align: top;
+          padding: 15px;
+          text-align: center;
+        }
+        
+        .signature-section .signature-box {
+          border: 1px solid #bdc3c7;
+          height: 80px;
+          margin: 20px 0;
+          background-color: #f8f9fa;
+        }
         
         /* Print Styles */
         @media print {
           body { padding: 10px; }
           .summary-section { break-inside: avoid; }
           .details-section { break-inside: avoid; }
+          .signature-section { break-inside: avoid; }
+          
+          /* Enhanced print styles for blending division */
+          .blending-summary-section { break-inside: avoid; }
         }
         
         /* Division-specific colors */
@@ -517,6 +545,8 @@ function generateEnhancedHTML(data: PDFReportData): string {
       ${generateSummarySection(data)}
 
       ${generateDetailsSection(data)}
+
+      ${generateSignatureSection(data)}
 
       <!-- Footer -->
       <div class="footer">
@@ -756,7 +786,7 @@ function generateSummarySection(data: PDFReportData): string {
     `;
   }
 
-  // ✅ BLENDING: Summary blending
+  // ✅ BLENDING: Summary blending - Enhanced template for DIVISI BLENDING PERSEDIAAN BAHAN BAKU
   if (
     divisionName.includes("BLENDING") ||
     divisionName.includes("PERSEDIAAN") ||
@@ -783,7 +813,95 @@ function generateSummarySection(data: PDFReportData): string {
         (item: any) => Number(item.stokAkhir || 0) < 100
       ).length;
       const statusGudang = itemStokRendah > 0 ? "Perlu Perhatian" : "Stok Aman";
+      
+      // Special template for DIVISI BLENDING PERSEDIAAN BAHAN BAKU
+      if (divisionName.includes("BLENDING") && divisionName.includes("PERSEDIAAN")) {
+        return `
+          <div class="blending-summary-section" style="margin: 20px 0; page-break-inside: avoid;">
+            <!-- Header Section -->
+            <div style="text-align: center; margin-bottom: 25px; padding: 15px; border: 2px solid #2c3e50; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+              <h2 style="color: #2c3e50; margin: 0; font-size: 18px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
+                📊 LAPORAN HARIAN BLENDING PERSEDIAAN BAHAN BAKU
+              </h2>
+              <div style="font-size: 14px; color: #495057; margin-top: 8px;">
+                Tanggal: ${data.date} | Status: ${statusGudang}
+              </div>
+            </div>
 
+            <!-- Summary Cards -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px;">
+              <div style="padding: 15px; border: 1px solid #dee2e6; border-radius: 8px; background: #fff; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="font-size: 24px; font-weight: bold; color: #28a745;">${totalMasuk.toLocaleString()}</div>
+                <div style="font-size: 12px; color: #6c757d; text-transform: uppercase;">Total Masuk (Unit)</div>
+              </div>
+              <div style="padding: 15px; border: 1px solid #dee2e6; border-radius: 8px; background: #fff; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="font-size: 24px; font-weight: bold; color: #dc3545;">${totalPakai.toLocaleString()}</div>
+                <div style="font-size: 12px; color: #6c757d; text-transform: uppercase;">Total Pemakaian (Unit)</div>
+              </div>
+              <div style="padding: 15px; border: 1px solid #dee2e6; border-radius: 8px; background: #fff; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="font-size: 24px; font-weight: bold; color: #007bff;">${totalStok.toLocaleString()}</div>
+                <div style="font-size: 12px; color: #6c757d; text-transform: uppercase;">Total Stok Akhir (Unit)</div>
+              </div>
+            </div>
+
+            <!-- Detailed Summary Table -->
+            <div style="margin-bottom: 20px;">
+              <h3 style="color: #2c3e50; margin-bottom: 10px; font-size: 16px; border-bottom: 2px solid #3498db; padding-bottom: 5px;">
+                📈 RINGKASAN PERGERAKAN STOK
+              </h3>
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                  <tr style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white;">
+                    <th style="border: 1px solid #2c3e50; padding: 12px; text-align: left; font-weight: bold;">Indikator</th>
+                    <th style="border: 1px solid #2c3e50; padding: 12px; text-align: center; font-weight: bold;">Nilai</th>
+                    <th style="border: 1px solid #2c3e50; padding: 12px; text-align: center; font-weight: bold;">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="background-color: #f8f9fa;">
+                    <td style="border: 1px solid #dee2e6; padding: 10px; font-weight: 500;">Efisiensi Penggunaan</td>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">${totalMasuk > 0 ? ((totalPakai / totalMasuk) * 100).toFixed(1) : 0}%</td>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">
+                      <span style="color: ${(totalMasuk > 0 && (totalPakai / totalMasuk) < 0.8) ? '#28a745' : ((totalPakai / totalMasuk) > 0.9) ? '#dc3545' : '#ffc107'}; font-weight: bold;">
+                        ${(totalMasuk > 0 && (totalPakai / totalMasuk) < 0.8) ? 'EFISIEN' : ((totalPakai / totalMasuk) > 0.9) ? 'BOROS' : 'NORMAL'}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; font-weight: 500;">Rata-rata Stok per Item</td>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">${rataStok.toFixed(1)} unit</td>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">
+                      <span style="color: ${rataStok > 200 ? '#28a745' : rataStok > 100 ? '#ffc107' : '#dc3545'}; font-weight: bold;">
+                        ${rataStok > 200 ? 'TINGGI' : rataStok > 100 ? 'SEDANG' : 'RENDAH'}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr style="background-color: #f8f9fa;">
+                    <td style="border: 1px solid #dee2e6; padding: 10px; font-weight: 500;">Item Kritis (< 100 unit)</td>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">${itemStokRendah} item</td>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">
+                      <span style="color: ${itemStokRendah === 0 ? '#28a745' : itemStokRendah < 3 ? '#ffc107' : '#dc3545'}; font-weight: bold;">
+                        ${itemStokRendah === 0 ? 'AMAN' : itemStokRendah < 3 ? 'PERHATIAN' : 'KRITIS'}
+                      </span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; font-weight: 500;">Status Keseluruhan Gudang</td>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">${laporanBlendingData.length} item</td>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">
+                      <span style="color: ${statusGudang === "Stok Aman" ? '#28a745' : '#ffc107'}; font-weight: bold; text-transform: uppercase;">
+                        ${statusGudang}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }
+
+      // Default template for other GUDANG/PERSEDIAAN divisions
       return `
         <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
           <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">📦 RINGKASAN BLENDING/GUDANG HARIAN</h3>
@@ -810,6 +928,31 @@ function generateSummarySection(data: PDFReportData): string {
         </div>
       `;
     }
+    
+    // ✅ Enhanced: Special template for empty BLENDING data
+    if (divisionName.includes("BLENDING") && divisionName.includes("PERSEDIAAN")) {
+      return `
+        <div class="blending-summary-section" style="margin: 20px 0; page-break-inside: avoid;">
+          <!-- Header Section -->
+          <div style="text-align: center; margin-bottom: 25px; padding: 15px; border: 2px solid #2c3e50; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+            <h2 style="color: #2c3e50; margin: 0; font-size: 18px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
+              📊 LAPORAN HARIAN BLENDING PERSEDIAAN BAHAN BAKU
+            </h2>
+            <div style="font-size: 14px; color: #495057; margin-top: 8px;">
+              Tanggal: ${data.date} | Status: Belum Ada Data
+            </div>
+          </div>
+          
+          <div style="text-align: center; padding: 40px; color: #6c757d; border: 1px dashed #dee2e6; border-radius: 8px;">
+            <div style="font-size: 48px; margin-bottom: 15px;">📋</div>
+            <h3 style="color: #495057; margin-bottom: 10px;">Belum Ada Data Blending/Gudang</h3>
+            <p style="margin: 0; font-size: 14px;">Silakan input data transaksi gudang untuk tanggal ini</p>
+            <p style="margin: 5px 0 0 0; font-size: 12px;">Total Entri: ${allEntries.length}</p>
+          </div>
+        </div>
+      `;
+    }
+    
     // ✅ FIXED: Tampilkan summary default untuk BLENDING/GUDANG tanpa data
     return `
       <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
@@ -969,7 +1112,7 @@ function generateSummarySection(data: PDFReportData): string {
                   : attendanceRate >= 80
                   ? "orange"
                   : "red"
-              };">${attendanceRate.toFixed(1)}%</td></tr>
+              }>${attendanceRate.toFixed(1)}%</td></tr>
             </tbody>
           </table>
         </div>
@@ -1023,8 +1166,14 @@ function generateDetailsSection(data: PDFReportData): string {
     divisionName.includes("PERSEDIAAN") ||
     divisionName.includes("BLENDING")
   ) {
-    headerColumns =
-      "<th>Barang Masuk</th><th>Pemakaian</th><th>Stok Akhir</th><th>Keterangan</th>";
+    // Enhanced header for DIVISI BLENDING PERSEDIAAN BAHAN BAKU
+    if (divisionName.includes("BLENDING") && divisionName.includes("PERSEDIAAN")) {
+      headerColumns =
+        "<th>Barang Masuk<br/><span style='font-size: 10px; font-weight: normal;'>(Unit)</span></th><th>Pemakaian<br/><span style='font-size: 10px; font-weight: normal;'>(Unit)</span></th><th>Stok Akhir<br/><span style='font-size: 10px; font-weight: normal;'>(Unit & Status)</span></th><th>Turnover & Keterangan</th>";
+    } else {
+      headerColumns =
+        "<th>Barang Masuk</th><th>Pemakaian</th><th>Stok Akhir</th><th>Keterangan</th>";
+    }
   } else if (divisionName.includes("HRD")) {
     headerColumns =
       "<th>Status Kehadiran</th><th>Tidak Hadir</th><th>Shift</th><th>Jam Lembur</th>";
@@ -1143,14 +1292,33 @@ function generateDetailsSection(data: PDFReportData): string {
         const stokAkhir = entry.stokAkhir || 0;
         const keterangan = entry.keterangan || "-";
 
-        dataCells = `
-        <td style="text-align: right;">${barangMasuk.toLocaleString(
-          "id-ID"
-        )}</td>
-        <td style="text-align: right;">${pemakaian.toLocaleString("id-ID")}</td>
-        <td style="text-align: right;">${stokAkhir.toLocaleString("id-ID")}</td>
-        <td style="text-align: left;">${keterangan}</td>
-      `;
+        // Enhanced template for DIVISI BLENDING PERSEDIAAN BAHAN BAKU
+        if (divisionName.includes("BLENDING") && divisionName.includes("PERSEDIAAN")) {
+          const stokStatus = stokAkhir < 50 ? "KRITIS" : stokAkhir < 100 ? "RENDAH" : stokAkhir < 200 ? "SEDANG" : "AMAN";
+          const statusColor = stokAkhir < 50 ? "#dc3545" : stokAkhir < 100 ? "#fd7e14" : stokAkhir < 200 ? "#ffc107" : "#28a745";
+          const turnover = barangMasuk > 0 ? ((pemakaian / barangMasuk) * 100).toFixed(1) : "0";
+          
+          dataCells = `
+            <td style="text-align: right; font-weight: 500; ${barangMasuk > 0 ? 'color: #28a745;' : ''}">${barangMasuk.toLocaleString("id-ID")}</td>
+            <td style="text-align: right; font-weight: 500; ${pemakaian > 0 ? 'color: #dc3545;' : ''}">${pemakaian.toLocaleString("id-ID")}</td>
+            <td style="text-align: right; font-weight: bold; color: ${statusColor};">
+              ${stokAkhir.toLocaleString("id-ID")}
+              <div style="font-size: 10px; font-weight: normal; margin-top: 2px;">[${stokStatus}]</div>
+            </td>
+            <td style="text-align: center;">
+              <div style="font-size: 11px; color: #495057;">${turnover}% turnover</div>
+              <div style="font-size: 10px; color: #6c757d; margin-top: 2px;">${keterangan}</div>
+            </td>
+          `;
+        } else {
+          // Default template for other GUDANG divisions
+          dataCells = `
+            <td style="text-align: right;">${barangMasuk.toLocaleString("id-ID")}</td>
+            <td style="text-align: right;">${pemakaian.toLocaleString("id-ID")}</td>
+            <td style="text-align: right;">${stokAkhir.toLocaleString("id-ID")}</td>
+            <td style="text-align: left;">${keterangan}</td>
+          `;
+        }
       } else if (divisionName.includes("HRD")) {
         const status = entry.attendanceStatus || "-";
         const absentCount = entry.absentCount || 0;
@@ -1203,6 +1371,115 @@ function generateDetailsSection(data: PDFReportData): string {
         <tbody>
           ${rows}
         </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function generateSignatureSection(data: PDFReportData): string {
+  const divisionName = data.divisionName.toUpperCase();
+  
+  // Enhanced signature section for DIVISI BLENDING PERSEDIAAN BAHAN BAKU
+  if (divisionName.includes("BLENDING") && divisionName.includes("PERSEDIAAN")) {
+    return `
+      <div class="signature-section" style="margin-top: 40px; page-break-inside: avoid;">
+        <!-- Note/Catatan Section -->
+        <div style="margin-bottom: 30px; padding: 15px; border: 1px solid #dee2e6; border-radius: 8px; background-color: #f8f9fa;">
+          <h4 style="color: #2c3e50; margin-bottom: 10px; font-size: 14px;">📝 CATATAN PENTING:</h4>
+          <ul style="margin: 0; padding-left: 20px; color: #495057; font-size: 12px;">
+            <li>Stok dengan status KRITIS (< 50 unit) perlu segera di-restock</li>
+            <li>Monitoring turnover rate untuk optimalisasi persediaan</li>
+            <li>Verifikasi fisik stok secara berkala sesuai jadwal</li>
+            <li>Koordinasi dengan tim procurement untuk item stok rendah</li>
+          </ul>
+        </div>
+
+        <!-- Signature Table -->
+        <table style="width: 100%; border-collapse: collapse; margin-top: 30px;">
+          <tr>
+            <td style="width: 30%; text-align: center; vertical-align: top; padding: 10px;">
+              <div style="font-weight: bold; margin-bottom: 10px; color: #2c3e50;">Dibuat Oleh:</div>
+              <div style="margin-bottom: 60px;">Staff Gudang/Blending</div>
+              <div style="border-top: 1px solid #000; padding-top: 5px; margin-top: 50px;">
+                <strong>(...................................)</strong>
+              </div>
+              <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+                Tanggal: ........................
+              </div>
+            </td>
+            <td style="width: 30%; text-align: center; vertical-align: top; padding: 10px;">
+              <div style="font-weight: bold; margin-bottom: 10px; color: #2c3e50;">Diperiksa Oleh:</div>
+              <div style="margin-bottom: 60px;">Supervisor Gudang</div>
+              <div style="border-top: 1px solid #000; padding-top: 5px; margin-top: 50px;">
+                <strong>(...................................)</strong>
+              </div>
+              <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+                Tanggal: ........................
+              </div>
+            </td>
+            <td style="width: 30%; text-align: center; vertical-align: top; padding: 10px;">
+              <div style="font-weight: bold; margin-bottom: 10px; color: #2c3e50;">Disetujui Oleh:</div>
+              <div style="margin-bottom: 60px;">Manager Operasional</div>
+              <div style="border-top: 1px solid #000; padding-top: 5px; margin-top: 50px;">
+                <strong>(...................................)</strong>
+              </div>
+              <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+                Tanggal: ........................
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Legend/Keterangan -->
+        <div style="margin-top: 25px; padding: 12px; border: 1px solid #dee2e6; border-radius: 6px; background-color: #f1f3f4;">
+          <h5 style="color: #2c3e50; margin-bottom: 8px; font-size: 13px;">🔍 KETERANGAN STATUS STOK:</h5>
+          <div style="display: flex; gap: 20px; font-size: 11px;">
+            <span><strong style="color: #28a745;">AMAN:</strong> ≥ 200 unit</span>
+            <span><strong style="color: #ffc107;">SEDANG:</strong> 100-199 unit</span>
+            <span><strong style="color: #fd7e14;">RENDAH:</strong> 50-99 unit</span>
+            <span><strong style="color: #dc3545;">KRITIS:</strong> < 50 unit</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Standard signature section for other divisions
+  return `
+    <div class="signature-section" style="margin-top: 40px; page-break-inside: avoid;">
+      <table style="width: 100%; border-collapse: collapse; margin-top: 30px;">
+        <tr>
+          <td style="width: 33%; text-align: center; vertical-align: top; padding: 10px;">
+            <div style="font-weight: bold; margin-bottom: 10px; color: #2c3e50;">Dibuat Oleh:</div>
+            <div style="margin-bottom: 60px;">Staff ${data.divisionName}</div>
+            <div style="border-top: 1px solid #000; padding-top: 5px; margin-top: 50px;">
+              <strong>(...................................)</strong>
+            </div>
+            <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+              Tanggal: ........................
+            </div>
+          </td>
+          <td style="width: 33%; text-align: center; vertical-align: top; padding: 10px;">
+            <div style="font-weight: bold; margin-bottom: 10px; color: #2c3e50;">Diperiksa Oleh:</div>
+            <div style="margin-bottom: 60px;">Supervisor</div>
+            <div style="border-top: 1px solid #000; padding-top: 5px; margin-top: 50px;">
+              <strong>(...................................)</strong>
+            </div>
+            <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+              Tanggal: ........................
+            </div>
+          </td>
+          <td style="width: 33%; text-align: center; vertical-align: top; padding: 10px;">
+            <div style="font-weight: bold; margin-bottom: 10px; color: #2c3e50;">Disetujui Oleh:</div>
+            <div style="margin-bottom: 60px;">Manager</div>
+            <div style="border-top: 1px solid #000; padding-top: 5px; margin-top: 50px;">
+              <strong>(...................................)</strong>
+            </div>
+            <div style="font-size: 11px; color: #6c757d; margin-top: 5px;">
+              Tanggal: ........................
+            </div>
+          </td>
+        </tr>
       </table>
     </div>
   `;
