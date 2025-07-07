@@ -23,7 +23,7 @@ import {
   toastSuccess,
   toastError,
   toastWarning,
-  toastInfo,
+  toastInfo,  
   toastPromise,
 } from "@/lib/toast-utils";
 import { Button } from "@/components/ui/button";
@@ -512,10 +512,9 @@ export default function JournalPage() {
         // ✅ Map piutang dan utang data dengan format tanggal yang benar
         const mappedPiutangEntries = (piutangData || [])
           .filter((p: any) => {
-            const transaksiDate = p.tanggal_transaksi || p.tanggalTransaksi;
-            if (!transaksiDate) return false;
-
-            const dateStr = transaksiDate.toString();
+            const transaksiDateMap = p.tanggalTransaksi; // ✅ Gunakan tanggalTransaksi
+            if (!transaksiDateMap) return false;
+            const dateStr = transaksiDateMap.toString();
             return (
               dateStr.startsWith(selectedDate) ||
               dateStr.includes(selectedDate) ||
@@ -524,21 +523,17 @@ export default function JournalPage() {
           })
           .map((p: any) => ({
             id: `piutang-${p.id}`,
-            accountId:
-              p.account?.id?.toString() ||
-              p.account_id?.toString() ||
-              p.accountId?.toString(),
-            createdAt:
-              p.tanggal_transaksi || p.tanggalTransaksi || p.created_at,
+            accountId: p.account?.id?.toString(), // ✅ Sudah benar
+            createdAt: p.tanggalTransaksi || p.createdAt, // ✅ Gunakan tanggalTransaksi
             nilai: Number(p.nominal) || 0,
             description: p.keterangan || "",
-            transactionType: p.tipe_transaksi || p.tipeTransaksi,
+            transactionType: p.tipeTransaksi, // ✅ Gunakan tipeTransaksi
             kategori: p.kategori,
             // ✅ ADD: Required EntriHarian fields
             keterangan: p.keterangan || "",
-            date: p.tanggal_transaksi || p.tanggalTransaksi || p.created_at,
-            tanggal: p.tanggal_transaksi || p.tanggalTransaksi || p.created_at,
-            createdBy: p.created_by || "system",
+            date: p.tanggalTransaksi || p.createdAt, // ✅ Gunakan tanggalTransaksi
+            tanggal: p.tanggalTransaksi || p.createdAt, // ✅ Gunakan tanggalTransaksi
+            createdBy: p.user?.username || "system", // ✅ Gunakan user.username
           }));
 
         const mappedUtangEntries = (utangData || [])
@@ -588,6 +583,9 @@ export default function JournalPage() {
             selectedDate
           );
           setPiutangSummary(piutangSummaryData);
+          // ✅ DEBUG LOGGING: Cek hasil summary dan data piutang
+          console.log("[DEBUG] Piutang Data:", piutangData);
+          console.log("[DEBUG] Piutang Summary Data:", piutangSummaryData);
         }
 
         console.log("✅ DATA LOADED SUCCESSFULLY:", {
@@ -2602,18 +2600,31 @@ export default function JournalPage() {
 
   // Fungsi untuk menghitung summary piutang
   const calculatePiutangSummary = (piutangData: any[], tanggal: string) => {
-    const hariIni = piutangData.filter((p) => p.tanggal_transaksi === tanggal);
+    // ✅ FIXED: Gunakan field name yang benar dari backend
+    const hariIni = piutangData.filter((p) => {
+      const transaksiDateSummary = p.tanggalTransaksi; // ✅ Gunakan tanggalTransaksi bukan tanggal_transaksi
+      if (!transaksiDateSummary) return false;
+      // ✅ Normalisasi tanggal ke format YYYY-MM-DD
+      const normalizedDate = new Date(transaksiDateSummary)
+        .toISOString()
+        .split("T")[0];
+      const normalizedSelectedDate = new Date(tanggal)
+        .toISOString()
+        .split("T")[0];
+      return normalizedDate === normalizedSelectedDate;
+    });
 
+    // ✅ FIXED: Gunakan tipeTransaksi bukan tipe_transaksi
     const baru = hariIni
-      .filter((p) => p.tipe_transaksi === "PIUTANG_BARU")
+      .filter((p) => p.tipeTransaksi === "PIUTANG_BARU")
       .reduce((sum, p) => sum + Number(p.nominal), 0);
 
     const tertagih = hariIni
-      .filter((p) => p.tipe_transaksi === "PIUTANG_TERTAGIH")
+      .filter((p) => p.tipeTransaksi === "PIUTANG_TERTAGIH")
       .reduce((sum, p) => sum + Number(p.nominal), 0);
 
     const macet = hariIni
-      .filter((p) => p.tipe_transaksi === "PIUTANG_MACET")
+      .filter((p) => p.tipeTransaksi === "PIUTANG_MACET")
       .reduce((sum, p) => sum + Number(p.nominal), 0);
 
     // Saldo akhir piutang bisa dihitung sesuai kebutuhan, misal total baru - tertagih - macet
