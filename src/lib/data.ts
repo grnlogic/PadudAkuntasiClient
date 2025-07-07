@@ -14,6 +14,7 @@ import {
   salespersonAPI,
   laporanPenjualanProdukAPI,
   getSalespeople as apiGetSalespeople,
+  deleteSalesperson as apiDeleteSalesperson,
 } from "./api";
 
 // ✅ ADD: Helper function to get token (same as in api.ts)
@@ -987,3 +988,13 @@ export const getProductAccounts = async (divisionId?: number) => {
 };
 
 export const getSalespeople = apiGetSalespeople;
+
+// ✅ NEW: Delete salesperson function
+export const deleteSalesperson = async (id: number): Promise<boolean> => {
+  try {
+    return await apiDeleteSalesperson(id);
+  } catch (error) {
+    console.error("❌ Error deleting salesperson:", error);
+    throw error;
+  }
+};

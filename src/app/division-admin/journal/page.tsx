@@ -90,7 +90,12 @@ import type {
   LaporanGudangHarian, // ✅ ADD: Import laporan gudang types
   CreateLaporanGudangRequest,
 } from "@/lib/api";
-import { getSalespeople, createSalesperson, type Salesperson } from "@/lib/api";
+import {
+  getSalespeople,
+  createSalesperson,
+  deleteSalesperson,
+  type Salesperson,
+} from "@/lib/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import dynamic from "next/dynamic";
 import { getPerusahaan } from "@/lib/data";

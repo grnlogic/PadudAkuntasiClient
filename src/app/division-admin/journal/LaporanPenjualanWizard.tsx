@@ -9,6 +9,7 @@ import {
   getAccountsByDivision,
   getEntriHarianByDate,
   getLaporanPenjualanSales,
+  deleteSalesperson,
 } from "@/lib/data";
 import { createSalesperson } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,7 @@ import {
 } from "@/components/ui/table";
 import { toastSuccess, toastError } from "@/lib/toast-utils";
 import { getCurrentUser } from "@/lib/auth";
-import { Plus, Trash2, Save } from "lucide-react";
+import { Plus, Trash2, Save, Download, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function LaporanPenjualanWizard() {
@@ -67,6 +68,13 @@ export default function LaporanPenjualanWizard() {
   const [newSalespersonName, setNewSalespersonName] = useState("");
   const [addingSales, setAddingSales] = useState(false);
 
+  // ✅ NEW: State untuk management salesperson
+  const [showSalespersonManagement, setShowSalespersonManagement] =
+    useState(false);
+  const [deletingSalesperson, setDeletingSalesperson] = useState<number | null>(
+    null
+  );
+
   // ✅ Helper function untuk filter data berdasarkan tanggal hari ini
   const filterDataForToday = (data: any[]) => {
     const today = new Date().toISOString().split("T")[0];
@@ -99,14 +107,55 @@ export default function LaporanPenjualanWizard() {
 
       setLaporanProduk(filteredData);
     });
-    getSalespeople().then(setSalesList);
+    // ✅ REMOVED: Tidak perlu load semua salespeople di awal
+    // getSalespeople().then(setSalesList);
   }, []);
 
   useEffect(() => {
     if (selectedPerusahaan && selectedPerusahaan.id) {
-      getSalespeopleByPerusahaan(selectedPerusahaan.id).then(setSalesList);
+      console.log(
+        "🏢 Loading salespeople for company:",
+        selectedPerusahaan.nama,
+        "(ID:",
+        selectedPerusahaan.id,
+        ")"
+      );
+
+      // ✅ IMPROVED: Load salespeople by company and reset selection
+      getSalespeopleByPerusahaan(selectedPerusahaan.id).then((salesList) => {
+        console.log(
+          "👥 Found salespeople for company:",
+          salesList.length,
+          "sales:",
+          salesList.map((s) => s.nama)
+        );
+        setSalesList(salesList);
+
+        // ✅ ADDED: Reset selected salesperson jika tidak ada di list baru
+        if (selectedSalesperson) {
+          const isSelectedSalespersonInNewList = salesList.find(
+            (s: any) => s.id === selectedSalesperson.id
+          );
+          if (!isSelectedSalespersonInNewList) {
+            console.log(
+              "🔄 Selected salesperson",
+              selectedSalesperson.nama,
+              "not found in new company, resetting selection"
+            );
+            setSelectedSalesperson(null);
+          } else {
+            console.log(
+              "✅ Selected salesperson",
+              selectedSalesperson.nama,
+              "found in new company"
+            );
+          }
+        }
+      });
     } else {
+      console.log("🚫 No company selected, clearing salespeople list");
       setSalesList([]);
+      setSelectedSalesperson(null); // Reset jika tidak ada perusahaan dipilih
     }
   }, [selectedPerusahaan]);
 
@@ -277,6 +326,46 @@ export default function LaporanPenjualanWizard() {
     }
   };
 
+  // ✅ NEW: Fungsi untuk delete salesperson
+  const handleDeleteSalesperson = async (
+    salespersonId: number,
+    salespersonName: string
+  ) => {
+    if (
+      !confirm(
+        `Apakah Anda yakin ingin menghapus salesperson "${salespersonName}"?`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingSalesperson(salespersonId);
+    try {
+      await deleteSalesperson(salespersonId);
+      toastSuccess.custom(`Salesperson "${salespersonName}" berhasil dihapus!`);
+
+      // ✅ FIXED: Refresh salespeople list berdasarkan perusahaan yang dipilih
+      if (selectedPerusahaan && selectedPerusahaan.id) {
+        const updatedSales = await getSalespeopleByPerusahaan(
+          selectedPerusahaan.id
+        );
+        setSalesList(updatedSales);
+      } else {
+        // Jika tidak ada perusahaan dipilih, kosongkan list
+        setSalesList([]);
+      }
+
+      // If currently selected salesperson was deleted, reset selection
+      if (selectedSalesperson && selectedSalesperson.id === salespersonId) {
+        setSelectedSalesperson(null);
+      }
+    } catch (error: any) {
+      toastError.custom(error.message || "Gagal menghapus salesperson");
+    } finally {
+      setDeletingSalesperson(null);
+    }
+  };
+
   // Debug function to check all accounts in division
   const debugAllAccountsInDivision = async () => {
     const user = getCurrentUser();
@@ -383,10 +472,103 @@ export default function LaporanPenjualanWizard() {
     }
   };
 
+  // ✅ NEW: PDF Generation Functions
+  const generatePDFReport = () => {
+    console.log("🔄 Starting PDF generation...");
+    import("@/lib/enhanced-pdf")
+      .then(({ downloadEnhancedPDF }) => {
+        const user = getCurrentUser();
+        const today = new Date().toISOString().slice(0, 10);
+        
+        // Filter laporan produk untuk hari ini
+        const todayLaporanProduk = filterDataForToday(laporanProduk);
+        
+        console.log("🔍 [PDF GENERATION DEBUG] Data for PDF:", {
+          today,
+          divisionName: user?.division?.name,
+          laporanProdukCount: todayLaporanProduk.length,
+          laporanProdukSample: todayLaporanProduk[0],
+        });
+
+        const reportData = {
+          date: today,
+          divisionName: user?.division?.name || "DIVISI PEMASARAN & PENJUALAN",
+          entries: [], // Entri harian kosong untuk wizard ini
+          laporanPenjualanSales: [], // Sales kosong untuk wizard ini  
+          laporanProduksi: [], // Produksi kosong
+          laporanGudang: [], // Gudang kosong
+          laporanPenjualanProduk: todayLaporanProduk, // ✅ Data laporan produk
+          accounts: productList, // Product accounts
+        };
+
+        console.log("📊 Final reportData for PDF:", reportData);
+        
+        downloadEnhancedPDF(reportData);
+        toastSuccess.custom("PDF laporan berhasil diunduh");
+      })
+      .catch((error) => {
+        console.error("PDF generation error:", error);
+        toastError.custom("Gagal generate PDF");
+      });
+  };
+
+  const previewPDFReport = () => {
+    console.log("🔄 Starting PDF preview...");
+    import("@/lib/enhanced-pdf")
+      .then(({ previewEnhancedPDF }) => {
+        const user = getCurrentUser();
+        const today = new Date().toISOString().slice(0, 10);
+        
+        // Filter laporan produk untuk hari ini
+        const todayLaporanProduk = filterDataForToday(laporanProduk);
+        
+        const reportData = {
+          date: today,
+          divisionName: user?.division?.name || "DIVISI PEMASARAN & PENJUALAN",
+          entries: [], // Entri harian kosong untuk wizard ini
+          laporanPenjualanSales: [], // Sales kosong untuk wizard ini  
+          laporanProduksi: [], // Produksi kosong
+          laporanGudang: [], // Gudang kosong
+          laporanPenjualanProduk: todayLaporanProduk, // ✅ Data laporan produk
+          accounts: productList, // Product accounts
+        };
+
+        previewEnhancedPDF(reportData);
+        toastSuccess.custom("Preview PDF dibuka di tab baru");
+      })
+      .catch((error) => {
+        console.error("PDF preview error:", error);
+        toastError.custom("Gagal preview PDF");
+      });
+  };
+
   return (
     <Card className="mb-6">
       <CardHeader>
-        <CardTitle>Laporan Penjualan Produk</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Laporan Penjualan Produk</CardTitle>
+          {/* ✅ NEW: PDF Export Buttons */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={previewPDFReport}
+              className="text-blue-600 hover:text-blue-700 border-blue-200"
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Preview PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={generatePDFReport}
+              className="text-green-600 hover:text-green-700 border-green-200"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download PDF
+            </Button>
+          </div>
+        </div>
         <div className="mt-2 flex items-center gap-4 text-sm">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-green-500 rounded-full"></div>
@@ -458,9 +640,22 @@ export default function LaporanPenjualanWizard() {
         )}
         {step === 2 && (
           <div className="mb-4">
-            <label className="block mb-2 font-semibold">
-              Pilih Salesperson
-            </label>
+            <div className="flex items-center justify-between mb-4">
+              <label className="block font-semibold">Pilih Salesperson</label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setShowSalespersonManagement(!showSalespersonManagement)
+                }
+                className="text-blue-600 hover:text-blue-700"
+              >
+                {showSalespersonManagement
+                  ? "Sembunyikan Management"
+                  : "Kelola Salesperson"}
+              </Button>
+            </div>
+
             <Select
               value={selectedSalesperson?.id?.toString() || ""}
               onValueChange={(val) => {
@@ -479,51 +674,134 @@ export default function LaporanPenjualanWizard() {
                 ))}
               </SelectContent>
             </Select>
-            <div className="flex gap-2 mt-2">
-              <Input
-                value={newSalespersonName}
-                onChange={(e) => setNewSalespersonName(e.target.value)}
-                placeholder="Nama salesperson baru"
-                disabled={!selectedPerusahaan}
-              />
-              <Button
-                onClick={async () => {
-                  if (!newSalespersonName.trim() || !selectedPerusahaan) return;
-                  setAddingSales(true);
-                  try {
-                    const user = JSON.parse(
-                      localStorage.getItem("user") || "null"
-                    );
-                    const divisionId = user?.division?.id
-                      ? parseInt(user.division.id)
-                      : undefined;
-                    const newSales = await createSalesperson(
-                      newSalespersonName.trim(),
-                      selectedPerusahaan.id,
-                      divisionId
-                    );
-                    const updatedSales = await getSalespeople();
-                    setSalesList(updatedSales);
-                    setNewSalespersonName("");
-                    toastSuccess.custom("Salesperson berhasil ditambahkan!");
-                  } catch (e: any) {
-                    toastError.custom(
-                      e.message || "Gagal menambah salesperson"
-                    );
-                  } finally {
-                    setAddingSales(false);
-                  }
-                }}
-                disabled={
-                  !newSalespersonName.trim() ||
-                  !selectedPerusahaan ||
-                  addingSales
-                }
-                className="bg-purple-600 hover:bg-purple-700 text-white"
-              >
-                {addingSales ? "Menyimpan..." : "Tambah"}
-              </Button>
-            </div>
+
+            {/* ✅ NEW: Salesperson Management Section */}
+            {showSalespersonManagement && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                <h4 className="font-semibold mb-3 text-gray-800">
+                  Management Salesperson
+                </h4>
+
+                {/* Add New Salesperson */}
+                <div className="flex gap-2 mb-4">
+                  <Input
+                    value={newSalespersonName}
+                    onChange={(e) => setNewSalespersonName(e.target.value)}
+                    placeholder="Nama salesperson baru"
+                    disabled={!selectedPerusahaan}
+                  />
+                  <Button
+                    onClick={async () => {
+                      if (!newSalespersonName.trim() || !selectedPerusahaan)
+                        return;
+                      setAddingSales(true);
+                      try {
+                        const user = JSON.parse(
+                          localStorage.getItem("user") || "null"
+                        );
+                        const divisionId = user?.division?.id
+                          ? parseInt(user.division.id)
+                          : undefined;
+                        const newSales = await createSalesperson(
+                          newSalespersonName.trim(),
+                          selectedPerusahaan.id,
+                          divisionId
+                        );
+                        // ✅ FIXED: Refresh salespeople berdasarkan perusahaan yang dipilih
+                        const updatedSales = await getSalespeopleByPerusahaan(
+                          selectedPerusahaan.id
+                        );
+                        setSalesList(updatedSales);
+                        setNewSalespersonName("");
+                        toastSuccess.custom(
+                          "Salesperson berhasil ditambahkan!"
+                        );
+                      } catch (e: any) {
+                        toastError.custom(
+                          e.message || "Gagal menambah salesperson"
+                        );
+                      } finally {
+                        setAddingSales(false);
+                      }
+                    }}
+                    disabled={
+                      !newSalespersonName.trim() ||
+                      !selectedPerusahaan ||
+                      addingSales
+                    }
+                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    {addingSales ? "Menyimpan..." : "Tambah"}
+                  </Button>
+                </div>
+
+                {/* List All Salespeople with Delete Option */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h5 className="font-medium text-sm text-gray-700">
+                      Daftar Salesperson untuk:{" "}
+                      <span className="text-blue-600 font-semibold">
+                        {selectedPerusahaan?.nama}
+                      </span>
+                    </h5>
+                    <Badge variant="outline" className="text-xs">
+                      {salesList.length} sales
+                    </Badge>
+                  </div>
+                  {salesList.length === 0 ? (
+                    <div className="p-4 text-center bg-gray-50 rounded border border-dashed">
+                      <p className="text-sm text-gray-500 italic">
+                        💼 Belum ada salesperson untuk{" "}
+                        <strong>{selectedPerusahaan?.nama}</strong>
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Tambahkan salesperson baru menggunakan form di atas
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid gap-2">
+                      {salesList.map((sales: any) => (
+                        <div
+                          key={sales.id}
+                          className="flex items-center justify-between p-3 bg-white rounded border hover:bg-gray-50"
+                        >
+                          <div className="flex-1">
+                            <span className="font-medium">{sales.nama}</span>
+                            <span className="text-sm text-gray-500 ml-2">
+                              (ID: {sales.id})
+                            </span>
+                            <Badge variant="outline" className="ml-2 text-xs">
+                              {selectedPerusahaan?.nama}
+                            </Badge>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              handleDeleteSalesperson(sales.id, sales.nama)
+                            }
+                            disabled={deletingSalesperson === sales.id}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                          >
+                            {deletingSalesperson === sales.id ? (
+                              <>
+                                <div className="animate-spin mr-1 h-3 w-3 border border-red-600 border-t-transparent rounded-full" />
+                                Menghapus...
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Hapus
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
         {step === 3 && (
@@ -891,6 +1169,40 @@ export default function LaporanPenjualanWizard() {
               ))}
             </TableBody>
           </Table>
+          
+          {/* ✅ NEW: PDF Export Info */}
+          {laporanProduk.length > 0 && (
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-medium text-blue-800">📄 Export Laporan PDF</h4>
+                  <p className="text-sm text-blue-600 mt-1">
+                    Data yang tersedia untuk export: <strong>{laporanProduk.length} laporan penjualan produk</strong> hari ini
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={previewPDFReport}
+                    className="text-blue-600 hover:text-blue-700 border-blue-200"
+                  >
+                    <FileText className="h-4 w-4 mr-1" />
+                    Preview
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={generatePDFReport}
+                    className="text-green-600 hover:text-green-700 border-green-200"
+                  >
+                    <Download className="h-4 w-4 mr-1" />
+                    Download
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

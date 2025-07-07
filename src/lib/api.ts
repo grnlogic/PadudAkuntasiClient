@@ -568,6 +568,30 @@ export async function createSalesperson(
   return res.json();
 }
 
+// DELETE salesperson
+export async function deleteSalesperson(id: number): Promise<boolean> {
+  const token = getToken();
+  if (!token) throw new Error("No authentication token found");
+
+  const res = await fetch(`${BASE_URL}/api/v1/salespeople/${id}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.text();
+    console.error("❌ DELETE SALESPERSON ERROR:", errorData);
+    throw new Error(
+      `Failed to delete salesperson: ${res.status} ${res.statusText}`
+    );
+  }
+
+  return true;
+}
+
 // ✅ NEW: LaporanProduksi API interface and functions
 export interface CreateLaporanProduksiRequest {
   tanggalLaporan: string; // format: 'YYYY-MM-DD'
