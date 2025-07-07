@@ -48,6 +48,8 @@ import {
   getUtangTransaksi,
   getLaporanPenjualanSales, // ✅ ADD: Import untuk laporan penjualan sales
   getLaporanPenjualanProduk, // ✅ ADD: Import untuk laporan penjualan produk
+  getLaporanProduksi, // ✅ ADD: Import laporan produksi
+  getLaporanGudang, // ✅ ADD: Import laporan gudang
 } from "@/lib/data";
 import { getCurrentUser } from "@/lib/auth";
 import { getAccountsByDivision, type Account } from "@/lib/data";
@@ -220,16 +222,121 @@ export default function TransactionPage() {
         combinedEntries = [...divisionEntries, ...mappedSales, ...mappedProduk];
       }
 
+      // ✅ NEW: Mapping untuk PRODUKSI
+      if (divisionType === "PRODUKSI") {
+        const laporanProduksiEntries = await getLaporanProduksi();
+
+        const mappedProduksi =
+          laporanProduksiEntries?.map((laporan: any) => ({
+            id: `produksi-${laporan.id}`,
+            accountId: laporan.account?.id?.toString() || "PRODUKSI",
+            tanggal:
+              laporan.tanggalLaporan ||
+              laporan.tanggal_laporan ||
+              laporan.createdAt ||
+              "",
+            date:
+              laporan.tanggalLaporan ||
+              laporan.tanggal_laporan ||
+              laporan.createdAt ||
+              "",
+            nilai: Number(laporan.hasilProduksi || laporan.hasil_produksi || 0),
+            description: `Produksi: ${
+              laporan.account?.accountName || "Unknown"
+            } - Hasil: ${laporan.hasilProduksi || laporan.hasil_produksi || 0}`,
+            keterangan:
+              laporan.keteranganKendala || laporan.keterangan_kendala || "",
+            createdBy:
+              laporan.createdBy?.username ||
+              laporan.created_by?.username ||
+              "system",
+            createdAt:
+              laporan.createdAt ||
+              laporan.created_at ||
+              new Date().toISOString(),
+            // ✅ Add specialized produksi fields
+            hasilProduksi: Number(
+              laporan.hasilProduksi || laporan.hasil_produksi || 0
+            ),
+            barangGagal: Number(
+              laporan.barangGagal || laporan.barang_gagal || 0
+            ),
+            stockBarangJadi: Number(
+              laporan.stockBarangJadi || laporan.stock_barang_jadi || 0
+            ),
+            hppAmount: Number(
+              laporan.hpBarangJadi || laporan.hp_barang_jadi || 0
+            ),
+          })) || [];
+
+        console.log("🏭 PRODUKSI DATA MAPPING:", {
+          produksiCount: laporanProduksiEntries?.length || 0,
+          mappedProduksiCount: mappedProduksi.length,
+          sampleProduksi: mappedProduksi[0],
+        });
+
+        combinedEntries = [...divisionEntries, ...mappedProduksi];
+      }
+
+      // ✅ NEW: Mapping untuk PERSEDIAAN_BAHAN_BAKU (BLENDING)
+      if (divisionType === "PERSEDIAAN_BAHAN_BAKU") {
+        const laporanGudangEntries = await getLaporanGudang();
+
+        const mappedGudang =
+          laporanGudangEntries?.map((laporan: any) => ({
+            id: `gudang-${laporan.id}`,
+            accountId: laporan.account?.id?.toString() || "GUDANG",
+            tanggal:
+              laporan.tanggalLaporan ||
+              laporan.tanggal_laporan ||
+              laporan.createdAt ||
+              "",
+            date:
+              laporan.tanggalLaporan ||
+              laporan.tanggal_laporan ||
+              laporan.createdAt ||
+              "",
+            nilai: Number(laporan.stokAkhir || laporan.stok_akhir || 0),
+            description: `Gudang: ${
+              laporan.account?.accountName || "Unknown"
+            } - Stok Akhir: ${laporan.stokAkhir || laporan.stok_akhir || 0}`,
+            keterangan: laporan.keterangan || laporan.kondisi_gudang || "",
+            createdBy:
+              laporan.createdBy?.username ||
+              laporan.created_by?.username ||
+              "system",
+            createdAt:
+              laporan.createdAt ||
+              laporan.created_at ||
+              new Date().toISOString(),
+            // ✅ Add specialized gudang fields
+            barangMasuk: Number(
+              laporan.barangMasuk ||
+                laporan.barang_masuk ||
+                laporan.stokAwal ||
+                laporan.stok_awal ||
+                0
+            ),
+            pemakaianAmount: Number(laporan.pemakaian || 0),
+            stokAkhir: Number(laporan.stokAkhir || laporan.stok_akhir || 0),
+          })) || [];
+
+        console.log("📦 GUDANG/BLENDING DATA MAPPING:", {
+          gudangCount: laporanGudangEntries?.length || 0,
+          mappedGudangCount: mappedGudang.length,
+          sampleGudang: mappedGudang[0],
+        });
+
+        combinedEntries = [...divisionEntries, ...mappedGudang];
+      }
+
       setEntries(combinedEntries);
       console.log("✅ ENTRIES LOADED:", {
         divisionType,
         totalEntries: combinedEntries.length,
         breakdown: {
           regular: divisionEntries.length,
-          pemasaran:
-            divisionType === "PEMASARAN"
-              ? combinedEntries.length - divisionEntries.length
-              : 0,
+          specialized: combinedEntries.length - divisionEntries.length,
         },
       });
     } catch (error) {
@@ -253,6 +360,13 @@ export default function TransactionPage() {
       divisionName?.includes("sumber daya manusia")
     )
       return "HRD"; // ✅ ADD: HRD division detection
+    // ✅ NEW: Deteksi BLENDING PERSEDIAAN BAHAN BAKU
+    if (
+      divisionName?.includes("blending") ||
+      divisionName?.includes("persediaan")
+    ) {
+      return "PERSEDIAAN_BAHAN_BAKU";
+    }
     return "GENERAL";
   };
 
@@ -348,6 +462,28 @@ export default function TransactionPage() {
             }
             return true;
 
+          // ✅ NEW: PERSEDIAAN_BAHAN_BAKU filtering
+          case "PERSEDIAAN_BAHAN_BAKU":
+            const hasInventoryDataBlending =
+              (entry as any).barangMasuk != null ||
+              (entry as any).pemakaianAmount != null ||
+              (entry as any).stokAkhir != null;
+
+            if (filterType === "Barang Masuk") {
+              return hasInventoryDataBlending && (entry as any).barangMasuk > 0;
+            } else if (filterType === "Pemakaian") {
+              return (
+                hasInventoryDataBlending && (entry as any).pemakaianAmount > 0
+              );
+            } else if (filterType === "Stok Rendah") {
+              const stokAkhir = (entry as any).stokAkhir || 0;
+              return hasInventoryDataBlending && stokAkhir < 100;
+            } else if (filterType === "Stok Aman") {
+              const stokAkhir = (entry as any).stokAkhir || 0;
+              return hasInventoryDataBlending && stokAkhir >= 100;
+            }
+            return true;
+
           // ✅ NEW: HRD division filtering
           case "HRD":
             const hasAttendanceData =
@@ -431,6 +567,26 @@ export default function TransactionPage() {
         id: "PRODUK",
         accountCode: "PRODUK",
         accountName: "Laporan Penjualan Produk",
+        valueType: "KUANTITAS",
+      };
+    }
+
+    // ✅ NEW: Handle GUDANG virtual account
+    if (accountId === "GUDANG") {
+      return {
+        id: "GUDANG",
+        accountCode: "GUDANG",
+        accountName: "Laporan Persediaan Gudang",
+        valueType: "KUANTITAS",
+      };
+    }
+
+    // ✅ NEW: Handle PRODUKSI virtual account
+    if (accountId === "PRODUKSI") {
+      return {
+        id: "PRODUKSI",
+        accountCode: "PRODUKSI",
+        accountName: "Laporan Produksi",
         valueType: "KUANTITAS",
       };
     }
@@ -643,6 +799,58 @@ export default function TransactionPage() {
             value: lowStockItems > 0 ? "Perlu Restock" : "Stok Aman",
             type: "text",
             color: lowStockItems > 0 ? "text-red-600" : "text-green-600",
+          },
+        };
+
+      // ✅ NEW: PERSEDIAAN_BAHAN_BAKU metrics
+      case "PERSEDIAAN_BAHAN_BAKU":
+        const totalBarangMasuk = filteredEntries.reduce((sum, entry) => {
+          const barangMasuk = (entry as any).barangMasuk || 0;
+          return sum + barangMasuk;
+        }, 0);
+
+        const totalPemakaianBlending = filteredEntries.reduce((sum, entry) => {
+          const pemakaian = (entry as any).pemakaianAmount || 0;
+          return sum + pemakaian;
+        }, 0);
+
+        const avgStokAkhirBlending =
+          filteredEntries.length > 0
+            ? filteredEntries.reduce((sum, entry) => {
+                const stok = (entry as any).stokAkhir || 0;
+                return sum + stok;
+              }, 0) / filteredEntries.length
+            : 0;
+
+        const lowStockItemsBlending = filteredEntries.filter(
+          (entry) => (entry as any).stokAkhir < 100
+        ).length;
+
+        return {
+          metric1: {
+            label: "Total Barang Masuk",
+            value: totalBarangMasuk,
+            type: "unit",
+            color: "text-blue-600",
+          },
+          metric2: {
+            label: "Total Pemakaian",
+            value: totalPemakaianBlending,
+            type: "unit",
+            color: "text-orange-600",
+          },
+          metric3: {
+            label: "Rata-rata Stok",
+            value: avgStokAkhirBlending,
+            type: "unit",
+            color: "text-green-600",
+          },
+          metric4: {
+            label: "Status Gudang",
+            value: lowStockItemsBlending > 0 ? "Perlu Restock" : "Stok Aman",
+            type: "text",
+            color:
+              lowStockItemsBlending > 0 ? "text-red-600" : "text-green-600",
           },
         };
 
@@ -869,6 +1077,41 @@ export default function TransactionPage() {
           </Badge>
         );
 
+      // ✅ NEW: PERSEDIAAN_BAHAN_BAKU badge
+      case "PERSEDIAAN_BAHAN_BAKU":
+        const barangMasuk = (entry as any).barangMasuk || 0;
+        const pemakaian = (entry as any).pemakaianAmount || 0;
+        const stokAkhirBlending = (entry as any).stokAkhir || 0;
+
+        if (barangMasuk > 0) {
+          return (
+            <Badge className="bg-blue-100 text-blue-800">
+              <Package className="h-3 w-3 mr-1" />
+              Barang Masuk: {barangMasuk}
+            </Badge>
+          );
+        } else if (pemakaian > 0) {
+          return (
+            <Badge className="bg-orange-100 text-orange-800">
+              <Package className="h-3 w-3 mr-1" />
+              Pemakaian: {pemakaian}
+            </Badge>
+          );
+        } else {
+          return (
+            <Badge
+              className={`${
+                stokAkhirBlending >= 100
+                  ? "bg-green-100 text-green-800"
+                  : "bg-red-100 text-red-800"
+              }`}
+            >
+              <Warehouse className="h-3 w-3 mr-1" />
+              Stok: {stokAkhirBlending >= 100 ? "Aman" : "Rendah"}
+            </Badge>
+          );
+        }
+
       // ✅ NEW: HRD badge
       case "HRD":
         const attendanceStatus = (entry as any).attendanceStatus;
@@ -1036,6 +1279,35 @@ export default function TransactionPage() {
           },
         ];
 
+      // ✅ NEW: PERSEDIAAN_BAHAN_BAKU filter options
+      case "PERSEDIAAN_BAHAN_BAKU":
+        return [
+          {
+            value: "Barang Masuk",
+            label: "Ada Barang Masuk",
+            icon: Package,
+            color: "text-blue-600",
+          },
+          {
+            value: "Pemakaian",
+            label: "Ada Pemakaian",
+            icon: Package,
+            color: "text-orange-600",
+          },
+          {
+            value: "Stok Rendah",
+            label: "Stok Rendah",
+            icon: Warehouse,
+            color: "text-red-600",
+          },
+          {
+            value: "Stok Aman",
+            label: "Stok Aman",
+            icon: Warehouse,
+            color: "text-green-600",
+          },
+        ];
+
       // ✅ NEW: HRD filter options
       case "HRD":
         return [
@@ -1110,7 +1382,12 @@ export default function TransactionPage() {
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
-            Riwayat Transaksi {divisionType === "GENERAL" ? "" : divisionType}
+            Riwayat Transaksi{" "}
+            {divisionType === "GENERAL"
+              ? ""
+              : divisionType === "PERSEDIAAN_BAHAN_BAKU"
+              ? "PERSEDIAAN BAHAN BAKU"
+              : divisionType}
           </h1>
           <p className="text-gray-600 mt-2">
             {divisionType === "KEUANGAN" &&
@@ -1121,6 +1398,8 @@ export default function TransactionPage() {
               `Riwayat target dan realisasi penjualan divisi ${user?.division?.name}`}
             {divisionType === "GUDANG" &&
               `Riwayat pemakaian dan stok divisi ${user?.division?.name}`}
+            {divisionType === "PERSEDIAAN_BAHAN_BAKU" &&
+              `Riwayat persediaan bahan baku dan blending divisi ${user?.division?.name}`}
             {divisionType === "HRD" &&
               `Riwayat kehadiran dan aktivitas karyawan divisi ${user?.division?.name}`}{" "}
             {/* ✅ NEW */}
@@ -1440,7 +1719,12 @@ export default function TransactionPage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              Daftar Transaksi {divisionType === "GENERAL" ? "" : divisionType}
+              Daftar Transaksi{" "}
+              {divisionType === "GENERAL"
+                ? ""
+                : divisionType === "PERSEDIAAN_BAHAN_BAKU"
+                ? "PERSEDIAAN BAHAN BAKU"
+                : divisionType}
             </CardTitle>
             <CardDescription>
               {filteredEntries.length} entri ditemukan dari {entries.length}{" "}
@@ -1458,12 +1742,15 @@ export default function TransactionPage() {
                     <TableHead>Status/Tipe</TableHead>
                     <TableHead>Nilai Utama</TableHead>
                     {/* ✅ CONDITIONAL: Additional columns based on division */}
-                    {divisionType === "PRODUKSI" && <TableHead>HPP</TableHead>}
+                    {divisionType === "PRODUKSI" && (
+                      <TableHead>Detail Produksi</TableHead>
+                    )}
                     {divisionType === "PEMASARAN" && (
                       <TableHead>Target vs Realisasi</TableHead>
                     )}
-                    {divisionType === "GUDANG" && (
-                      <TableHead>Pemakaian/Stok</TableHead>
+                    {(divisionType === "GUDANG" ||
+                      divisionType === "PERSEDIAAN_BAHAN_BAKU") && (
+                      <TableHead>Detail Persediaan</TableHead>
                     )}
                     {divisionType === "HRD" && (
                       <TableHead>Detail Kehadiran</TableHead>
@@ -1508,9 +1795,32 @@ export default function TransactionPage() {
                         {/* ✅ CONDITIONAL: Additional data columns */}
                         {divisionType === "PRODUKSI" && (
                           <TableCell className="text-sm">
-                            {(entry as any).hppAmount
-                              ? formatCurrency((entry as any).hppAmount)
-                              : "-"}
+                            <div className="space-y-1">
+                              <div className="text-blue-600">
+                                Hasil:{" "}
+                                {(entry as any).hasilProduksi
+                                  ? `${(entry as any).hasilProduksi} unit`
+                                  : "-"}
+                              </div>
+                              <div className="text-orange-600">
+                                Gagal:{" "}
+                                {(entry as any).barangGagal
+                                  ? `${(entry as any).barangGagal} unit`
+                                  : "-"}
+                              </div>
+                              <div className="text-purple-600">
+                                Stok:{" "}
+                                {(entry as any).stockBarangJadi
+                                  ? `${(entry as any).stockBarangJadi} unit`
+                                  : "-"}
+                              </div>
+                              <div className="text-green-600">
+                                HPP:{" "}
+                                {(entry as any).hppAmount
+                                  ? formatCurrency((entry as any).hppAmount)
+                                  : "-"}
+                              </div>
+                            </div>
                           </TableCell>
                         )}
 
@@ -1565,9 +1875,16 @@ export default function TransactionPage() {
                           </TableCell>
                         )}
 
-                        {divisionType === "GUDANG" && (
+                        {(divisionType === "GUDANG" ||
+                          divisionType === "PERSEDIAAN_BAHAN_BAKU") && (
                           <TableCell className="text-sm">
                             <div className="space-y-1">
+                              <div className="text-blue-600">
+                                Masuk:{" "}
+                                {(entry as any).barangMasuk
+                                  ? `${(entry as any).barangMasuk} unit`
+                                  : "-"}
+                              </div>
                               <div className="text-orange-600">
                                 Pakai:{" "}
                                 {(entry as any).pemakaianAmount
@@ -1580,16 +1897,14 @@ export default function TransactionPage() {
                                   ? `${(entry as any).stokAkhir} unit`
                                   : "-"}
                               </div>
-                              {/* ✅ NEW: Show status if both values exist */}
-                              {(entry as any).pemakaianAmount &&
-                                (entry as any).stokAkhir && (
-                                  <div className="text-gray-500 text-xs">
-                                    Status:{" "}
-                                    {(entry as any).stokAkhir >= 100
-                                      ? "✅ Aman"
-                                      : "⚠️ Rendah"}
-                                  </div>
-                                )}
+                              {(entry as any).stokAkhir && (
+                                <div className="text-gray-500 text-xs">
+                                  Status:{" "}
+                                  {(entry as any).stokAkhir >= 100
+                                    ? "✅ Aman"
+                                    : "⚠️ Rendah"}
+                                </div>
+                              )}
                             </div>
                           </TableCell>
                         )}
@@ -1642,7 +1957,11 @@ export default function TransactionPage() {
             {filteredEntries.length === 0 && (
               <div className="text-center py-8 text-gray-500">
                 {entries.length === 0
-                  ? `Belum ada transaksi yang tercatat untuk divisi ${divisionType}`
+                  ? `Belum ada transaksi yang tercatat untuk divisi ${
+                      divisionType === "PERSEDIAAN_BAHAN_BAKU"
+                        ? "PERSEDIAAN BAHAN BAKU"
+                        : divisionType
+                    }`
                   : "Tidak ada transaksi yang sesuai dengan filter"}
               </div>
             )}

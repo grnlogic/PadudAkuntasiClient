@@ -15,6 +15,14 @@ import {
   laporanPenjualanProdukAPI,
   getSalespeople as apiGetSalespeople,
 } from "./api";
+
+// ✅ ADD: Helper function to get token (same as in api.ts)
+function getToken() {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("auth_token");
+  }
+  return null;
+}
 import type {
   EntriHarian as ImportedEntriHarian,
   CreateEntriHarianRequest,
@@ -442,125 +450,150 @@ export const getEntriHarianByDate = async (
   tanggal: string
 ): Promise<EntriHarian[]> => {
   try {
+    // ✅ BETTER: Use the existing API pattern instead of direct fetch
     const response = await entriesAPI.getByDate(tanggal);
 
-    if (response.success && response.data && Array.isArray(response.data)) {
-      const mappedEntries = response.data.map((entry: any) => {
-        // ✅ FIXED: Apply same mapping logic as getEntriHarian
-        let transactionType = "";
-        let nilai = Number(entry.nilai || 0);
-
-        // ✅ PRIORITIZE: transaction_type (backend format) over transactionType
-        if (entry.transaction_type) {
-          transactionType = entry.transaction_type;
-        } else if (entry.transactionType) {
-          transactionType = entry.transactionType;
-        } else {
-          // Fallback logic for old format
-          const penerimaan = Number(entry.penerimaan || 0);
-          const pengeluaran = Number(entry.pengeluaran || 0);
-
-          if (penerimaan > 0) {
-            transactionType = "PENERIMAAN";
-            nilai = penerimaan;
-          } else if (pengeluaran > 0) {
-            transactionType = "PENGELUARAN";
-            nilai = pengeluaran;
-          } else {
-            transactionType = nilai >= 0 ? "PENERIMAAN" : "PENGELUARAN";
-          }
-        }
-
-        const mappedEntry = {
-          id: entry.id?.toString() || "",
-          accountId:
-            entry.account?.id?.toString() || entry.accountId?.toString() || "",
-          date: entry.tanggalLaporan || entry.date || "",
-          tanggal: entry.tanggalLaporan || entry.date || "",
-          nilai: nilai,
-          description: entry.description || "",
-          createdBy: entry.user?.username || entry.createdBy || "system",
-          createdAt: entry.createdAt || new Date().toISOString(),
-          transactionType: transactionType,
-
-          // ✅ FIXED: Map all specialized fields
-          ...(entry.targetAmount !== undefined && {
-            targetAmount: Number(entry.targetAmount),
-          }),
-          ...(entry.target_amount !== undefined && {
-            targetAmount: Number(entry.target_amount),
-          }),
-          ...(entry.realisasiAmount !== undefined && {
-            realisasiAmount: Number(entry.realisasiAmount),
-          }),
-          ...(entry.realisasi_amount !== undefined && {
-            realisasiAmount: Number(entry.realisasi_amount),
-          }),
-          ...(entry.hppAmount !== undefined && {
-            hppAmount: Number(entry.hppAmount),
-          }),
-          ...(entry.hpp_amount !== undefined && {
-            hppAmount: Number(entry.hpp_amount),
-          }),
-          ...(entry.pemakaianAmount !== undefined && {
-            pemakaianAmount: Number(entry.pemakaianAmount),
-          }),
-          ...(entry.pemakaian_amount !== undefined && {
-            pemakaianAmount: Number(entry.pemakaian_amount),
-          }),
-          ...(entry.stokAkhir !== undefined && {
-            stokAkhir: Number(entry.stokAkhir),
-          }),
-          ...(entry.stok_akhir !== undefined && {
-            stokAkhir: Number(entry.stok_akhir),
-          }),
-          // ✅ CRITICAL FIX: Map saldo akhir fields
-          ...(entry.saldoAkhir !== undefined && {
-            saldoAkhir: Number(entry.saldoAkhir),
-          }),
-          ...(entry.saldo_akhir !== undefined && {
-            saldoAkhir: Number(entry.saldo_akhir),
-          }),
-
-          // ✅ NEW: Map HRD fields
-          ...(entry.attendanceStatus && {
-            attendanceStatus: entry.attendanceStatus,
-          }),
-          ...(entry.attendance_status && {
-            attendanceStatus: entry.attendance_status,
-          }),
-          ...(entry.absentCount !== undefined && {
-            absentCount: Number(entry.absentCount),
-          }),
-          ...(entry.absent_count !== undefined && {
-            absentCount: Number(entry.absent_count),
-          }),
-          ...(entry.shift && {
-            shift: entry.shift,
-          }),
-        };
-
-        // ✅ DEBUG: Log mapping for keuangan division in getEntriHarianByDate
-        if (entry.keuangan_data === true) {
-          console.log("🔍 getEntriHarianByDate KEUANGAN MAPPING:", {
-            entryId: entry.id,
-            backendTransactionType: entry.transaction_type,
-            backendNilai: entry.nilai,
-            mappedTransactionType: mappedEntry.transactionType,
-            mappedNilai: mappedEntry.nilai,
-            accountName: entry.account?.accountName,
-          });
-        }
-
-        return mappedEntry;
-      });
-
-      return mappedEntries;
+    if (!response.success || !response.data) {
+      throw new Error("Failed to fetch entries by date");
     }
-    return [];
+
+    const data = response.data;
+    console.log("🔍 Raw backend data for date", tanggal, ":", data);
+
+    // ✅ FIXED: Enhanced transformation with robust HRD field mapping
+    const transformEntryFromBackend = (entry: any): EntriHarian => {
+      return {
+        id: entry.id?.toString() || Date.now().toString(),
+        accountId:
+          entry.accountId?.toString() || entry.account_id?.toString() || "",
+        tanggal: entry.tanggal || entry.date || "",
+        date: entry.date || entry.tanggal || "",
+        nilai: Number(entry.nilai) || 0,
+        description: entry.description || entry.keterangan || "",
+        createdBy: entry.createdBy || entry.created_by || "system",
+        createdAt:
+          entry.createdAt || entry.created_at || new Date().toISOString(),
+        keterangan: entry.description || entry.keterangan || "",
+
+        // ✅ ADD: HRD field mapping with both camelCase and snake_case support
+        ...(entry.attendanceStatus && {
+          attendanceStatus: entry.attendanceStatus,
+        }),
+        ...(entry.attendance_status && {
+          attendanceStatus: entry.attendance_status,
+        }),
+        ...(entry.absentCount !== undefined && {
+          absentCount: Number(entry.absentCount),
+        }),
+        ...(entry.absent_count !== undefined && {
+          absentCount: Number(entry.absent_count),
+        }),
+        ...(entry.shift && {
+          shift: entry.shift, // Should be "REGULER" | "LEMBUR"
+        }),
+        ...(entry.keteranganKendala && {
+          keteranganKendala: entry.keteranganKendala,
+        }),
+        ...(entry.keterangan_kendala && {
+          keteranganKendala: entry.keterangan_kendala,
+        }),
+
+        // ✅ ADD: Other specialized fields mapping
+        ...(entry.transactionType && {
+          transactionType: entry.transactionType,
+        }),
+        ...(entry.transaction_type && {
+          transactionType: entry.transaction_type,
+        }),
+        ...(entry.targetAmount !== undefined && {
+          targetAmount: Number(entry.targetAmount),
+        }),
+        ...(entry.target_amount !== undefined && {
+          targetAmount: Number(entry.target_amount),
+        }),
+        ...(entry.realisasiAmount !== undefined && {
+          realisasiAmount: Number(entry.realisasiAmount),
+        }),
+        ...(entry.realisasi_amount !== undefined && {
+          realisasiAmount: Number(entry.realisasi_amount),
+        }),
+        ...(entry.saldoAkhir !== undefined && {
+          saldoAkhir: Number(entry.saldoAkhir),
+        }),
+        ...(entry.saldo_akhir !== undefined && {
+          saldoAkhir: Number(entry.saldo_akhir),
+        }),
+        ...(entry.salesUserId !== undefined && {
+          salesUserId: Number(entry.salesUserId),
+        }),
+        ...(entry.sales_user_id !== undefined && {
+          salesUserId: Number(entry.sales_user_id),
+        }),
+        ...(entry.returPenjualan !== undefined && {
+          returPenjualan: Number(entry.returPenjualan),
+        }),
+        ...(entry.retur_penjualan !== undefined && {
+          returPenjualan: Number(entry.retur_penjualan),
+        }),
+        ...(entry.hasilProduksi !== undefined && {
+          hasilProduksi: Number(entry.hasilProduksi),
+        }),
+        ...(entry.hasil_produksi !== undefined && {
+          hasilProduksi: Number(entry.hasil_produksi),
+        }),
+        ...(entry.barangGagal !== undefined && {
+          barangGagal: Number(entry.barangGagal),
+        }),
+        ...(entry.barang_gagal !== undefined && {
+          barangGagal: Number(entry.barang_gagal),
+        }),
+        ...(entry.stockBarangJadi !== undefined && {
+          stockBarangJadi: Number(entry.stockBarangJadi),
+        }),
+        ...(entry.stock_barang_jadi !== undefined && {
+          stockBarangJadi: Number(entry.stock_barang_jadi),
+        }),
+        ...(entry.hpBarangJadi !== undefined && {
+          hpBarangJadi: Number(entry.hpBarangJadi),
+        }),
+        ...(entry.hp_barang_jadi !== undefined && {
+          hpBarangJadi: Number(entry.hp_barang_jadi),
+        }),
+        ...(entry.stokAwal !== undefined && {
+          stokAwal: Number(entry.stokAwal),
+        }),
+        ...(entry.stok_awal !== undefined && {
+          stokAwal: Number(entry.stok_awal),
+        }),
+        ...(entry.pemakaian !== undefined && {
+          pemakaian: Number(entry.pemakaian),
+        }),
+        ...(entry.kondisiGudang && {
+          kondisiGudang: entry.kondisiGudang,
+        }),
+        ...(entry.kondisi_gudang && {
+          kondisiGudang: entry.kondisi_gudang,
+        }),
+      };
+    };
+
+    // ✅ FIXED: Apply transformation to all entries
+    const transformedEntries = (Array.isArray(data) ? data : []).map(
+      transformEntryFromBackend
+    );
+
+    console.log("✅ Transformed entries for date", tanggal, ":", {
+      total: transformedEntries.length,
+      sample: transformedEntries[0],
+      hrdEntries: transformedEntries.filter(
+        (entry) => entry.attendanceStatus || entry.absentCount || entry.shift
+      ),
+    });
+
+    return transformedEntries;
   } catch (error) {
-    console.error("Error in getEntriHarianByDate:", error);
-    return [];
+    console.error("❌ Error fetching entries by date:", error);
+    throw new Error("Gagal memuat entri harian");
   }
 };
 

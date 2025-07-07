@@ -20,15 +20,15 @@ export interface EntriHarian {
   // ✅ NEW: Keuangan saldo akhir
   saldoAkhir?: number;
 
-  // ✅ NEW: HRD fields
+  // ✅ FIXED: Standardized HRD fields
   attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
-  overtimeHours?: number;
-  shift?: "PAGI" | "SIANG" | "MALAM";
+  absentCount?: number; // Jumlah yang tidak hadir
+  shift?: "REGULER" | "LEMBUR"; // ✅ BENAR: Sesuai meeting
+  keteranganKendala?: string; // Untuk kendala HRD
 
   // ✅ NEW: Pemasaran Sales fields
   salesUserId?: number;
   returPenjualan?: number;
-  keteranganKendala?: string;
 
   // ✅ NEW: Produksi fields
   hasilProduksi?: number;
@@ -67,10 +67,11 @@ export interface CreateEntriHarianRequest {
   // ✅ Gudang fields
   pemakaianAmount?: number;
   stokAkhir?: number;
-  // ✅ HRD fields
+  // ✅ FIXED: Standardized HRD fields
   attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
   absentCount?: number;
-  shift?: "REGULER" | "LEMBUR";
+  shift?: "REGULER" | "LEMBUR"; // ✅ BENAR: Sesuai meeting
+  keteranganKendala?: string;
   // ✅ NEW: Gudang fields for PERSEDIAAN_BAHAN_BAKU - Updated field names
   stokAwal?: number;
   pemakaian?: number;
