@@ -422,18 +422,6 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
           }),
         };
 
-        // ✅ DEBUG: Log mapping for keuangan division
-        if (entry.keuangan_data === true) {
-          console.log("🔍 KEUANGAN MAPPING:", {
-            entryId: entry.id,
-            backendTransactionType: entry.transaction_type,
-            backendNilai: entry.nilai,
-            mappedTransactionType: mappedEntry.transactionType,
-            mappedNilai: mappedEntry.nilai,
-            accountName: entry.account?.accountName,
-          });
-        }
-
         return mappedEntry;
       });
 
@@ -441,7 +429,6 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
     }
     return [];
   } catch (error) {
-    console.error("Error in getEntriHarian:", error);
     return [];
   }
 };
@@ -458,7 +445,6 @@ export const getEntriHarianByDate = async (
     }
 
     const data = response.data;
-    console.log("🔍 Raw backend data for date", tanggal, ":", data);
 
     // ✅ FIXED: Enhanced transformation with robust HRD field mapping
     const transformEntryFromBackend = (entry: any): EntriHarian => {
@@ -609,17 +595,8 @@ export const getEntriHarianByDate = async (
       transformEntryFromBackend
     );
 
-    console.log("✅ Transformed entries for date", tanggal, ":", {
-      total: transformedEntries.length,
-      sample: transformedEntries[0],
-      hrdEntries: transformedEntries.filter(
-        (entry) => entry.attendanceStatus || entry.absentCount || entry.shift
-      ),
-    });
-
     return transformedEntries;
   } catch (error) {
-    console.error("❌ Error fetching entries by date:", error);
     throw new Error("Gagal memuat entri harian");
   }
 };
@@ -632,14 +609,7 @@ export const saveEntriHarianBatch = async (
     (e) => !e.piutangType // Remove piutang entries from regular batch
   );
 
-  console.log("📊 BATCH FILTERING:", {
-    originalCount: entries.length,
-    filteredCount: validEntries.length,
-    removedPiutang: entries.length - validEntries.length,
-  });
-
   if (validEntries.length === 0) {
-    console.log("⚠️ No valid entries for regular batch save");
     return [];
   }
 
@@ -763,7 +733,6 @@ export const getLaporanPenjualanSales = async (): Promise<
     }
     return [];
   } catch (error) {
-    console.error("Error fetching laporan penjualan sales:", error);
     return [];
   }
 };
@@ -791,7 +760,6 @@ export const deleteLaporanPenjualanSales = async (
     const response = await laporanPenjualanSalesAPI.delete(id);
     return response.success;
   } catch (error) {
-    console.error("Error deleting laporan penjualan sales:", error);
     return false;
   }
 };
@@ -824,7 +792,6 @@ export const getLaporanProduksi = async (): Promise<
     }
     return [];
   } catch (error) {
-    console.error("Error fetching laporan produksi:", error);
     return [];
   }
 };
@@ -848,7 +815,6 @@ export const deleteLaporanProduksi = async (id: number): Promise<boolean> => {
     const response = await laporanProduksiAPI.delete(id);
     return response.success;
   } catch (error) {
-    console.error("Error deleting laporan produksi:", error);
     return false;
   }
 };
@@ -897,32 +863,10 @@ export const getLaporanGudang = async (): Promise<LaporanGudangHarian[]> => {
         createdAt: laporan.createdAt ?? laporan.created_at,
       }));
 
-      console.log("🔍 LAPORAN GUDANG MAPPING:", {
-        originalCount: response.data.length,
-        mappedCount: mappedData.length,
-        sampleMapping: mappedData[0]
-          ? {
-              original: {
-                id: response.data[0].id,
-                barang_masuk: response.data[0].barangMasuk,
-                stok_akhir: response.data[0].stokAkhir,
-                kondisi_gudang: response.data[0].keterangan,
-              },
-              mapped: {
-                id: mappedData[0].id,
-                barangMasuk: mappedData[0].barangMasuk,
-                stokAkhir: mappedData[0].stokAkhir,
-                keterangan: mappedData[0].keterangan,
-              },
-            }
-          : null,
-      });
-
       return mappedData;
     }
     return [];
   } catch (error) {
-    console.error("Error fetching laporan gudang:", error);
     return [];
   }
 };
@@ -946,7 +890,6 @@ export const deleteLaporanGudang = async (id: number): Promise<boolean> => {
     const response = await laporanGudangAPI.delete(id);
     return response.success;
   } catch (error) {
-    console.error("Error deleting laporan gudang:", error);
     return false;
   }
 };
@@ -958,10 +901,8 @@ export const getNotifications = async (): Promise<Notification[]> => {
     if (response.success && response.data) {
       return response.data;
     }
-    console.warn("⚠️ Failed to get notifications:", response);
     return [];
   } catch (error) {
-    console.error("❌ Error getting notifications:", error);
     return [];
   }
 };
@@ -971,7 +912,6 @@ export const markNotificationAsRead = async (id: number): Promise<boolean> => {
     const response = await notificationAPI.markAsRead(id);
     return response.success;
   } catch (error) {
-    console.error("❌ Error marking notification as read:", error);
     return false;
   }
 };
@@ -980,11 +920,6 @@ export const markNotificationAsRead = async (id: number): Promise<boolean> => {
 // Helper function untuk transform backend data ke frontend format
 const transformLaporanPenjualanProdukFromBackend = (backendData: any) => {
   if (!backendData) return null;
-
-  console.log(
-    "🔍 TRANSFORM LAPORAN PENJUALAN PRODUK - Raw backend data:",
-    backendData
-  );
 
   // ✅ FIXED: Backend menggunakan camelCase, bukan snake_case
   const transformed = {
@@ -1003,40 +938,19 @@ const transformLaporanPenjualanProdukFromBackend = (backendData: any) => {
     createdAt: backendData.createdAt,
   };
 
-  console.log(
-    "✅ TRANSFORM LAPORAN PENJUALAN PRODUK - Transformed data:",
-    transformed
-  );
-
   return transformed;
 };
 
 export const getLaporanPenjualanProduk = async () => {
-  console.log("🔍 GET LAPORAN PENJUALAN PRODUK - Fetching data...");
-
   const response = await laporanPenjualanProdukAPI.getAll();
-  console.log("📡 GET LAPORAN PENJUALAN PRODUK - API Response:", response);
 
   if (response.success && response.data && Array.isArray(response.data)) {
-    console.log(
-      "📊 GET LAPORAN PENJUALAN PRODUK - Raw data count:",
-      response.data.length
-    );
     // Transform setiap item dari backend format ke frontend format
     const transformedData = response.data
       .map(transformLaporanPenjualanProdukFromBackend)
       .filter(Boolean);
-    console.log(
-      "✅ GET LAPORAN PENJUALAN PRODUK - Transformed data count:",
-      transformedData.length
-    );
-    console.log(
-      "✅ GET LAPORAN PENJUALAN PRODUK - Final transformed data:",
-      transformedData
-    );
     return transformedData;
   }
-  console.log("⚠️ GET LAPORAN PENJUALAN PRODUK - No data or failed response");
   return [];
 };
 
@@ -1060,22 +974,11 @@ export const getSalespeopleByPerusahaan = async (perusahaanId: number) => {
 };
 
 export const getProductAccounts = async (divisionId?: number) => {
-  console.log("🎯 getProductAccounts called with divisionId:", divisionId);
-
   // Always use division-specific endpoint if divisionId is provided
   if (divisionId) {
-    console.log("🔍 Fetching products for divisionId:", divisionId);
-    console.log(
-      "📡 Calling endpoint: /api/v1/accounts/products/by-division/" + divisionId
-    );
     const response = await accountsAPI.getProductsByDivision(divisionId);
-    console.log("📨 Raw API response:", response);
     if (response.success && response.data) {
-      console.log("✅ Products fetched successfully:", response.data);
-      console.log("📊 Total products count:", response.data.length);
       return response.data;
-    } else {
-      console.error("❌ Failed to fetch products:", response);
     }
   } else {
     console.warn("⚠️ No divisionId provided, cannot fetch products");

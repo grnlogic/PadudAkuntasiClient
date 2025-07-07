@@ -341,6 +341,23 @@ export default function JournalPage() {
       } else if (entry.transactionType === "SALDO_AKHIR") {
         const saldoValue = Number(entry.saldoAkhir) || nilai;
         summary.totalSaldoAkhir += saldoValue;
+        // ✅ ADD: Debug logging
+        console.log("🔍 SALDO_AKHIR DEBUG:", {
+          entryId: entry.id,
+          saldoAkhir: entry.saldoAkhir,
+          nilai: entry.nilai,
+          saldoValue,
+          runningTotal: summary.totalSaldoAkhir,
+        });
+
+        // ✅ FIXED: Log the correct saldoValue for SALDO_AKHIR entries
+        console.log("💰 Processing entry:", {
+          id: entry.id,
+          type: entry.transactionType,
+          nilai: saldoValue, // Use saldoValue instead of nilai for SALDO_AKHIR
+          runningTotal: summary,
+        });
+        return; // ✅ Early return to avoid duplicate logging
       }
 
       console.log("💰 Processing entry:", {
@@ -589,21 +606,47 @@ export default function JournalPage() {
               dateStr.split("T")[0] === selectedDate
             );
           })
-          .map((u: any) => ({
-            id: `utang-${u.id}`,
-            accountId: u.account_id?.toString() || u.accountId?.toString(),
-            createdAt:
-              u.tanggal_transaksi || u.tanggalTransaksi || u.created_at,
-            nilai: Number(u.nominal) || 0,
-            description: u.keterangan || "",
-            transactionType: u.tipe_transaksi || u.tipeTransaksi,
-            kategori: u.kategori,
-            // ✅ ADD: Required EntriHarian fields
-            keterangan: u.keterangan || "",
-            date: u.tanggal_transaksi || u.tanggalTransaksi || u.created_at,
-            tanggal: u.tanggal_transaksi || u.tanggalTransaksi || u.created_at,
-            createdBy: u.created_by || "system",
-          }));
+          .map((u: any) => {
+            // ✅ Debug logging for utang mapping
+            console.log("🔍 MAPPING UTANG ENTRY:", {
+              rawData: u,
+              account_id: u.account_id,
+              accountId: u.accountId,
+              account: u.account,
+              account_id_string: u.account_id?.toString(),
+              accountId_string: u.accountId?.toString(),
+            });
+
+            // ✅ FIXED: Better accountId extraction with fallbacks
+            let finalAccountId = "";
+            if (u.account?.id) {
+              finalAccountId = u.account.id.toString();
+            } else if (u.account_id) {
+              finalAccountId = u.account_id.toString();
+            } else if (u.accountId) {
+              finalAccountId = u.accountId.toString();
+            }
+
+            const mapped = {
+              id: `utang-${u.id}`,
+              accountId: finalAccountId, // ✅ Use processed accountId
+              createdAt:
+                u.tanggal_transaksi || u.tanggalTransaksi || u.created_at,
+              nilai: Number(u.nominal) || 0,
+              description: u.keterangan || "",
+              transactionType: u.tipe_transaksi || u.tipeTransaksi,
+              kategori: u.kategori,
+              // ✅ ADD: Required EntriHarian fields
+              keterangan: u.keterangan || "",
+              date: u.tanggal_transaksi || u.tanggalTransaksi || u.created_at,
+              tanggal:
+                u.tanggal_transaksi || u.tanggalTransaksi || u.created_at,
+              createdBy: u.created_by || "system",
+            };
+
+            console.log("✅ MAPPED UTANG ENTRY:", mapped);
+            return mapped;
+          });
 
         // Combine all entries
         const allEntries = [
@@ -731,8 +774,22 @@ export default function JournalPage() {
   };
 
   const getAccountDisplay = (accountId: string) => {
+    // ✅ Debug logging for account lookup
+    console.log("🔍 ACCOUNT LOOKUP DEBUG:", {
+      searchingFor: accountId,
+      accountType: typeof accountId,
+      accountsList: accounts.map((acc) => ({
+        id: acc.id,
+        name: acc.accountName,
+      })),
+      foundAccount: accounts.find((acc) => acc.id === accountId),
+    });
+
     const account = accounts.find((acc) => acc.id === accountId);
-    if (!account) return "Akun tidak ditemukan";
+    if (!account) {
+      // ✅ Enhanced fallback message with more info
+      return `⚠️ Account ID ${accountId} tidak ditemukan`;
+    }
 
     // ✅ ADD: Keterangan berdasarkan valueType
     const keterangan =
@@ -773,783 +830,197 @@ export default function JournalPage() {
   };
 
   const saveJournalEntries = async () => {
-    console.log("🚀 SAVE JOURNAL ENTRIES - START");
-
-    // Update validation logic untuk piutang
-    const validRows = journalRows.filter((row) => {
-      const account = getSelectedAccount(row.accountId);
-      if (!account) return false;
-
-      // Validasi khusus PEMASARAN
-      if (divisionType === "PEMASARAN") {
-        // Salesperson wajib, dan minimal salah satu target/realisasi/retur terisi
-        if (
-          row.salesUserId &&
-          (row.targetAmount || row.realisasiAmount || row.returPenjualan)
-        ) {
-          return true;
-        }
-      }
-
-      // ✅ NEW: Validasi khusus HRD
-      if (divisionType === "HRD") {
-        // Minimal salah satu field HRD terisi
-        if (
-          row.attendanceStatus ||
-          row.absentCount ||
-          row.shift ||
-          row.keteranganKendala
-        ) {
-          return true;
-        }
-      }
-
-      // ✅ NEW: Validasi khusus PRODUKSI
-      if (divisionType === "PRODUKSI") {
-        // Minimal salah satu field produksi terisi
-        if (
-          row.hasilProduksi ||
-          row.barangGagal ||
-          row.stockBarangJadi ||
-          row.hpBarangJadi ||
-          row.keteranganKendala
-        ) {
-          return true;
-        }
-      }
-
-      // ✅ NEW: Validasi khusus PERSEDIAAN_BAHAN_BAKU - FLEKSIBEL
-      if (divisionType === "PERSEDIAAN_BAHAN_BAKU") {
-        // Minimal salah satu field gudang terisi (stok awal, pemakaian, stok akhir, atau kondisi)
-        if (
-          row.barangMasuk ||
-          row.pemakaian ||
-          row.stokAkhir ||
-          row.keteranganGudang
-        ) {
-          return true;
-        }
-      }
-
-      // Validasi piutang HANYA untuk KEUANGAN
-      if (
-        divisionType === "KEUANGAN" &&
-        (row.piutangType ||
-          (row.transactionType &&
-            ["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
-              row.transactionType
-            )))
-      ) {
-        return (
-          row.accountId &&
-          row.nominal &&
-          Number.parseFloat(row.nominal) > 0 &&
-          selectedDate
-        );
-      }
-
-      // Validasi utang HANYA untuk KEUANGAN
-      if (
-        divisionType === "KEUANGAN" &&
-        (row.utangType ||
-          (row.transactionType &&
-            ["UTANG_BARU", "UTANG_DIBAYAR"].includes(row.transactionType)))
-      ) {
-        return (
-          row.accountId &&
-          row.nominal &&
-          Number.parseFloat(row.nominal) > 0 &&
-          selectedDate
-        );
-      }
-
-      // Validasi regular entries
-      if (
-        row.transactionType &&
-        ["PENERIMAAN", "PENGELUARAN", "SALDO_AKHIR"].includes(
-          row.transactionType
-        )
-      ) {
-        return (
-          row.accountId &&
-          row.nominal &&
-          Number.parseFloat(row.nominal) > 0 &&
-          selectedDate
-        );
-      }
-
-      // Validasi default untuk GENERAL
-      return (
-        row.accountId &&
-        ((account.valueType === "NOMINAL" &&
-          row.nominal &&
-          Number.parseFloat(row.nominal) > 0) ||
-          (account.valueType === "KUANTITAS" &&
-            row.kuantitas &&
-            Number.parseFloat(row.kuantitas) > 0)) &&
-        selectedDate
-      );
-    });
-
-    console.log("📊 VALID ROWS COUNT:", validRows.length);
-
-    if (validRows.length === 0) {
-      console.log("❌ No valid rows - showing validation error");
-      toastError.validation("Tidak ada entri yang valid untuk disimpan");
+    if (!selectedDate) {
+      toastError.custom("Pilih tanggal terlebih dahulu");
       return;
     }
 
-    // ✅ CRITICAL FIX: Separate piutang entries from regular entries
-    const piutangEntries =
-      divisionType === "KEUANGAN"
-        ? validRows.filter(
-            (row) =>
-              row.piutangType ||
-              (row.transactionType &&
-                ["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
-                  row.transactionType
-                ))
-          )
-        : [];
+    // ✅ ALWAYS CREATE NEW ENTRIES - Never check for existing
+    const validEntries = journalRows
+      .filter((row) => {
+        if (!row.accountId) {
+          console.warn("⚠️ Skipping row with missing accountId:", row);
+          return false;
+        }
+        // Validate based on transaction type
+        if (selectedTransactionType === "KAS") {
+          if (row.transactionType === "SALDO_AKHIR") {
+            return row.saldoAkhir && parseFloat(row.saldoAkhir) > 0;
+          } else {
+            return row.nominal && parseFloat(row.nominal) > 0;
+          }
+        } else {
+          return row.nominal && parseFloat(row.nominal) > 0;
+        }
+      })
+      .map((row) => {
+        const baseEntry = {
+          accountId: parseInt(row.accountId),
+          tanggal: selectedDate,
+          description: row.keterangan || "",
+        };
+        // ✅ ALWAYS CREATE NEW - Add timestamp to ensure uniqueness
+        const timestamp = Date.now();
+        const uniqueId = `${baseEntry.accountId}-${selectedDate}-${timestamp}`;
+        console.log(`✅ CREATING NEW ENTRY (ID: ${uniqueId}):`, baseEntry);
+        // Handle different transaction types
+        if (selectedTransactionType === "KAS") {
+          if (row.transactionType === "SALDO_AKHIR") {
+            return {
+              ...baseEntry,
+              nilai: parseFloat(row.saldoAkhir || "0"), // ✅ FIXED: Gunakan saldoAkhir sebagai nilai
+              saldoAkhir: parseFloat(row.saldoAkhir || "0"),
+              transactionType: "SALDO_AKHIR",
+            };
+          } else {
+            return {
+              ...baseEntry,
+              nilai: parseFloat(row.nominal),
+              transactionType: row.transactionType,
+            };
+          }
+        } else if (selectedTransactionType === "PIUTANG") {
+          return {
+            accountId: parseInt(row.accountId),
+            tanggalTransaksi: selectedDate,
+            tipeTransaksi: row.transactionType,
+            kategori: row.kategori,
+            nominal: parseFloat(row.nominal),
+            keterangan: row.keterangan || "",
+          };
+        } else if (selectedTransactionType === "UTANG") {
+          return {
+            accountId: parseInt(row.accountId),
+            tanggalTransaksi: selectedDate,
+            tipeTransaksi: row.transactionType,
+            kategori: row.utangKategori,
+            nominal: parseFloat(row.nominal),
+            keterangan: row.keterangan || "",
+          };
+        }
+        return baseEntry;
+      });
 
-    // ✅ NEW: Separate utang entries
-    const utangEntries =
-      divisionType === "KEUANGAN"
-        ? validRows.filter(
-            (row) =>
-              row.utangType ||
-              (row.transactionType &&
-                ["UTANG_BARU", "UTANG_DIBAYAR"].includes(row.transactionType))
-          )
-        : [];
-
-    const regularEntries = validRows.filter(
-      (row) =>
-        (divisionType !== "KEUANGAN" ||
-          (!row.piutangType &&
-            !row.utangType &&
-            !(
-              row.transactionType &&
-              [
-                "PIUTANG_BARU",
-                "PIUTANG_TERTAGIH",
-                "PIUTANG_MACET",
-                "UTANG_BARU",
-                "UTANG_DIBAYAR",
-              ].includes(row.transactionType)
-            ))) &&
-        (divisionType !== "PEMASARAN" || !row.salesUserId) &&
-        (divisionType !== "HRD" || !row.attendanceStatus) && // ✅ ADD: Exclude HRD entries
-        (divisionType !== "PERSEDIAAN_BAHAN_BAKU" ||
-          !(
-            row.barangMasuk ||
-            row.pemakaian ||
-            row.stokAkhir ||
-            row.keteranganGudang
-          )) && // ✅ ADD: Exclude PERSEDIAAN_BAHAN_BAKU gudang entries
-        (divisionType !== "PRODUKSI" ||
-          !(
-            row.hasilProduksi ||
-            row.barangGagal ||
-            row.stockBarangJadi ||
-            row.hpBarangJadi
-          )) // ✅ ADD: Exclude PRODUKSI entries
-    );
-
-    // Tambahkan ini:
-    const pemasaranSalesEntries = validRows.filter(
-      (row) => row.salesUserId && divisionType === "PEMASARAN"
-    );
-
-    // ✅ NEW: Separate HRD entries
-    const hrdEntries = validRows.filter(
-      (row) =>
-        divisionType === "HRD" &&
-        (row.attendanceStatus || row.absentCount || row.shift)
-    );
-
-    // ✅ NEW: Separate produksi entries
-    const produksiEntries = validRows.filter(
-      (row) =>
-        divisionType === "PRODUKSI" &&
-        (row.hasilProduksi ||
-          row.barangGagal ||
-          row.stockBarangJadi ||
-          row.hpBarangJadi)
-    );
-
-    // ✅ NEW: Separate gudang entries for PERSEDIAAN_BAHAN_BAKU
-    const gudangEntries = validRows.filter(
-      (row) =>
-        divisionType === "PERSEDIAAN_BAHAN_BAKU" &&
-        (row.barangMasuk ||
-          row.pemakaian ||
-          row.stokAkhir ||
-          row.keteranganGudang)
-    );
-
-    console.log("📊 ENTRY SEPARATION:", {
-      totalValid: validRows.length,
-      piutangCount: piutangEntries.length,
-      utangCount: utangEntries.length,
-      regularCount: regularEntries.length,
-      pemasaranSalesCount: pemasaranSalesEntries.length,
-      hrdCount: hrdEntries.length, // ✅ ADD: HRD count
-      produksiCount: produksiEntries.length,
-      gudangCount: gudangEntries.length, // ✅ ADD: Gudang count
-      piutangEntries: piutangEntries.map((r) => ({
-        id: r.id,
-        type: r.piutangType || r.transactionType,
-      })),
-      utangEntries: utangEntries.map((r) => ({
-        id: r.id,
-        type: r.utangType || r.transactionType,
-      })),
-      regularEntries: regularEntries.map((r) => ({
-        id: r.id,
-        transactionType: r.transactionType,
-      })),
-      pemasaranSalesEntries: pemasaranSalesEntries.map((r) => ({
-        id: r.id,
-        salesUserId: r.salesUserId,
-      })),
-      hrdEntries: hrdEntries.map((r) => ({
-        // ✅ ADD: HRD entries logging
-        id: r.id,
-        attendanceStatus: r.attendanceStatus,
-        absentCount: r.absentCount,
-        shift: r.shift,
-      })),
-    });
-
-    setLoading(true);
+    if (validEntries.length === 0) {
+      toastError.custom("Tidak ada data valid untuk disimpan");
+      return;
+    }
 
     try {
-      const savedResults = [];
-
-      // ✅ CRITICAL: Handle piutang entries FIRST and SEPARATELY
-
-      if (piutangEntries.length > 0) {
-        console.log("💰 PROCESSING PIUTANG ENTRIES:", piutangEntries);
-
-        for (const row of piutangEntries) {
-          // ✅ Get piutang type from either field
-          const piutangType = row.piutangType || row.transactionType;
-
-          // ✅ Validate piutang type
-          if (
-            !piutangType ||
-            !["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
-              piutangType
-            )
-          ) {
-            console.error("❌ Invalid piutang type:", piutangType);
-            throw new Error(
-              `VALIDATION_ERROR: Tipe piutang tidak valid: ${piutangType}`
-            );
-          }
-
-          // ✅ Validate nominal
-          const nominal = Number.parseFloat(row.nominal);
-          if (!nominal || nominal <= 0) {
-            console.error("❌ Invalid nominal:", row.nominal);
-            throw new Error(
-              "VALIDATION_ERROR: Nominal piutang harus lebih dari 0"
-            );
-          }
-
-          // ✅ Validate date
-          if (!selectedDate) {
-            console.error("❌ Invalid date:", selectedDate);
-            throw new Error("VALIDATION_ERROR: Tanggal transaksi tidak valid");
-          }
-
-          // GUNAKAN LANGSUNG accountId dari row
-          const accountId = Number(row.accountId);
-
-          if (!accountId) {
-            alert("Akun tidak valid!");
-            return;
-          }
-
-          const piutangData: CreatePiutangRequest = {
-            tanggalTransaksi: selectedDate,
-            tipeTransaksi: piutangType as
-              | "PIUTANG_BARU"
-              | "PIUTANG_TERTAGIH"
-              | "PIUTANG_MACET",
-            kategori: row.kategori || "KARYAWAN",
-            nominal: Number(nominal),
-            keterangan: row.keterangan || "",
-            accountId, // <-- langsung dari input user
-          };
-
-          console.log("📤 Akan mengirim piutang ke backend:", piutangData);
-          const result = await piutangAPI.create(piutangData);
-          console.log("✅ Hasil dari backend:", result);
-          savedResults.push(result);
-          console.log("✅ PIUTANG SAVED SUCCESSFULLY:", result);
-        }
-      }
-
-      // ✅ NEW: Handle utang entries
-      if (utangEntries.length > 0) {
-        console.log("💳 PROCESSING UTANG ENTRIES:", utangEntries);
-
-        for (const row of utangEntries) {
-          // ✅ Get utang type from either field
-          const utangType = row.utangType || row.transactionType;
-
-          // ✅ Validate utang type
-          if (
-            !utangType ||
-            !["UTANG_BARU", "UTANG_DIBAYAR"].includes(utangType)
-          ) {
-            console.error("❌ Invalid utang type:", utangType);
-            throw new Error(
-              `VALIDATION_ERROR: Tipe utang tidak valid: ${utangType}`
-            );
-          }
-
-          // ✅ Validate nominal
-          const nominal = Number.parseFloat(row.nominal);
-          if (!nominal || nominal <= 0) {
-            console.error("❌ Invalid nominal:", row.nominal);
-            throw new Error(
-              "VALIDATION_ERROR: Nominal utang harus lebih dari 0"
-            );
-          }
-
-          // ✅ Validate date
-          if (!selectedDate) {
-            console.error("❌ Invalid date:", selectedDate);
-            throw new Error("VALIDATION_ERROR: Tanggal transaksi tidak valid");
-          }
-
-          // GUNAKAN LANGSUNG accountId dari row
-          const accountId = Number(row.accountId);
-
-          if (!accountId) {
-            alert("Akun tidak valid!");
-            return;
-          }
-
-          const utangData: CreateUtangRequest = {
-            tanggalTransaksi: selectedDate,
-            tipeTransaksi: utangType as "UTANG_BARU" | "UTANG_DIBAYAR",
-            kategori: row.utangKategori || "BAHAN_BAKU",
-            nominal: Number(nominal),
-            keterangan: row.keterangan || "",
-            accountId, // <-- langsung dari input user
-          };
-
-          console.log("📤 Akan mengirim utang ke backend:", utangData);
-          const result = await utangAPI.create(utangData);
-          console.log("✅ Hasil dari backend:", result);
-          savedResults.push(result);
-          console.log("✅ UTANG SAVED SUCCESSFULLY:", result);
-        }
-      }
-
-      // ✅ CRITICAL: Handle regular entries ONLY if there are any
-      if (regularEntries.length > 0) {
-        console.log("📝 PROCESSING REGULAR ENTRIES:", regularEntries);
-
-        const entriesToSave: CreateEntriHarianRequest[] = regularEntries.map(
-          (row) => {
-            const account = getSelectedAccount(row.accountId)!;
-
-            let nilai: number;
-            if (divisionType === "GENERAL") {
-              const value =
-                account.valueType === "NOMINAL" ? row.nominal : row.kuantitas;
-              nilai = Number.parseFloat(value);
-            } else {
-              switch (divisionType) {
-                case "PEMASARAN":
-                  // Jika ini sales entry, ambil dari realisasi/target
-                  if (row.salesUserId) {
-                    nilai = Number.parseFloat(
-                      row.realisasiAmount || row.targetAmount || "0"
-                    );
-                  } else {
-                    // Jika ini jurnal akuntansi biasa, ambil dari nominal
-                    nilai = Number.parseFloat(row.nominal || "0");
-                  }
-                  break;
-                case "KEUANGAN":
-                  nilai = Number.parseFloat(row.nominal || "0");
-                  break;
-                case "PERSEDIAAN_BAHAN_BAKU":
-                  nilai = Number.parseFloat(row.kuantitas || "0");
-                  break;
-                case "GUDANG":
-                  nilai = Number.parseFloat(row.pemakaianAmount || "0");
-                  break;
-                case "HRD":
-                  nilai = row.attendanceStatus === "HADIR" ? 1 : 0;
-                  break;
-                default:
-                  nilai = 0;
-              }
-            }
-
-            let entryNilai = Number.parseFloat(row.nominal) || 0;
-            let entrySaldoAkhir: number | undefined = undefined;
-
-            if (row.transactionType === "SALDO_AKHIR") {
-              entrySaldoAkhir = entryNilai;
-              entryNilai = 0;
-            }
-
-            const entry: CreateEntriHarianRequest = {
-              accountId: Number(row.accountId),
-              tanggal: selectedDate,
-              nilai: nilai,
-              description: row.keterangan || "",
-
-              ...(row.transactionType && {
-                transactionType: row.transactionType,
-              }),
-              ...(row.targetAmount && {
-                targetAmount: Number.parseFloat(row.targetAmount),
-              }),
-              ...(row.realisasiAmount && {
-                realisasiAmount: Number.parseFloat(row.realisasiAmount),
-              }),
-              ...(row.pemakaianAmount && {
-                pemakaianAmount: Number.parseFloat(row.pemakaianAmount),
-              }),
-              ...(row.stokAkhir && {
-                stokAkhir: Number.parseFloat(row.stokAkhir),
-              }),
-              ...(row.attendanceStatus && {
-                attendanceStatus: row.attendanceStatus,
-              }),
-              ...(row.absentCount && {
-                absentCount: Number.parseFloat(row.absentCount),
-              }),
-              ...(row.shift && { shift: row.shift }),
-              ...(entrySaldoAkhir && {
-                saldoAkhir: entrySaldoAkhir,
-              }),
-            };
-
-            return entry;
-          }
+      console.log(
+        `🚀 SAVING ${validEntries.length} NEW ENTRIES:`,
+        validEntries
+      );
+      // ✅ ALWAYS CREATE NEW ENTRIES
+      if (selectedTransactionType === "KAS") {
+        // Hanya kirim entry yang punya field nilai (bukan baseEntry kosong)
+        const kasEntries = validEntries.filter(
+          (e) => typeof e.nilai !== "undefined"
         );
-
-        console.log(
-          "📤 SENDING REGULAR ENTRIES TO /api/v1/entri-harian/batch:",
-          entriesToSave
-        );
-
-        try {
-          const regularResult = await saveEntriHarianBatch(entriesToSave);
-          savedResults.push(...regularResult);
-          console.log("✅ REGULAR ENTRIES SAVED SUCCESSFULLY:", regularResult);
-        } catch (regularError) {
-          console.error("❌ REGULAR ENTRIES SAVE ERROR:", regularError);
-          throw regularError; // Re-throw to be caught by main catch block
+        await toastPromise.save(saveEntriHarianBatch(kasEntries), "jurnal kas");
+      } else if (selectedTransactionType === "PIUTANG") {
+        // Save each piutang entry individually
+        for (const entry of validEntries) {
+          await piutangAPI.create(entry as any);
         }
+        toastSuccess.custom("Data piutang berhasil disimpan");
+      } else if (selectedTransactionType === "UTANG") {
+        // Save each utang entry individually
+        for (const entry of validEntries) {
+          await utangAPI.create(entry as any);
+        }
+        toastSuccess.custom("Data utang berhasil disimpan");
       }
-
-      // ✅ NEW: Handle pemasaran sales entries separately
-      if (pemasaranSalesEntries.length > 0 && divisionType === "PEMASARAN") {
-        console.log(
-          " PROCESSING PEMASARAN SALES ENTRIES:",
-          pemasaranSalesEntries
-        );
-
-        // ✅ NEW: Convert pemasaran entries to regular entri harian format
-        const pemasaranEntriesToSave: CreateEntriHarianRequest[] =
-          pemasaranSalesEntries.map((row) => {
-            const account = getSelectedAccount(row.accountId)!;
-
-            return {
-              accountId: Number(row.accountId),
-              tanggal: selectedDate,
-              nilai: Number.parseFloat(
-                row.realisasiAmount || row.targetAmount || "0"
-              ),
-              description: row.keteranganKendala || "",
-              // ✅ ADD: Pemasaran-specific fields
-              targetAmount: row.targetAmount
-                ? Number.parseFloat(row.targetAmount)
-                : undefined,
-              realisasiAmount: row.realisasiAmount
-                ? Number.parseFloat(row.realisasiAmount)
-                : undefined,
-              // ✅ ADD: Sales user info
-              salesUserId: row.salesUserId
-                ? Number(row.salesUserId)
-                : undefined,
-              returPenjualan: row.returPenjualan
-                ? Number.parseFloat(row.returPenjualan)
-                : undefined,
-              keteranganKendala: row.keteranganKendala || undefined,
-            };
-          });
-
-        console.log(
-          "📤 SENDING PEMASARAN ENTRIES TO /api/v1/entri-harian/batch:",
-          pemasaranEntriesToSave
-        );
-
-        try {
-          const pemasaranResult = await saveEntriHarianBatch(
-            pemasaranEntriesToSave
-          );
-          savedResults.push(...pemasaranResult);
-          console.log(
-            "✅ PEMASARAN ENTRIES SAVED SUCCESSFULLY:",
-            pemasaranResult
-          );
-        } catch (pemasaranError) {
-          console.error("❌ PEMASARAN ENTRIES SAVE ERROR:", pemasaranError);
-          throw pemasaranError; // Re-throw to be caught by main catch block
-        }
-      }
-
-      // ✅ NEW: Handle produksi entries separately
-      if (produksiEntries.length > 0 && divisionType === "PRODUKSI") {
-        console.log(" PROCESSING PRODUKSI ENTRIES:", produksiEntries);
-
-        for (const row of produksiEntries) {
-          const produksiData: CreateLaporanProduksiRequest = {
-            tanggalLaporan: selectedDate,
-            accountId: Number(row.accountId),
-            hasilProduksi: row.hasilProduksi
-              ? Number(row.hasilProduksi)
-              : undefined,
-            barangGagal: row.barangGagal ? Number(row.barangGagal) : undefined,
-            stockBarangJadi: row.stockBarangJadi
-              ? Number(row.stockBarangJadi)
-              : undefined,
-            hpBarangJadi: row.hpBarangJadi
-              ? Number(row.hpBarangJadi)
-              : undefined,
-            keteranganKendala: row.keteranganKendala || undefined,
-          };
-
-          console.log(
-            "📤 Akan mengirim laporan produksi ke backend:",
-            produksiData
-          );
-          const result = await saveLaporanProduksi(produksiData);
-          console.log("✅ Hasil dari backend:", result);
-          savedResults.push(result);
-          console.log("✅ LAPORAN PRODUKSI SAVED SUCCESSFULLY:", result);
-        }
-      }
-
-      // ✅ NEW: Handle gudang entries separately
-      if (
-        gudangEntries.length > 0 &&
-        divisionType === "PERSEDIAAN_BAHAN_BAKU"
-      ) {
-        console.log("📦 PROCESSING GUDANG ENTRIES:", gudangEntries);
-
-        for (const row of gudangEntries) {
-          const gudangData: CreateLaporanGudangRequest = {
-            tanggalLaporan: selectedDate,
-            accountId: Number(row.accountId),
-            // ✅ CRITICAL: Kirim undefined hanya jika benar-benar kosong, kirim 0 jika user input 0
-            stokAwal:
-              row.barangMasuk === "" || row.barangMasuk === undefined
-                ? undefined // Kosong = auto-calculate
-                : Number(row.barangMasuk), // Ada input = gunakan input user (bisa 0)
-            pemakaian: row.pemakaian ? Number(row.pemakaian) : undefined,
-            stokAkhir: row.stokAkhir ? Number(row.stokAkhir) : undefined,
-            kondisiGudang: row.keteranganGudang || undefined,
-          };
-
-          console.log(
-            "📤 Akan mengirim laporan gudang ke backend:",
-            gudangData
-          );
-          const result = await saveLaporanGudang(gudangData);
-          console.log("✅ Hasil dari backend:", result);
-          savedResults.push(result);
-          console.log("✅ LAPORAN GUDANG SAVED SUCCESSFULLY:", result);
-        }
-      }
-
-      // ✅ NEW: Handle HRD entries separately
-      if (hrdEntries.length > 0 && divisionType === "HRD") {
-        console.log("👥 PROCESSING HRD ENTRIES:", hrdEntries);
-
-        for (const row of hrdEntries) {
-          const hrdData: CreateEntriHarianRequest = {
-            accountId: Number(row.accountId),
-            tanggal: selectedDate,
-            nilai: row.attendanceStatus === "HADIR" ? 1 : 0,
-            description: row.keteranganKendala || "",
-            attendanceStatus: row.attendanceStatus,
-            absentCount: row.absentCount ? Number(row.absentCount) : undefined,
-            shift: row.shift,
-          };
-
-          console.log("📤 Akan mengirim laporan HRD ke backend:", hrdData);
-          const result = await saveEntriHarianBatch([hrdData]);
-          console.log("✅ Hasil dari backend:", result);
-          savedResults.push(...result);
-          console.log("✅ LAPORAN HRD SAVED SUCCESSFULLY:", result);
-        }
-      }
-
-      // ✅ SUCCESS HANDLING: Show success message and reload data
-      if (savedResults.length > 0) {
-        console.log("✅ ALL ENTRIES SAVED SUCCESSFULLY:", savedResults);
-
-        const totalSaved = savedResults.length;
-        const pemasaranCount = pemasaranSalesEntries.length;
-        const piutangCount = piutangEntries.length;
-        const utangCount = utangEntries.length;
-        const regularCount = regularEntries.length;
-        const hrdCount = hrdEntries.length; // ✅ ADD: HRD count
-        const produksiCount = produksiEntries.length;
-        const gudangCount = gudangEntries.length;
-
-        let successMessage = `Berhasil menyimpan ${totalSaved} entri`;
-        if (pemasaranCount > 0) {
-          successMessage += ` (${pemasaranCount} laporan sales`;
-        }
-        if (piutangCount > 0) {
-          successMessage +=
-            pemasaranCount > 0
-              ? `, ${piutangCount} piutang`
-              : ` (${piutangCount} piutang`;
-        }
-        if (utangCount > 0) {
-          successMessage +=
-            pemasaranCount > 0 || piutangCount > 0
-              ? `, ${utangCount} utang`
-              : ` (${utangCount} utang`;
-        }
-        if (regularCount > 0) {
-          successMessage +=
-            pemasaranCount > 0 || piutangCount > 0 || utangCount > 0
-              ? `, ${regularCount} reguler`
-              : ` (${regularCount} reguler`;
-        }
-        if (hrdCount > 0) {
-          // ✅ ADD: HRD success message
-          successMessage +=
-            pemasaranCount > 0 ||
-            piutangCount > 0 ||
-            utangCount > 0 ||
-            regularCount > 0
-              ? `, ${hrdCount} HRD`
-              : ` (${hrdCount} HRD`;
-        }
-        if (produksiCount > 0) {
-          successMessage +=
-            pemasaranCount > 0 ||
-            piutangCount > 0 ||
-            utangCount > 0 ||
-            regularCount > 0 ||
-            hrdCount > 0
-              ? `, ${produksiCount} produksi`
-              : ` (${produksiCount} produksi`;
-        }
-        if (gudangCount > 0) {
-          successMessage +=
-            pemasaranCount > 0 ||
-            piutangCount > 0 ||
-            utangCount > 0 ||
-            regularCount > 0 ||
-            hrdCount > 0 ||
-            produksiCount > 0
-              ? `, ${gudangCount} gudang`
-              : ` (${gudangCount} gudang`;
-        }
-        if (
-          pemasaranCount > 0 ||
-          piutangCount > 0 ||
-          utangCount > 0 ||
-          regularCount > 0 ||
-          hrdCount > 0 ||
-          produksiCount > 0 ||
-          gudangCount > 0
-        ) {
-          successMessage += ")";
-        }
-
-        toastSuccess.custom(successMessage);
-
-        // Clear form
-        setJournalRows([
-          {
-            id: "1",
-            accountId: "",
-            keterangan: "",
-            nominal: "",
-            kuantitas: "",
-            piutangType: undefined,
-            transactionType: undefined,
-            targetAmount: "",
-            realisasiAmount: "",
-            pemakaianAmount: "",
-            stokAkhir: "",
-            saldoAkhir: "",
-            attendanceStatus: undefined,
-            absentCount: "",
-            shift: undefined,
-            utangType: undefined,
-            utangKategori: undefined,
-            salesUserId: "",
-            returPenjualan: "",
-            keteranganKendala: "",
-            hasilProduksi: "",
-            barangGagal: "",
-            stockBarangJadi: "",
-            hpBarangJadi: "",
-            // ✅ NEW: Initialize gudang fields
-            barangMasuk: "",
-            pemakaian: "",
-            keteranganGudang: "",
-          },
-        ]);
-
-        // Reload data to show updated entries
-        await loadData();
-      }
-
-      // Rest of success handling...
-    } catch (err) {
-      console.error("❌ SAVE JOURNAL ENTRIES ERROR:", err);
-
-      // Handle different types of errors
-      if (err instanceof Error) {
-        if (err.message.includes("VALIDATION_ERROR")) {
-          toastError.validation(err.message.replace("VALIDATION_ERROR: ", ""));
-        } else if (err.message.includes("NETWORK_ERROR")) {
-          toastError.custom(
-            "Gagal terhubung ke server. Periksa koneksi internet Anda."
-          );
-        } else {
-          toastError.custom(
-            err.message || "Terjadi kesalahan saat menyimpan entri"
-          );
-        }
-      } else {
-        toastError.custom("Terjadi kesalahan yang tidak diketahui");
-      }
-    } finally {
-      setLoading(false);
+      console.log("✅ ALL NEW ENTRIES SAVED SUCCESSFULLY");
+      // Reset form dan reload data
+      setJournalRows([
+        {
+          id: Date.now().toString(),
+          accountId: "",
+          keterangan: "",
+          nominal: "",
+          kuantitas: "",
+          piutangType: undefined,
+          transactionType: undefined,
+          targetAmount: "",
+          realisasiAmount: "",
+          pemakaianAmount: "",
+          stokAkhir: "",
+          saldoAkhir: "",
+          attendanceStatus: undefined,
+          absentCount: "",
+          shift: undefined,
+          utangType: undefined,
+          utangKategori: undefined,
+          salesUserId: "",
+          returPenjualan: "",
+          keteranganKendala: "",
+          hasilProduksi: "",
+          barangGagal: "",
+          stockBarangJadi: "",
+          hpBarangJadi: "",
+          barangMasuk: "",
+          pemakaian: "",
+          keteranganGudang: "",
+        },
+      ]);
+      loadData();
+    } catch (error) {
+      console.error("❌ SAVE ERROR:", error);
+      toastError.custom("Gagal menyimpan data");
     }
   };
 
   const removeExistingEntry = async (id: string) => {
     if (!confirm("Hapus entri ini?")) return;
 
+    let entityType = "entri jurnal";
     try {
-      await toastPromise.delete(deleteEntriHarian(id), "entri jurnal");
+      let deletePromise;
+      // ✅ FIXED: Deteksi jenis entry berdasarkan ID prefix
+      if (id.startsWith("piutang-")) {
+        // Extract numeric ID untuk piutang
+        const numericId = parseInt(id.replace("piutang-", ""));
+        console.log("🗑️ Deleting PIUTANG with ID:", numericId);
+        deletePromise = piutangAPI.delete(numericId);
+        entityType = "piutang";
+      } else if (id.startsWith("utang-")) {
+        // Extract numeric ID untuk utang
+        const numericId = parseInt(id.replace("utang-", ""));
+        console.log("🗑️ Deleting UTANG with ID:", numericId);
+        deletePromise = utangAPI.delete(numericId);
+        entityType = "utang";
+      } else if (id.startsWith("sales-")) {
+        // Extract numeric ID untuk laporan penjualan sales
+        const numericId = parseInt(id.replace("sales-", ""));
+        console.log("🗑️ Deleting SALES REPORT with ID:", numericId);
+        deletePromise = deleteLaporanPenjualanSales(numericId);
+        entityType = "laporan penjualan sales";
+      } else if (id.startsWith("produksi-")) {
+        // Extract numeric ID untuk laporan produksi
+        const numericId = parseInt(id.replace("produksi-", ""));
+        console.log("🗑️ Deleting PRODUKSI REPORT with ID:", numericId);
+        deletePromise = deleteLaporanProduksi(numericId);
+        entityType = "laporan produksi";
+      } else if (id.startsWith("gudang-")) {
+        // Extract numeric ID untuk laporan gudang
+        const numericId = parseInt(id.replace("gudang-", ""));
+        console.log("🗑️ Deleting GUDANG REPORT with ID:", numericId);
+        deletePromise = deleteLaporanGudang(numericId);
+        entityType = "laporan gudang";
+      } else {
+        // Regular entri harian
+        console.log("🗑️ Deleting ENTRI HARIAN with ID:", id);
+        deletePromise = deleteEntriHarian(id);
+        entityType = "entri jurnal";
+      }
 
+      await toastPromise.delete(deletePromise, entityType);
+      console.log(`✅ Successfully deleted ${entityType} with ID:`, id);
       loadData();
     } catch (error) {
-      toastError.custom("Gagal menghapus entri");
+      console.error("❌ Delete error:", error);
+      toastError.custom(`Gagal menghapus ${entityType}`);
     }
   };
 
@@ -1838,61 +1309,67 @@ export default function JournalPage() {
                     <SelectContent>
                       <SelectItem value="PENERIMAAN">
                         <span className="flex items-center gap-2">
-                          <span className="text-green-600">⬆️</span> Penerimaan
+                          <ArrowUpCircle className="h-4 w-4 text-green-600" />
+                          Penerimaan
                         </span>
                       </SelectItem>
                       <SelectItem value="PENGELUARAN">
                         <span className="flex items-center gap-2">
-                          <span className="text-red-600">⬇️</span> Pengeluaran
+                          <ArrowDownCircle className="h-4 w-4 text-red-600" />
+                          Pengeluaran
                         </span>
                       </SelectItem>
                       <SelectItem value="SALDO_AKHIR">
                         <span className="flex items-center gap-2">
-                          <span className="text-purple-600">💰</span> Saldo
-                          Akhir
+                          <DollarSign className="h-4 w-4 text-blue-600" />
+                          Saldo Akhir
                         </span>
                       </SelectItem>
-                      {/* Tambahkan tipe piutang */}
                       <SelectItem value="PIUTANG_BARU">
                         <span className="flex items-center gap-2">
-                          <span className="text-blue-600">👤</span> Piutang Baru
+                          💰 Piutang Baru
                         </span>
                       </SelectItem>
                       <SelectItem value="PIUTANG_TERTAGIH">
                         <span className="flex items-center gap-2">
-                          <span className="text-emerald-600">👤</span> Piutang
-                          Tertagih
+                          💰 Piutang Tertagih
                         </span>
                       </SelectItem>
                       <SelectItem value="PIUTANG_MACET">
                         <span className="flex items-center gap-2">
-                          <span className="text-orange-600">👤</span> Piutang
-                          Macet
+                          💰 Piutang Macet
                         </span>
                       </SelectItem>
-                      {/* ✅ NEW: Tambahkan tipe utang */}
-                      <SelectItem value="UTANG_BARU">
-                        <span className="flex items-center gap-2">
-                          <span className="text-red-600">💳</span> Utang Baru
-                        </span>
-                      </SelectItem>
+                      <SelectItem value="UTANG_BARU">Utang Baru</SelectItem>
                       <SelectItem value="UTANG_DIBAYAR">
-                        <span className="flex items-center gap-2">
-                          <span className="text-green-600">💳</span> Utang
-                          Dibayar
-                        </span>
+                        Utang Dibayar
                       </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                {/* ✅ FIXED: Conditional input based on transaction type */}
                 <div>
-                  <Label>Nominal</Label>
+                  <Label>
+                    {row.transactionType === "SALDO_AKHIR"
+                      ? "Saldo Akhir"
+                      : "Nominal"}
+                  </Label>
                   <Input
                     type="number"
                     placeholder="Rp 0"
-                    value={row.nominal}
+                    value={
+                      row.transactionType === "SALDO_AKHIR"
+                        ? row.saldoAkhir || ""
+                        : row.nominal || ""
+                    }
                     onChange={(e) =>
-                      updateRow(row.id, "nominal", e.target.value)
+                      updateRow(
+                        row.id,
+                        row.transactionType === "SALDO_AKHIR"
+                          ? "saldoAkhir"
+                          : "nominal",
+                        e.target.value
+                      )
                     }
                     className="mt-1"
                     min="0"
@@ -1902,12 +1379,18 @@ export default function JournalPage() {
                 <div>
                   <Label>Nilai Tampil</Label>
                   <div className="mt-1 p-2 bg-white rounded border text-sm">
-                    {row.nominal
-                      ? Number(row.nominal).toLocaleString("id-ID", {
-                          style: "currency",
-                          currency: "IDR",
-                        })
-                      : "0"}
+                    {(() => {
+                      const value =
+                        row.transactionType === "SALDO_AKHIR"
+                          ? row.saldoAkhir
+                          : row.nominal;
+                      return value
+                        ? Number(value).toLocaleString("id-ID", {
+                            style: "currency",
+                            currency: "IDR",
+                          })
+                        : "0";
+                    })()}
                   </div>
                 </div>
               </div>
@@ -2357,15 +1840,15 @@ export default function JournalPage() {
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label>Akun</Label>
+              <Label>Chart of Account (COA)</Label>
               <Select
                 value={journalRows[0].accountId}
                 onValueChange={(value) =>
                   updateRow(journalRows[0].id, "accountId", value)
                 }
               >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Pilih akun" />
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih COA" />
                 </SelectTrigger>
                 <SelectContent>
                   {accounts.map((account) => (
@@ -2384,34 +1867,51 @@ export default function JournalPage() {
                   updateRow(journalRows[0].id, "transactionType", value)
                 }
               >
-                <SelectTrigger className="mt-1">
+                <SelectTrigger>
                   <SelectValue placeholder="Pilih jenis transaksi" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="PENERIMAAN">Penerimaan</SelectItem>
-                  <SelectItem value="PENGELUARAN">Pengeluaran</SelectItem>
-                  <SelectItem value="SALDO_AKHIR">Saldo Akhir</SelectItem>
+                  <SelectItem value="PENERIMAAN">💰 Penerimaan</SelectItem>
+                  <SelectItem value="PENGELUARAN">💸 Pengeluaran</SelectItem>
+                  <SelectItem value="SALDO_AKHIR">📊 Saldo Akhir</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Nominal</Label>
-              <Input
-                type="number"
-                placeholder="Rp 0"
-                value={journalRows[0].nominal}
-                onChange={(e) =>
-                  updateRow(journalRows[0].id, "nominal", e.target.value)
-                }
-                className="mt-1"
-                min="0"
-                step="1000"
-              />
-            </div>
+            {journalRows[0].transactionType === "SALDO_AKHIR" ? (
+              <div>
+                <Label>Saldo Akhir</Label>
+                <Input
+                  type="number"
+                  placeholder="Rp 0"
+                  value={journalRows[0].saldoAkhir || ""}
+                  onChange={(e) =>
+                    updateRow(journalRows[0].id, "saldoAkhir", e.target.value)
+                  }
+                  className="mt-1"
+                  min="0"
+                  step="1000"
+                />
+              </div>
+            ) : (
+              <div>
+                <Label>Nominal</Label>
+                <Input
+                  type="number"
+                  placeholder="Rp 0"
+                  value={journalRows[0].nominal}
+                  onChange={(e) =>
+                    updateRow(journalRows[0].id, "nominal", e.target.value)
+                  }
+                  className="mt-1"
+                  min="0"
+                  step="1000"
+                />
+              </div>
+            )}
             <div>
               <Label>Keterangan</Label>
               <Input
-                placeholder="Deskripsi"
+                placeholder="Deskripsi transaksi"
                 value={journalRows[0].keterangan}
                 onChange={(e) =>
                   updateRow(journalRows[0].id, "keterangan", e.target.value)
@@ -2425,26 +1925,22 @@ export default function JournalPage() {
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label>Akun Piutang</Label>
+              <Label>Chart of Account (COA)</Label>
               <Select
                 value={journalRows[0].accountId}
                 onValueChange={(value) =>
                   updateRow(journalRows[0].id, "accountId", value)
                 }
               >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Pilih akun piutang" />
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih COA" />
                 </SelectTrigger>
                 <SelectContent>
-                  {accounts
-                    .filter((account) =>
-                      account.accountName.toLowerCase().includes("piutang")
-                    )
-                    .map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {getAccountDisplay(account.id)}
-                      </SelectItem>
-                    ))}
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {getAccountDisplay(account.id)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -2456,13 +1952,17 @@ export default function JournalPage() {
                   updateRow(journalRows[0].id, "transactionType", value)
                 }
               >
-                <SelectTrigger className="mt-1">
+                <SelectTrigger>
                   <SelectValue placeholder="Pilih tipe piutang" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="PIUTANG_BARU">Baru</SelectItem>
-                  <SelectItem value="PIUTANG_TERTAGIH">Tertagih</SelectItem>
-                  <SelectItem value="PIUTANG_MACET">Macet</SelectItem>
+                  <SelectItem value="PIUTANG_BARU">🆕 Piutang Baru</SelectItem>
+                  <SelectItem value="PIUTANG_TERTAGIH">
+                    💰 Piutang Tertagih
+                  </SelectItem>
+                  <SelectItem value="PIUTANG_MACET">
+                    ⚠️ Piutang Macet
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2474,11 +1974,11 @@ export default function JournalPage() {
                   updateRow(journalRows[0].id, "kategori", value)
                 }
               >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Pilih kategori piutang" />
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih kategori" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="KARYAWAN">👤 Karyawan</SelectItem>
+                  <SelectItem value="KARYAWAN">👥 Karyawan</SelectItem>
                   <SelectItem value="TOKO">🏪 Toko</SelectItem>
                   <SelectItem value="BAHAN_BAKU">📦 Bahan Baku</SelectItem>
                 </SelectContent>
@@ -2515,26 +2015,22 @@ export default function JournalPage() {
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label>Akun Utang</Label>
+              <Label>Chart of Account (COA)</Label>
               <Select
                 value={journalRows[0].accountId}
                 onValueChange={(value) =>
                   updateRow(journalRows[0].id, "accountId", value)
                 }
               >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Pilih akun utang" />
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih COA" />
                 </SelectTrigger>
                 <SelectContent>
-                  {accounts
-                    .filter((account) =>
-                      account.accountName.toLowerCase().includes("utang")
-                    )
-                    .map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {getAccountDisplay(account.id)}
-                      </SelectItem>
-                    ))}
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {getAccountDisplay(account.id)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -2546,12 +2042,14 @@ export default function JournalPage() {
                   updateRow(journalRows[0].id, "transactionType", value)
                 }
               >
-                <SelectTrigger className="mt-1">
+                <SelectTrigger>
                   <SelectValue placeholder="Pilih tipe utang" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="UTANG_BARU">Baru</SelectItem>
-                  <SelectItem value="UTANG_DIBAYAR">Dibayar</SelectItem>
+                  <SelectItem value="UTANG_BARU">🆕 Utang Baru</SelectItem>
+                  <SelectItem value="UTANG_DIBAYAR">
+                    💰 Utang Dibayar
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2563,8 +2061,8 @@ export default function JournalPage() {
                   updateRow(journalRows[0].id, "utangKategori", value)
                 }
               >
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Pilih kategori utang" />
+                <SelectTrigger>
+                  <SelectValue placeholder="Pilih kategori" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="BAHAN_BAKU">📦 Bahan Baku</SelectItem>
@@ -2791,6 +2289,7 @@ export default function JournalPage() {
                   <TableHead>Akun</TableHead>
                   <TableHead>Keterangan</TableHead>
                   <TableHead>Jenis Transaksi</TableHead>
+                  <TableHead>Kategori</TableHead>
                   <TableHead>Nilai</TableHead>
                   <TableHead>Waktu</TableHead>
                   <TableHead>Aksi</TableHead>
@@ -2801,6 +2300,18 @@ export default function JournalPage() {
                   const account = accounts.find(
                     (a) => a.id === entry.accountId
                   );
+
+                  // ✅ Debug logging for table display
+                  if (!account && entry.accountId) {
+                    console.log("❌ ACCOUNT NOT FOUND IN TABLE:", {
+                      entryId: entry.id,
+                      accountId: entry.accountId,
+                      availableAccounts: accounts.map((a) => ({
+                        id: a.id,
+                        name: a.accountName,
+                      })),
+                    });
+                  }
                   return (
                     <TableRow key={entry.id}>
                       <TableCell>{index + 1}</TableCell>
@@ -2809,7 +2320,8 @@ export default function JournalPage() {
                           {account?.accountCode || "N/A"}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {account?.accountName || "Akun tidak ditemukan"}
+                          {account?.accountName ||
+                            `⚠️ Account ID ${entry.accountId} tidak ditemukan`}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -2823,14 +2335,26 @@ export default function JournalPage() {
                             "REGULAR"}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        {/* ✅ Display kategori for utang/piutang entries */}
+                        {(entry as any).kategori ? (
+                          <Badge variant="secondary" className="text-xs">
+                            {(entry as any).kategori}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400 text-sm">-</span>
+                        )}
+                      </TableCell>
                       <TableCell className="font-medium">
                         {/* ✅ FIXED: Untuk HRD, tampilkan absentCount bukan nilai */}
                         {divisionType === "HRD"
                           ? `${(entry as any).absentCount || 0} orang`
                           : account?.valueType === "NOMINAL" ||
                             account?.id === "SALES"
-                          ? formatCurrency(entry.nilai)
-                          : `${entry.nilai.toLocaleString("id-ID")} unit`}
+                          ? formatCurrency(getDisplayValue(entry)) // ✅ Use getDisplayValue to handle SALDO_AKHIR properly
+                          : `${getDisplayValue(entry).toLocaleString(
+                              "id-ID"
+                            )} unit`}
                       </TableCell>
                       <TableCell>
                         {new Date(entry.createdAt).toLocaleTimeString("id-ID", {
@@ -3061,7 +2585,13 @@ export default function JournalPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
               <DivisionIcon className="h-8 w-8 text-gray-600" />
-              Jurnal {user?.division?.name}
+              Jurnal{" "}
+              {user?.division?.name && user.division.name.includes("BLENDING")
+                ? user.division.name
+                    .replace(/ ?BLENDING ?/g, " ")
+                    .replace(/  +/g, " ")
+                    .replace(/^ | $/g, "")
+                : user?.division?.name}
             </h1>
             <p className="text-gray-600 mt-2">
               Pilih akun, jenis transaksi, dan masukkan nominal.{" "}
@@ -3164,342 +2694,347 @@ export default function JournalPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {/* Render form sesuai tab yang dipilih */}
-                {selectedTransactionType === "KAS" && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Pilih Akun Kas
-                      </label>
-                      <Select
-                        value={journalRows[0].accountId}
-                        onValueChange={(value) =>
-                          updateRow(journalRows[0].id, "accountId", value)
-                        }
+                {/* Render form sesuai tab yang dipilih, MULTI ROW */}
+                {["KAS", "PIUTANG", "UTANG"].includes(
+                  selectedTransactionType
+                ) && (
+                  <>
+                    {journalRows.map((row, idx) => (
+                      <div
+                        key={row.id}
+                        className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 border-b pb-4"
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih akun kas..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {accounts
-                            .filter((acc) =>
-                              acc.accountName.toLowerCase().includes("kas")
-                            )
-                            .map((account) => (
-                              <SelectItem key={account.id} value={account.id}>
-                                {getAccountDisplay(account.id)}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Jenis Transaksi
-                      </label>
-                      <Select
-                        value={journalRows[0].transactionType || ""}
-                        onValueChange={(value) =>
-                          updateRow(journalRows[0].id, "transactionType", value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih jenis transaksi..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="PENERIMAAN">
-                            💰 Penerimaan Kas
-                          </SelectItem>
-                          <SelectItem value="PENGELUARAN">
-                            💸 Pengeluaran Kas
-                          </SelectItem>
-                          <SelectItem value="SALDO_AKHIR">
-                            💵 Saldo Akhir Kas
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        {journalRows[0].transactionType === "SALDO_AKHIR"
-                          ? "Saldo Akhir"
-                          : "Nominal"}
-                      </label>
-                      <Input
-                        type="number"
-                        placeholder="Rp 0"
-                        value={
-                          journalRows[0].transactionType === "SALDO_AKHIR"
-                            ? journalRows[0].saldoAkhir
-                            : journalRows[0].nominal
-                        }
-                        onChange={(e) =>
-                          updateRow(
-                            journalRows[0].id,
-                            journalRows[0].transactionType === "SALDO_AKHIR"
-                              ? "saldoAkhir"
-                              : "nominal",
-                            e.target.value
-                          )
-                        }
-                        className="mt-1"
-                        min="0"
-                        step="1000"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Keterangan
-                      </label>
-                      <Input
-                        placeholder="Deskripsi transaksi kas"
-                        value={journalRows[0].keterangan}
-                        onChange={(e) =>
-                          updateRow(
-                            journalRows[0].id,
-                            "keterangan",
-                            e.target.value
-                          )
-                        }
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
+                        {/* KAS */}
+                        {selectedTransactionType === "KAS" && (
+                          <>
+                            <div>
+                              <Label>Akun Kas</Label>
+                              <Select
+                                value={row.accountId}
+                                onValueChange={(value) =>
+                                  updateRow(row.id, "accountId", value)
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Pilih akun kas" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {accounts.map((account) => (
+                                    <SelectItem
+                                      key={account.id}
+                                      value={account.id}
+                                    >
+                                      {getAccountDisplay(account.id)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Jenis Transaksi</Label>
+                              <Select
+                                value={row.transactionType || ""}
+                                onValueChange={(value) =>
+                                  updateRow(row.id, "transactionType", value)
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Pilih jenis transaksi" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="PENERIMAAN">
+                                    💰 Penerimaan
+                                  </SelectItem>
+                                  <SelectItem value="PENGELUARAN">
+                                    💸 Pengeluaran
+                                  </SelectItem>
+                                  <SelectItem value="SALDO_AKHIR">
+                                    📊 Saldo Akhir
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            {row.transactionType === "SALDO_AKHIR" ? (
+                              <div>
+                                <Label>Saldo Akhir</Label>
+                                <Input
+                                  type="number"
+                                  placeholder="Rp 0"
+                                  value={row.saldoAkhir || ""}
+                                  onChange={(e) =>
+                                    updateRow(
+                                      row.id,
+                                      "saldoAkhir",
+                                      e.target.value
+                                    )
+                                  }
+                                  className="mt-1"
+                                  min="0"
+                                  step="1000"
+                                />
+                              </div>
+                            ) : (
+                              <div>
+                                <Label>Nominal</Label>
+                                <Input
+                                  type="number"
+                                  placeholder="Rp 0"
+                                  value={row.nominal}
+                                  onChange={(e) =>
+                                    updateRow(row.id, "nominal", e.target.value)
+                                  }
+                                  className="mt-1"
+                                  min="0"
+                                  step="1000"
+                                />
+                              </div>
+                            )}
+                            <div>
+                              <Label>Keterangan</Label>
+                              <Input
+                                placeholder="Deskripsi transaksi"
+                                value={row.keterangan}
+                                onChange={(e) =>
+                                  updateRow(
+                                    row.id,
+                                    "keterangan",
+                                    e.target.value
+                                  )
+                                }
+                                className="mt-1"
+                              />
+                            </div>
+                          </>
+                        )}
+                        {/* PIUTANG */}
+                        {selectedTransactionType === "PIUTANG" && (
+                          <>
+                            <div>
+                              <Label>Akun Piutang</Label>
+                              <Select
+                                value={row.accountId}
+                                onValueChange={(value) =>
+                                  updateRow(row.id, "accountId", value)
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Pilih akun piutang" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {accounts.map((account) => (
+                                    <SelectItem
+                                      key={account.id}
+                                      value={account.id}
+                                    >
+                                      {getAccountDisplay(account.id)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Tipe Piutang</Label>
+                              <Select
+                                value={row.transactionType || ""}
+                                onValueChange={(value) =>
+                                  updateRow(row.id, "transactionType", value)
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Pilih tipe piutang" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="PIUTANG_BARU">
+                                    🆕 Piutang Baru
+                                  </SelectItem>
+                                  <SelectItem value="PIUTANG_TERTAGIH">
+                                    💰 Piutang Tertagih
+                                  </SelectItem>
+                                  <SelectItem value="PIUTANG_MACET">
+                                    ⚠️ Piutang Macet
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Kategori Piutang</Label>
+                              <Select
+                                value={row.kategori || ""}
+                                onValueChange={(value) =>
+                                  updateRow(row.id, "kategori", value)
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Pilih kategori" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="KARYAWAN">
+                                    👥 Karyawan
+                                  </SelectItem>
+                                  <SelectItem value="TOKO">🏪 Toko</SelectItem>
+                                  <SelectItem value="BAHAN_BAKU">
+                                    📦 Bahan Baku
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Nominal</Label>
+                              <Input
+                                type="number"
+                                placeholder="Rp 0"
+                                value={row.nominal}
+                                onChange={(e) =>
+                                  updateRow(row.id, "nominal", e.target.value)
+                                }
+                                className="mt-1"
+                                min="0"
+                                step="1000"
+                              />
+                            </div>
+                            <div className="md:col-span-2">
+                              <Label>Keterangan</Label>
+                              <Input
+                                placeholder="Deskripsi transaksi piutang"
+                                value={row.keterangan}
+                                onChange={(e) =>
+                                  updateRow(
+                                    row.id,
+                                    "keterangan",
+                                    e.target.value
+                                  )
+                                }
+                                className="mt-1"
+                              />
+                            </div>
+                          </>
+                        )}
+                        {/* UTANG */}
+                        {selectedTransactionType === "UTANG" && (
+                          <>
+                            <div>
+                              <Label>Akun Utang</Label>
+                              <Select
+                                value={row.accountId}
+                                onValueChange={(value) =>
+                                  updateRow(row.id, "accountId", value)
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Pilih akun utang" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {accounts.map((account) => (
+                                    <SelectItem
+                                      key={account.id}
+                                      value={account.id}
+                                    >
+                                      {getAccountDisplay(account.id)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Tipe Utang</Label>
+                              <Select
+                                value={row.transactionType || ""}
+                                onValueChange={(value) =>
+                                  updateRow(row.id, "transactionType", value)
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Pilih tipe utang" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="UTANG_BARU">
+                                    🆕 Utang Baru
+                                  </SelectItem>
+                                  <SelectItem value="UTANG_DIBAYAR">
+                                    💰 Utang Dibayar
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Kategori Utang</Label>
+                              <Select
+                                value={row.utangKategori || ""}
+                                onValueChange={(value) =>
+                                  updateRow(row.id, "utangKategori", value)
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Pilih kategori" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="BAHAN_BAKU">
+                                    📦 Bahan Baku
+                                  </SelectItem>
+                                  <SelectItem value="BANK_HM">
+                                    🏦 Bank HM
+                                  </SelectItem>
+                                  <SelectItem value="BANK_HENRY">
+                                    🏦 Bank Henry
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>Nominal</Label>
+                              <Input
+                                type="number"
+                                placeholder="Rp 0"
+                                value={row.nominal}
+                                onChange={(e) =>
+                                  updateRow(row.id, "nominal", e.target.value)
+                                }
+                                className="mt-1"
+                                min="0"
+                                step="1000"
+                              />
+                            </div>
+                            <div className="md:col-span-2">
+                              <Label>Keterangan</Label>
+                              <Input
+                                placeholder="Deskripsi transaksi utang"
+                                value={row.keterangan}
+                                onChange={(e) =>
+                                  updateRow(
+                                    row.id,
+                                    "keterangan",
+                                    e.target.value
+                                  )
+                                }
+                                className="mt-1"
+                              />
+                            </div>
+                          </>
+                        )}
+                        {/* Tombol hapus baris */}
+                        {journalRows.length > 1 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeRow(row.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 mt-2"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Hapus
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      onClick={addNewRow}
+                      className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 mt-2"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Tambah Baris Entri
+                    </Button>
+                  </>
                 )}
-
-                {selectedTransactionType === "PIUTANG" && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Pilih Akun Piutang
-                      </label>
-                      <Select
-                        value={journalRows[0].accountId}
-                        onValueChange={(value) =>
-                          updateRow(journalRows[0].id, "accountId", value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih akun piutang..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {accounts
-                            .filter((account) =>
-                              account.accountName
-                                .toLowerCase()
-                                .includes("piutang")
-                            )
-                            .map((account) => (
-                              <SelectItem key={account.id} value={account.id}>
-                                {getAccountDisplay(account.id)}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Jenis Transaksi Piutang
-                      </label>
-                      <Select
-                        value={journalRows[0].piutangType || ""}
-                        onValueChange={(value) =>
-                          updateRow(journalRows[0].id, "piutangType", value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih jenis piutang..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="PIUTANG_BARU">
-                            📈 Piutang Baru
-                          </SelectItem>
-                          <SelectItem value="PIUTANG_TERTAGIH">
-                            💰 Piutang Tertagih
-                          </SelectItem>
-                          <SelectItem value="PIUTANG_MACET">
-                            ❌ Piutang Macet
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Kategori Piutang
-                      </label>
-                      <Select
-                        value={journalRows[0].kategori || ""}
-                        onValueChange={(value) =>
-                          updateRow(journalRows[0].id, "kategori", value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih kategori..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="KARYAWAN">👥 Karyawan</SelectItem>
-                          <SelectItem value="TOKO">🏪 Toko</SelectItem>
-                          <SelectItem value="BAHAN_BAKU">
-                            📦 Bahan Baku
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Nominal Piutang
-                      </label>
-                      <Input
-                        type="number"
-                        placeholder="Rp 0"
-                        value={journalRows[0].nominal}
-                        onChange={(e) =>
-                          updateRow(
-                            journalRows[0].id,
-                            "nominal",
-                            e.target.value
-                          )
-                        }
-                        className="mt-1"
-                        min="0"
-                        step="1000"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium mb-2">
-                        Keterangan Piutang
-                      </label>
-                      <Input
-                        placeholder="Deskripsi transaksi piutang"
-                        value={journalRows[0].keterangan}
-                        onChange={(e) =>
-                          updateRow(
-                            journalRows[0].id,
-                            "keterangan",
-                            e.target.value
-                          )
-                        }
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {selectedTransactionType === "UTANG" && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Pilih Akun Utang
-                      </label>
-                      <Select
-                        value={journalRows[0].accountId}
-                        onValueChange={(value) =>
-                          updateRow(journalRows[0].id, "accountId", value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih akun utang..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {accounts
-                            .filter((acc) =>
-                              acc.accountName.toLowerCase().includes("utang")
-                            )
-                            .map((account) => (
-                              <SelectItem key={account.id} value={account.id}>
-                                {getAccountDisplay(account.id)}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Jenis Transaksi Utang
-                      </label>
-                      <Select
-                        value={journalRows[0].utangType || ""}
-                        onValueChange={(value) =>
-                          updateRow(journalRows[0].id, "utangType", value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih jenis utang..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="UTANG_BARU">
-                            📈 Utang Baru
-                          </SelectItem>
-                          <SelectItem value="UTANG_DIBAYAR">
-                            💰 Utang Dibayar
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Kategori Utang
-                      </label>
-                      <Select
-                        value={journalRows[0].utangKategori || ""}
-                        onValueChange={(value) =>
-                          updateRow(journalRows[0].id, "utangKategori", value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih kategori..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="BAHAN_BAKU">
-                            📦 Bahan Baku
-                          </SelectItem>
-                          <SelectItem value="BANK_HM">🏦 Bank HM</SelectItem>
-                          <SelectItem value="BANK_HENRY">
-                            🏦 Bank Henry
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">
-                        Nominal Utang
-                      </label>
-                      <Input
-                        type="number"
-                        placeholder="Rp 0"
-                        value={journalRows[0].nominal}
-                        onChange={(e) =>
-                          updateRow(
-                            journalRows[0].id,
-                            "nominal",
-                            e.target.value
-                          )
-                        }
-                        className="mt-1"
-                        min="0"
-                        step="1000"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium mb-2">
-                        Keterangan Utang
-                      </label>
-                      <Input
-                        placeholder="Deskripsi transaksi utang"
-                        value={journalRows[0].keterangan}
-                        onChange={(e) =>
-                          updateRow(
-                            journalRows[0].id,
-                            "keterangan",
-                            e.target.value
-                          )
-                        }
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
-                )}
-
                 {/* Tombol Save untuk semua tab */}
                 <div className="flex gap-2 mt-6">
                   <Button
@@ -3724,7 +3259,15 @@ export default function JournalPage() {
                     {(() => {
                       const validRows = journalRows.filter((row) => {
                         const account = getSelectedAccount(row.accountId);
-                        if (!account) return false;
+                        if (!account) {
+                          console.log(
+                            "❌ Invalid account for row:",
+                            row.id,
+                            "accountId:",
+                            row.accountId
+                          );
+                          return false;
+                        }
 
                         // Validasi berdasarkan divisi
                         if (divisionType === "PEMASARAN") {
@@ -4058,25 +3601,7 @@ export default function JournalPage() {
                     <h3 className="font-semibold text-blue-800">Saldo Akhir</h3>
                   </div>
                   <p className="text-2xl font-bold text-blue-900 mt-2">
-                    {formatCurrency(
-                      existingEntries
-                        .filter(
-                          (entry) =>
-                            (
-                              accounts.find((a) => a.id === entry.accountId)
-                                ?.accountName || ""
-                            )
-                              .toLowerCase()
-                              .includes("kas") &&
-                            (entry as any).transactionType === "SALDO_AKHIR"
-                        )
-                        .reduce(
-                          (sum, entry) =>
-                            sum +
-                            Number((entry as any).saldoAkhir || entry.nilai),
-                          0
-                        )
-                    )}
+                    {formatCurrency(keuanganSummary.totalSaldoAkhir)}
                   </p>
                 </div>
               </div>

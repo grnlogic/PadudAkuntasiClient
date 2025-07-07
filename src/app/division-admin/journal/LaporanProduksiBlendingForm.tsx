@@ -632,9 +632,14 @@ export default function LaporanProduksiBlendingForm({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <CheckCircle className="h-5 w-5 text-green-600" />
-          Form Laporan Produksi & Blending
+          Form Laporan Produksi & Persediaan
           <Badge variant="outline" className="ml-2">
-            {userDivision.name}
+            {userDivision.name.includes("BLENDING")
+              ? userDivision.name
+                  .replace(/ ?BLENDING ?/g, " ")
+                  .replace(/  +/g, " ")
+                  .replace(/^ | $/g, "")
+              : userDivision.name}
           </Badge>
         </CardTitle>
       </CardHeader>
@@ -661,7 +666,7 @@ export default function LaporanProduksiBlendingForm({
             }`}
           >
             <Package className="h-4 w-4" />
-            Laporan Blending
+            Laporan Persediaan
           </button>
         </div>
 
@@ -677,7 +682,7 @@ export default function LaporanProduksiBlendingForm({
               </>
             ) : (
               <>
-                <strong>Laporan Blending:</strong> Input data persediaan bahan
+                <strong>Laporan Persediaan:</strong> Input data persediaan bahan
                 baku meliputi barang masuk, pemakaian, dan stok akhir untuk
                 setiap bahan baku di gudang.
               </>
@@ -706,7 +711,7 @@ export default function LaporanProduksiBlendingForm({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-medium">
-              Data {activeTab === "produksi" ? "Produksi" : "Blending"}
+              Data {activeTab === "produksi" ? "Produksi" : "Persediaan"}
             </h3>
             <Button onClick={addNewEntry} size="sm" variant="outline">
               <PlusCircle className="h-4 w-4 mr-2" />
@@ -830,33 +835,6 @@ export default function LaporanProduksiBlendingForm({
                       </div>
 
                       {/* Stok Barang Jadi */}
-                      <div className="space-y-2">
-                        <Label>Stok Barang Jadi (unit)</Label>
-                        <Input
-                          type="number"
-                          value={entry.stockBarangJadi}
-                          onChange={(e) =>
-                            updateEntry(
-                              entry.id,
-                              "stockBarangJadi",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Total stok akhir produk jadi"
-                          min="0"
-                          step="0.01"
-                          className={
-                            errors[`${entry.id}_stockBarangJadi`]
-                              ? "border-red-500"
-                              : ""
-                          }
-                        />
-                        {errors[`${entry.id}_stockBarangJadi`] && (
-                          <p className="text-sm text-red-500">
-                            {errors[`${entry.id}_stockBarangJadi`]}
-                          </p>
-                        )}
-                      </div>
 
                       {/* HP Barang Jadi (HPP) */}
                       <div className="space-y-2">
@@ -1100,7 +1078,7 @@ export default function LaporanProduksiBlendingForm({
         {activeTab === "blending" && (
           <Card className="mb-4">
             <CardHeader>
-              <CardTitle>Ringkasan Laporan Blending</CardTitle>
+              <CardTitle>Ringkasan Laporan Persediaan</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1192,7 +1170,8 @@ export default function LaporanProduksiBlendingForm({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-medium">
-              Data Laporan {activeTab === "produksi" ? "Produksi" : "Blending"}
+              Data Laporan{" "}
+              {activeTab === "produksi" ? "Produksi" : "Persediaan"}
             </h3>
             <div className="flex items-center gap-2">
               {isLoadingData && (
@@ -1337,7 +1316,7 @@ export default function LaporanProduksiBlendingForm({
                           >
                             {isLoadingData
                               ? "Memuat data..."
-                              : "Belum ada data laporan blending"}
+                              : "Belum ada data laporan persediaan"}
                           </TableCell>
                         </TableRow>
                       ) : (

@@ -38,6 +38,15 @@ async function apiRequest<T>(
     const token =
       typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
+    // ✅ Add request logging for debugging
+    console.log("🌐 [API REQUEST]", {
+      method: options.method || "GET",
+      endpoint,
+      fullUrl: `${API_BASE_URL}${endpoint}`,
+      hasToken: !!token,
+      body: options.body ? JSON.parse(options.body as string) : null,
+    });
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: {
         "Content-Type": "application/json",
@@ -54,10 +63,31 @@ async function apiRequest<T>(
       data = null;
     }
 
+    // ✅ Add response logging for debugging
+    console.log("📨 [API RESPONSE]", {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      data,
+      endpoint,
+    });
+
     if (!response.ok) {
+      // ✅ Enhanced error logging
+      console.error("❌ [API ERROR]", {
+        status: response.status,
+        statusText: response.statusText,
+        endpoint,
+        errorData: data,
+        errorMessage: data?.message || data?.error || "Unknown error",
+      });
+
       return {
         success: false,
-        error: data?.message || "An error occurred",
+        error:
+          data?.message ||
+          data?.error ||
+          `HTTP ${response.status}: ${response.statusText}`,
       };
     }
 
@@ -67,6 +97,12 @@ async function apiRequest<T>(
       message: data?.message,
     };
   } catch (error) {
+    console.error("💥 [API EXCEPTION]", {
+      endpoint,
+      error,
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+
     return {
       success: false,
       error:
@@ -143,17 +179,56 @@ export const accountsAPI = {
 
   update: async (id: string, updates: any) => {
     const numericId = parseInt(id);
-    const backendUpdates = {
-      accountCode: updates.accountCode?.trim(),
-      accountName: updates.accountName?.trim(),
-      valueType: updates.valueType,
-      ...(updates.division && {
-        division: {
-          id: parseInt(updates.division.id),
-          name: updates.division.name,
-        },
-      }),
-    };
+
+    // ✅ Enhanced validation and logging
+    console.log("🔍 [UPDATE ACCOUNT DEBUG] Input:", {
+      id,
+      numericId,
+      updates,
+      rawUpdates: JSON.stringify(updates, null, 2),
+    });
+
+    // ✅ Build payload with proper validation
+    const backendUpdates: any = {};
+
+    // Only include non-empty fields
+    if (updates.accountCode?.trim()) {
+      backendUpdates.accountCode = updates.accountCode.trim();
+    }
+
+    if (updates.accountName?.trim()) {
+      backendUpdates.accountName = updates.accountName.trim();
+    }
+
+    if (updates.valueType) {
+      backendUpdates.valueType = updates.valueType;
+    }
+
+    // ✅ Handle division field properly
+    if (updates.division) {
+      const divisionId =
+        typeof updates.division.id === "string"
+          ? parseInt(updates.division.id)
+          : updates.division.id;
+
+      if (divisionId && divisionId > 0) {
+        backendUpdates.division = {
+          id: divisionId,
+          name: updates.division.name || "",
+        };
+      }
+    } else {
+      // ✅ IMPORTANT: Include division if not provided to avoid backend errors
+      console.warn(
+        "⚠️ No division provided in update. This might cause backend errors."
+      );
+    }
+
+    console.log("🚀 [UPDATE ACCOUNT] Final payload:", {
+      url: `/api/v1/accounts/${numericId}`,
+      payload: backendUpdates,
+      payloadJson: JSON.stringify(backendUpdates, null, 2),
+    });
 
     return apiRequest<any>(`/api/v1/accounts/${numericId}`, {
       method: "PUT",
@@ -169,18 +244,11 @@ export const accountsAPI = {
   },
 
   getProducts: async () => {
-    console.log(
-      "🚨 WARNING: Using generic /products endpoint (should not be used for division-specific data)"
-    );
     return apiRequest<Account[]>("/api/v1/accounts/products");
   },
 
   getProductsByDivision: async (divisionId: number) => {
     const endpoint = `/api/v1/accounts/products/by-division/${divisionId}?t=${Date.now()}`;
-    console.log(
-      "✅ Calling correct division-specific endpoint with cache busting:",
-      endpoint
-    );
     return apiRequest<Account[]>(endpoint);
   },
 };
@@ -225,42 +293,28 @@ export interface CreatePiutangRequest {
 //Api Piutang
 export const piutangAPI = {
   create: async (data: CreatePiutangRequest) => {
-    // ✅ Add validation and logging
-    console.log("🔍 PIUTANG API - Raw data received:", data);
-
-    // ✅ Validate required fields
-    if (!data.tanggalTransaksi) {
-      throw new Error("VALIDATION_ERROR: Tanggal transaksi wajib diisi");
-    }
-    if (!data.tipeTransaksi) {
-      throw new Error("VALIDATION_ERROR: Tipe transaksi wajib diisi");
-    }
-    if (!data.nominal || data.nominal <= 0) {
-      throw new Error("VALIDATION_ERROR: Nominal harus lebih dari 0");
-    }
-    if (!data.accountId || data.accountId <= 0) {
-      throw new Error("VALIDATION_ERROR: Account ID wajib diisi");
-    }
-
-    // ✅ Format data for backend
-    const formattedData = {
-      tanggalTransaksi: data.tanggalTransaksi.slice(0, 10), // pastikan hanya YYYY-MM-DD
-      tipeTransaksi: data.tipeTransaksi, // pastikan UPPERCASE dan sesuai enum Java
-      kategori: data.kategori || "KARYAWAN",
-      nominal: Number(data.nominal),
-      keterangan: data.keterangan || "",
-      accountId: Number(data.accountId),
-    };
-    console.log("📤 PIUTANG API - Formatted data to send:", formattedData);
-
-    return apiRequest<any>("/api/v1/piutang", {
+    const response = await apiRequest<any>("/api/v1/piutang", {
       method: "POST",
-      body: JSON.stringify(formattedData),
+      body: JSON.stringify({
+        accountId: Number(data.accountId),
+        tanggalTransaksi: data.tanggalTransaksi,
+        tipeTransaksi: data.tipeTransaksi,
+        kategori: data.kategori,
+        nominal: Number(data.nominal),
+        keterangan: data.keterangan || "",
+      }),
     });
+    return response;
   },
 
   getAll: async () => {
     return apiRequest<any[]>("/api/v1/piutang");
+  },
+
+  delete: async (id: number) => {
+    return apiRequest(`/api/v1/piutang/${id}`, {
+      method: "DELETE",
+    });
   },
 };
 
@@ -299,8 +353,6 @@ export interface LaporanPenjualanSales {
 //Api LaporanPenjualanSales
 export const laporanPenjualanSalesAPI = {
   create: async (data: CreateLaporanPenjualanSalesRequest) => {
-    console.log("🔍 LAPORAN PENJUALAN SALES API - Raw data received:", data);
-
     // ✅ Validate required fields
     if (!data.tanggalLaporan) {
       throw new Error("VALIDATION_ERROR: Tanggal laporan wajib diisi");
@@ -322,10 +374,6 @@ export const laporanPenjualanSalesAPI = {
       returPenjualan: data.returPenjualan ? Number(data.returPenjualan) : null,
       keteranganKendala: data.keteranganKendala || null,
     };
-    console.log(
-      "📤 LAPORAN PENJUALAN SALES API - Formatted data to send:",
-      formattedData
-    );
 
     return apiRequest<LaporanPenjualanSales>("/api/v1/laporan-penjualan", {
       method: "POST",
@@ -356,42 +404,28 @@ export interface CreateUtangRequest {
 //Api Utang
 export const utangAPI = {
   create: async (data: CreateUtangRequest) => {
-    // ✅ Add validation and logging
-    console.log("🔍 UTANG API - Raw data received:", data);
-
-    // ✅ Validate required fields
-    if (!data.tanggalTransaksi) {
-      throw new Error("VALIDATION_ERROR: Tanggal transaksi wajib diisi");
-    }
-    if (!data.tipeTransaksi) {
-      throw new Error("VALIDATION_ERROR: Tipe transaksi wajib diisi");
-    }
-    if (!data.nominal || data.nominal <= 0) {
-      throw new Error("VALIDATION_ERROR: Nominal harus lebih dari 0");
-    }
-    if (!data.accountId || data.accountId <= 0) {
-      throw new Error("VALIDATION_ERROR: Account ID wajib diisi");
-    }
-
-    // ✅ Format data for backend
-    const formattedData = {
-      tanggalTransaksi: data.tanggalTransaksi.slice(0, 10), // pastikan hanya YYYY-MM-DD
-      tipeTransaksi: data.tipeTransaksi, // pastikan UPPERCASE dan sesuai enum Java
-      kategori: data.kategori || "BAHAN_BAKU",
-      nominal: Number(data.nominal),
-      keterangan: data.keterangan || "",
-      accountId: Number(data.accountId),
-    };
-    console.log("📤 UTANG API - Formatted data to send:", formattedData);
-
-    return apiRequest<any>("/api/v1/utang", {
+    const response = await apiRequest<any>("/api/v1/utang", {
       method: "POST",
-      body: JSON.stringify(formattedData),
+      body: JSON.stringify({
+        accountId: Number(data.accountId),
+        tanggalTransaksi: data.tanggalTransaksi,
+        tipeTransaksi: data.tipeTransaksi,
+        kategori: data.kategori,
+        nominal: Number(data.nominal),
+        keterangan: data.keterangan || "",
+      }),
     });
+    return response;
   },
 
   getAll: async () => {
     return apiRequest<any[]>("/api/v1/utang");
+  },
+
+  delete: async (id: number) => {
+    return apiRequest(`/api/v1/utang/${id}`, {
+      method: "DELETE",
+    });
   },
 };
 
@@ -517,8 +551,6 @@ export async function createSalesperson(
     status: "AKTIF",
   };
 
-  console.log("🔍 CREATE SALESPERSON - Request body:", requestBody);
-
   const res = await fetch(`${BASE_URL}/api/v1/salespeople`, {
     method: "POST",
     headers: {
@@ -530,7 +562,6 @@ export async function createSalesperson(
 
   if (!res.ok) {
     const errorText = await res.text();
-    console.error("❌ CREATE SALESPERSON - Error:", errorText);
     throw new Error("Gagal menambah salesperson: " + errorText);
   }
 
@@ -581,8 +612,6 @@ export interface LaporanProduksiHarian {
 //Api LaporanProduksi
 export const laporanProduksiAPI = {
   create: async (data: CreateLaporanProduksiRequest) => {
-    console.log("🔍 LAPORAN PRODUKSI API - Raw data received:", data);
-
     // ✅ Validate required fields
     if (!data.tanggalLaporan) {
       throw new Error("VALIDATION_ERROR: Tanggal laporan wajib diisi");
@@ -603,10 +632,6 @@ export const laporanProduksiAPI = {
       hpBarangJadi: data.hpBarangJadi ? Number(data.hpBarangJadi) : null,
       keteranganKendala: data.keteranganKendala || null,
     };
-    console.log(
-      "📤 LAPORAN PRODUKSI API - Formatted data to send:",
-      formattedData
-    );
 
     return apiRequest<LaporanProduksiHarian>("/api/v1/laporan-produksi", {
       method: "POST",
@@ -667,8 +692,6 @@ export interface LaporanGudangHarian {
 //Api LaporanGudang
 export const laporanGudangAPI = {
   create: async (data: CreateLaporanGudangRequest) => {
-    console.log("🔍 LAPORAN GUDANG API - Raw data received:", data);
-
     // ✅ Validate required fields
     if (!data.tanggalLaporan) {
       throw new Error("VALIDATION_ERROR: Tanggal laporan wajib diisi");
@@ -687,10 +710,6 @@ export const laporanGudangAPI = {
       stokAkhir: data.stokAkhir ? Number(data.stokAkhir) : null,
       keterangan: data.kondisiGudang || null, // Form sends 'kondisiGudang'
     };
-    console.log(
-      "📤 LAPORAN GUDANG API - Formatted data to send:",
-      formattedData
-    );
 
     return apiRequest<LaporanGudangHarian>("/api/v1/laporan-gudang", {
       method: "POST",
@@ -727,9 +746,6 @@ export const notificationAPI = {
   getAll: async () => {
     const response = await apiRequest<Notification[]>("/api/v1/notifications");
     if (response.success && response.data) {
-      // ✅ Ensure proper data mapping with logging
-      console.log("🔔 RAW NOTIFICATION RESPONSE:", response.data);
-
       const mappedNotifications = response.data.map((notif: any) => ({
         id: notif.id,
         message: notif.message,
@@ -739,7 +755,6 @@ export const notificationAPI = {
         user: notif.user,
       }));
 
-      console.log("🔔 MAPPED NOTIFICATIONS:", mappedNotifications);
       return { success: true, data: mappedNotifications };
     }
     return response;
@@ -752,11 +767,6 @@ export const notificationAPI = {
   },
 
   send: async (message: string, linkUrl?: string) => {
-    console.log("🔔 NOTIFICATION API - Sending notification:", {
-      message,
-      linkUrl,
-    });
-
     // ✅ Validate required fields
     if (!message || message.trim() === "") {
       throw new Error("VALIDATION_ERROR: Message is required");

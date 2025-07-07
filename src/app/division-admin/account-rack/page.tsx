@@ -218,6 +218,8 @@ export default function AccountRackPage() {
         accountCode: newAccount.accountCode,
         accountName: newAccount.accountName,
         valueType: newAccount.valueType,
+        // ✅ FIXED: Include division field for backend
+        division: editingAccount.division,
       });
 
       await loadAccounts();

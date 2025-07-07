@@ -14,7 +14,6 @@ export default function NotificationBell() {
   const fetchNotifications = async () => {
     try {
       const data = await getNotifications();
-      console.log("🔔 RAW NOTIFICATIONS DATA:", data);
 
       // Pastikan data array, jika tidak, fallback ke []
       if (Array.isArray(data)) {
@@ -26,11 +25,9 @@ export default function NotificationBell() {
       ) {
         setNotifications((data as any).data);
       } else {
-        console.warn("⚠️ Notifications data is not array:", data);
         setNotifications([]);
       }
     } catch (e) {
-      console.error("❌ Error fetching notifications:", e);
       setNotifications([]);
     }
   };
@@ -63,7 +60,6 @@ export default function NotificationBell() {
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
-        console.warn("⚠️ Invalid date string:", dateString);
         return "Baru saja";
       }
       return date.toLocaleString("id-ID", {
@@ -74,7 +70,6 @@ export default function NotificationBell() {
         minute: "2-digit",
       });
     } catch (error) {
-      console.error("❌ Error formatting date:", error, dateString);
       return "Baru saja";
     }
   };
@@ -88,9 +83,7 @@ export default function NotificationBell() {
         await markNotificationAsRead(notif.id);
       }
       fetchNotifications();
-    } catch (error) {
-      console.error("❌ Error clearing notifications:", error);
-    }
+    } catch (error) {}
   };
 
   const handleRead = async (notif: any) => {

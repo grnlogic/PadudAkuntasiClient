@@ -926,38 +926,22 @@ function generateSummarySection(data: PDFReportData): string {
   // HRD: Summary HRD
   if (divisionName.includes("HRD")) {
     if (allEntries.some((entry) => entry.attendanceStatus)) {
-      // ✅ FIXED: Hitung berdasarkan absentCount, bukan count entries
       let totalKaryawan = 0;
       let hadirCount = 0;
       let tidakHadirCount = 0;
-      let sakitCount = 0;
-      let izinCount = 0;
       let totalAbsentCount = 0;
-      let lemburCount = 0;
 
       allEntries.forEach((entry) => {
         if (entry.attendanceStatus) {
-          // ✅ FIXED: Total karyawan = sum of absentCount
-          const absentCount = Number(entry.absentCount) || 0;
-          totalKaryawan += absentCount;
-          totalAbsentCount += absentCount;
-
-          const attendanceStatus = entry.attendanceStatus;
-          const shift = entry.shift;
-
-          if (attendanceStatus === "HADIR") {
-            hadirCount += absentCount;
-          } else if (attendanceStatus === "TIDAK_HADIR") {
-            tidakHadirCount += absentCount;
-          } else if (attendanceStatus === "SAKIT") {
-            sakitCount += absentCount;
-          } else if (attendanceStatus === "IZIN") {
-            izinCount += absentCount;
+          totalKaryawan++;
+          if (entry.attendanceStatus === "HADIR") {
+            hadirCount++;
+          } else {
+            tidakHadirCount++;
           }
-
-          if (shift === "LEMBUR") {
-            lemburCount += absentCount;
-          }
+        }
+        if (entry.absentCount) {
+          totalAbsentCount += Number(entry.absentCount);
         }
       });
 
@@ -978,19 +962,14 @@ function generateSummarySection(data: PDFReportData): string {
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Karyawan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalKaryawan} orang</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Karyawan Hadir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${hadirCount} orang</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Karyawan Tidak Hadir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${tidakHadirCount} orang</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Karyawan Sakit</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${sakitCount} orang</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Karyawan Izin</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${izinCount} orang</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Shift Lembur</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${lemburCount} orang</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Absen</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalAbsentCount} orang</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Tingkat Kehadiran</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: ${
                 attendanceRate >= 90
                   ? "green"
                   : attendanceRate >= 80
                   ? "orange"
                   : "red"
-              }">${attendanceRate.toFixed(1)}%</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Laporan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${
-                allEntries.length
-              } entri</td></tr>
+              };">${attendanceRate.toFixed(1)}%</td></tr>
             </tbody>
           </table>
         </div>
@@ -1032,7 +1011,7 @@ function generateDetailsSection(data: PDFReportData): string {
   let headerColumns = "";
 
   if (divisionName.includes("KEUANGAN")) {
-    headerColumns = "<th>Jenis Transaksi</th><th>Nominal</th>";
+    headerColumns = "<th>Jenis Transaksi</th><th>Kategori</th><th>Nominal</th>";
   } else if (divisionName.includes("PEMASARAN")) {
     headerColumns =
       "<th>Perusahaan</th><th>Salesperson</th><th>Produk</th><th>Target</th><th>Realisasi</th><th>Achievement</th><th>Kendala</th>";
@@ -1048,7 +1027,7 @@ function generateDetailsSection(data: PDFReportData): string {
       "<th>Barang Masuk</th><th>Pemakaian</th><th>Stok Akhir</th><th>Keterangan</th>";
   } else if (divisionName.includes("HRD")) {
     headerColumns =
-      "<th>Status Kehadiran</th><th>Tidak Hadir</th><th>Shift</th>";
+      "<th>Status Kehadiran</th><th>Tidak Hadir</th><th>Shift</th><th>Jam Lembur</th>";
   } else {
     headerColumns = "<th>Nilai</th>";
   }
@@ -1085,8 +1064,13 @@ function generateDetailsSection(data: PDFReportData): string {
           transactionType === "SALDO_AKHIR"
             ? entry.saldoAkhir ?? entry.nilai
             : entry.nilai;
+
+        // Get kategori for utang/piutang entries
+        const kategori = entry.kategori || "-";
+
         dataCells = `
           <td style="text-align: center;">${transactionType}</td>
+          <td style="text-align: center;">${kategori}</td>
           <td style="text-align: right;">${formatCurrency(
             nominalValue || 0
           )}</td>
@@ -1171,10 +1155,12 @@ function generateDetailsSection(data: PDFReportData): string {
         const status = entry.attendanceStatus || "-";
         const absentCount = entry.absentCount || 0;
         const shift = entry.shift || "-";
+        const overtime = entry.overtimeHours || 0;
         dataCells = `
         <td style="text-align: center;">${status}</td>
         <td style="text-align: center;">${absentCount} orang</td>
         <td style="text-align: center;">${shift}</td>
+        <td style="text-align: right;">${overtime} jam</td>
       `;
       } else {
         dataCells = `
