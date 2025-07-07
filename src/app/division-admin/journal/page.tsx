@@ -2959,7 +2959,7 @@ export default function JournalPage() {
                   keuanganSummary.totalPengeluaran > 0 ||
                   keuanganSummary.totalSaldoAkhir > 0)) ||
               (divisionType === "PEMASARAN" &&
-                laporanPenjualanProduk.length > 0) ||
+  (laporanPenjualanProduk.length > 0 || laporanPenjualanSales.length > 0)) ||
               (divisionType === "PRODUKSI" && laporanProduksi.length > 0) ||
               (divisionType === "PERSEDIAAN_BAHAN_BAKU" &&
                 laporanGudang.length > 0) ||
