@@ -46,6 +46,8 @@ import {
   type EntriHarian,
   getPiutangTransaksi,
   getUtangTransaksi,
+  getLaporanPenjualanSales, // ✅ ADD: Import untuk laporan penjualan sales
+  getLaporanPenjualanProduk, // ✅ ADD: Import untuk laporan penjualan produk
 } from "@/lib/data";
 import { getCurrentUser } from "@/lib/auth";
 import { getAccountsByDivision, type Account } from "@/lib/data";
@@ -88,7 +90,7 @@ export default function TransactionPage() {
 
       let combinedEntries: EntriHarian[] = divisionEntries;
 
-      // Hanya untuk KEUANGAN, mapping piutang dan utang
+      // Mapping untuk KEUANGAN
       if (divisionType === "KEUANGAN") {
         const piutangEntries = await getPiutangTransaksi();
         const utangEntries = await getUtangTransaksi();
@@ -149,7 +151,87 @@ export default function TransactionPage() {
         ];
       }
 
+      // ✅ NEW: Mapping untuk PEMASARAN
+      if (divisionType === "PEMASARAN") {
+        const laporanSalesEntries = await getLaporanPenjualanSales();
+        const laporanProdukEntries = await getLaporanPenjualanProduk();
+
+        // Map laporan sales ke format EntriHarian
+        const mappedSales =
+          laporanSalesEntries?.map((laporan: any) => ({
+            id: `sales-${laporan.id}`,
+            accountId: "SALES", // Virtual account ID for sales
+            tanggal: laporan.tanggalLaporan || laporan.createdAt || "",
+            date: laporan.tanggalLaporan || laporan.createdAt || "",
+            nilai: Number(
+              laporan.realisasiAmount || laporan.realisasiPenjualan || 0
+            ),
+            description: `Sales: ${
+              laporan.salesperson?.username || "Unknown"
+            } - Target: ${
+              laporan.targetAmount || laporan.targetPenjualan || 0
+            }`,
+            keterangan: laporan.keteranganKendala || "",
+            createdBy: laporan.createdBy?.username || "system",
+            createdAt: laporan.createdAt || new Date().toISOString(),
+            // ✅ Add specialized pemasaran fields
+            targetAmount: Number(
+              laporan.targetAmount || laporan.targetPenjualan || 0
+            ),
+            realisasiAmount: Number(
+              laporan.realisasiAmount || laporan.realisasiPenjualan || 0
+            ),
+            returPenjualan: Number(laporan.returPenjualan || 0),
+            salesUserId: laporan.salesperson?.id,
+            keteranganKendala: laporan.keteranganKendala,
+          })) || [];
+
+        // Map laporan produk ke format EntriHarian
+        const mappedProduk =
+          laporanProdukEntries?.map((laporan: any) => ({
+            id: `produk-${laporan.id}`,
+            accountId: laporan.productAccountId?.toString() || "PRODUK",
+            tanggal: laporan.tanggalLaporan || laporan.createdAt || "",
+            date: laporan.tanggalLaporan || laporan.createdAt || "",
+            nilai: Number(laporan.realisasiKuantitas || 0),
+            description: `Produk: ${laporan.namaAccount || "Unknown"} - ${
+              laporan.namaPerusahaan
+            } (${laporan.namaSalesperson})`,
+            keterangan: laporan.keteranganKendala || "",
+            createdBy: laporan.createdByUsername || "system",
+            createdAt: laporan.createdAt || new Date().toISOString(),
+            // ✅ Add specialized product fields
+            targetAmount: Number(laporan.targetKuantitas || 0),
+            realisasiAmount: Number(laporan.realisasiKuantitas || 0),
+            namaPerusahaan: laporan.namaPerusahaan,
+            namaSalesperson: laporan.namaSalesperson,
+            namaAccount: laporan.namaAccount,
+          })) || [];
+
+        console.log("🎯 PEMASARAN DATA MAPPING:", {
+          salesCount: laporanSalesEntries?.length || 0,
+          produkCount: laporanProdukEntries?.length || 0,
+          mappedSalesCount: mappedSales.length,
+          mappedProdukCount: mappedProduk.length,
+          sampleSales: mappedSales[0],
+          sampleProduk: mappedProduk[0],
+        });
+
+        combinedEntries = [...divisionEntries, ...mappedSales, ...mappedProduk];
+      }
+
       setEntries(combinedEntries);
+      console.log("✅ ENTRIES LOADED:", {
+        divisionType,
+        totalEntries: combinedEntries.length,
+        breakdown: {
+          regular: divisionEntries.length,
+          pemasaran:
+            divisionType === "PEMASARAN"
+              ? combinedEntries.length - divisionEntries.length
+              : 0,
+        },
+      });
     } catch (error) {
       console.error("Error loading entries:", error);
     }
@@ -182,9 +264,7 @@ export default function TransactionPage() {
     // Search filter
     if (searchTerm) {
       filtered = filtered.filter((entry) => {
-        const account = accounts.find(
-          (acc: Account) => acc.id === entry.accountId
-        );
+        const account = getAccountInfo(entry.accountId);
         return (
           account &&
           (account.accountName
@@ -336,6 +416,25 @@ export default function TransactionPage() {
 
   // ✅ HELPER: Get account info for better detection
   const getAccountInfo = (accountId: string) => {
+    // Handle virtual accounts for pemasaran
+    if (accountId === "SALES") {
+      return {
+        id: "SALES",
+        accountCode: "SALES",
+        accountName: "Laporan Penjualan Sales",
+        valueType: "NOMINAL",
+      };
+    }
+
+    if (accountId === "PRODUK") {
+      return {
+        id: "PRODUK",
+        accountCode: "PRODUK",
+        accountName: "Laporan Penjualan Produk",
+        valueType: "KUANTITAS",
+      };
+    }
+
     return accounts.find((acc) => acc.id === accountId);
   };
 
@@ -707,20 +806,50 @@ export default function TransactionPage() {
         );
 
       case "PEMASARAN":
-        const target = (entry as any).targetAmount || 0;
-        const realisasi = (entry as any).realisasiAmount || 0;
-        const achievement = target > 0 ? (realisasi / target) * 100 : 0;
+        // Check if this is sales or product entry
+        if (entry.id.startsWith("sales-")) {
+          const target = (entry as any).targetAmount || 0;
+          const realisasi = (entry as any).realisasiAmount || 0;
+          const achievement = target > 0 ? (realisasi / target) * 100 : 0;
 
+          return (
+            <Badge
+              className={`${
+                achievement >= 100
+                  ? "bg-green-100 text-green-800"
+                  : achievement >= 75
+                  ? "bg-yellow-100 text-yellow-800"
+                  : "bg-red-100 text-red-800"
+              }`}
+            >
+              <Target className="h-3 w-3 mr-1" />
+              Sales: {achievement.toFixed(0)}%
+            </Badge>
+          );
+        } else if (entry.id.startsWith("produk-")) {
+          const target = (entry as any).targetAmount || 0;
+          const realisasi = (entry as any).realisasiAmount || 0;
+          const achievement = target > 0 ? (realisasi / target) * 100 : 0;
+
+          return (
+            <Badge
+              className={`${
+                achievement >= 100
+                  ? "bg-blue-100 text-blue-800"
+                  : "bg-orange-100 text-orange-800"
+              }`}
+            >
+              <Package className="h-3 w-3 mr-1" />
+              Produk: {achievement.toFixed(0)}%
+            </Badge>
+          );
+        }
+
+        // Fallback untuk entri regular pemasaran
         return (
-          <Badge
-            className={`${
-              achievement >= 100
-                ? "bg-green-100 text-green-800"
-                : "bg-orange-100 text-orange-800"
-            }`}
-          >
-            <Target className="h-3 w-3 mr-1" />
-            {achievement.toFixed(0)}%
+          <Badge className="bg-gray-100 text-gray-800">
+            <TrendingUp className="h-3 w-3 mr-1" />
+            Pemasaran
           </Badge>
         );
 
@@ -1346,9 +1475,7 @@ export default function TransactionPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredEntries.map((entry) => {
-                    const account = accounts.find(
-                      (acc: Account) => acc.id === entry.accountId
-                    );
+                    const account = getAccountInfo(entry.accountId);
 
                     return (
                       <TableRow key={entry.id}>
@@ -1372,7 +1499,8 @@ export default function TransactionPage() {
                         </TableCell>
                         <TableCell>{getTransactionBadge(entry)}</TableCell>
                         <TableCell className="font-medium">
-                          {account?.valueType === "NOMINAL"
+                          {account?.valueType === "NOMINAL" ||
+                          account?.id === "SALES"
                             ? formatCurrency(entry.nilai)
                             : `${entry.nilai.toLocaleString("id-ID")} unit`}
                         </TableCell>
@@ -1389,20 +1517,50 @@ export default function TransactionPage() {
                         {divisionType === "PEMASARAN" && (
                           <TableCell className="text-sm">
                             <div className="space-y-1">
-                              <div className="text-blue-600">
-                                Target:{" "}
-                                {(entry as any).targetAmount
-                                  ? formatCurrency((entry as any).targetAmount)
-                                  : "-"}
-                              </div>
-                              <div className="text-green-600">
-                                Realisasi:{" "}
-                                {(entry as any).realisasiAmount
-                                  ? formatCurrency(
-                                      (entry as any).realisasiAmount
-                                    )
-                                  : "-"}
-                              </div>
+                              {/* Show different info based on entry type */}
+                              {entry.id.startsWith("sales-") ? (
+                                <>
+                                  <div className="text-blue-600">
+                                    Target:{" "}
+                                    {formatCurrency(
+                                      (entry as any).targetAmount || 0
+                                    )}
+                                  </div>
+                                  <div className="text-green-600">
+                                    Realisasi:{" "}
+                                    {formatCurrency(
+                                      (entry as any).realisasiAmount || 0
+                                    )}
+                                  </div>
+                                  {(entry as any).returPenjualan && (
+                                    <div className="text-red-600">
+                                      Retur:{" "}
+                                      {formatCurrency(
+                                        (entry as any).returPenjualan
+                                      )}
+                                    </div>
+                                  )}
+                                </>
+                              ) : entry.id.startsWith("produk-") ? (
+                                <>
+                                  <div className="text-blue-600">
+                                    Target: {(entry as any).targetAmount || 0}{" "}
+                                    unit
+                                  </div>
+                                  <div className="text-green-600">
+                                    Realisasi:{" "}
+                                    {(entry as any).realisasiAmount || 0} unit
+                                  </div>
+                                  <div className="text-gray-500 text-xs">
+                                    {(entry as any).namaPerusahaan} -{" "}
+                                    {(entry as any).namaSalesperson}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-gray-500">
+                                  Data tidak tersedia
+                                </div>
+                              )}
                             </div>
                           </TableCell>
                         )}
