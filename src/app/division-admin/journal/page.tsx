@@ -23,7 +23,7 @@ import {
   toastSuccess,
   toastError,
   toastWarning,
-  toastInfo,  
+  toastInfo,
   toastPromise,
 } from "@/lib/toast-utils";
 import { Button } from "@/components/ui/button";
@@ -608,6 +608,11 @@ export default function JournalPage() {
             totalProductReports: filteredLaporanProduk.length,
             sampleSalesData: filteredLaporanSales[0],
             sampleProductData: filteredLaporanProduk[0],
+            // ✅ ADD: Raw data untuk memastikan tidak double-filtered
+            rawLaporanSales: laporanData,
+            rawLaporanProduk: laporanProdukData,
+            rawSalesCount: laporanData.length,
+            rawProdukCount: laporanProdukData.length,
           });
         }
 
@@ -1663,6 +1668,19 @@ export default function JournalPage() {
             salespeople,
           };
 
+          // ✅ FIXED: Debug logging untuk memastikan data lengkap
+          console.log("🔍 [PDF GENERATION DEBUG] reportData:", {
+            divisionType,
+            selectedDate,
+            entriesCount: existingEntries.length,
+            laporanSalesCount: laporanPenjualanSales.length,
+            laporanProdukCount: laporanPenjualanProduk.length,
+            sampleSalesData: laporanPenjualanSales[0],
+            sampleProdukData: laporanPenjualanProduk[0],
+            allSalesData: laporanPenjualanSales,
+            allProdukData: laporanPenjualanProduk,
+          });
+
           // ✅ DEBUG: Enhanced logging untuk troubleshooting account mapping
           console.log("=== DEBUG PDF GENERATION ===");
           console.log("divisionType:", divisionType);
@@ -1724,6 +1742,19 @@ export default function JournalPage() {
             users,
             salespeople,
           };
+
+          // ✅ FIXED: Debug logging untuk memastikan data lengkap
+          console.log("🔍 [PDF PREVIEW DEBUG] reportData:", {
+            divisionType,
+            selectedDate,
+            entriesCount: existingEntries.length,
+            laporanSalesCount: laporanPenjualanSales.length,
+            laporanProdukCount: laporanPenjualanProduk.length,
+            sampleSalesData: laporanPenjualanSales[0],
+            sampleProdukData: laporanPenjualanProduk[0],
+            allSalesData: laporanPenjualanSales,
+            allProdukData: laporanPenjualanProduk,
+          });
 
           previewEnhancedPDF(reportData);
           toastSuccess.custom("Preview PDF telah dibuka di tab baru");
@@ -2959,7 +2990,8 @@ export default function JournalPage() {
                   keuanganSummary.totalPengeluaran > 0 ||
                   keuanganSummary.totalSaldoAkhir > 0)) ||
               (divisionType === "PEMASARAN" &&
-  (laporanPenjualanProduk.length > 0 || laporanPenjualanSales.length > 0)) ||
+                (laporanPenjualanProduk.length > 0 ||
+                  laporanPenjualanSales.length > 0)) ||
               (divisionType === "PRODUKSI" && laporanProduksi.length > 0) ||
               (divisionType === "PERSEDIAAN_BAHAN_BAKU" &&
                 laporanGudang.length > 0) ||

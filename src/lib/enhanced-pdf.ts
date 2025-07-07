@@ -81,6 +81,18 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
   const divisionName = data.divisionName.toUpperCase();
   let transformedEntries: any[] = [];
 
+  // ✅ ADD: Debug logging untuk troubleshooting
+  console.log("🔍 [PDF DEBUG] getAllTransformedEntries called with:", {
+    divisionName,
+    date: data.date,
+    entriesCount: data.entries?.length || 0,
+    accountsCount: data.accounts?.length || 0,
+    laporanSalesCount: data.laporanPenjualanSales?.length || 0,
+    laporanProdukCount: data.laporanPenjualanProduk?.length || 0,
+    laporanProduksiCount: data.laporanProduksi?.length || 0,
+    laporanGudangCount: data.laporanGudang?.length || 0,
+  });
+
   // Helper untuk filter entri harian sesuai divisi
   function filterEntriHarian(entries: any[]) {
     // Jika account ada di data.accounts, berarti milik divisi ini
@@ -101,10 +113,10 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
       transformBackendData
     );
 
-    // Pastikan semua laporan sales ditambahkan
+    // ✅ FIXED: Gunakan semua data tanpa filter tambahan
     if (data.laporanPenjualanSales && data.laporanPenjualanSales.length > 0) {
       console.log(
-        "Processing laporanPenjualanSales:",
+        "🔍 [PDF DEBUG] ALL laporanPenjualanSales:",
         data.laporanPenjualanSales.length
       );
       const salesEntries = data.laporanPenjualanSales.map((sales: any) => {
@@ -127,10 +139,10 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
       transformedEntries.push(...salesEntries);
     }
 
-    // Pastikan semua laporan produk ditambahkan
+    // ✅ FIXED: Gunakan semua data laporanPenjualanProduk tanpa filter tambahan
     if (data.laporanPenjualanProduk && data.laporanPenjualanProduk.length > 0) {
       console.log(
-        "Processing laporanPenjualanProduk:",
+        "🔍 [PDF DEBUG] ALL laporanPenjualanProduk:",
         data.laporanPenjualanProduk.length
       );
       const produkEntries = data.laporanPenjualanProduk.map((produk: any) => {
@@ -173,7 +185,7 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
     }
 
     console.log(
-      "Total transformed entries for PEMASARAN:",
+      "🔍 [PDF DEBUG] Total PEMASARAN entries:",
       transformedEntries.length
     );
     return transformedEntries;
