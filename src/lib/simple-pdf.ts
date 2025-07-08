@@ -606,7 +606,7 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
                 } orang</td>
               </tr>
               <tr>
-                <td>Total Tidak Hadir</td>
+                <td>Total Total Orang</td>
                 <td>${data.entries.reduce((sum, entry) => {
                   const absentCount = (entry as any).absentCount || 0;
                   return sum + Number(absentCount);
@@ -696,7 +696,7 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
                 }
                 ${
                   data.divisionName.includes("HRD")
-                    ? "<th>Status Kehadiran</th><th>Tidak Hadir</th><th>Shift</th>"
+                    ? "<th>Status Kehadiran</th><th>Total Orang</th><th>Shift</th>"
                     : ""
                 }
                 ${

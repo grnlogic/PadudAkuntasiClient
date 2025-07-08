@@ -880,13 +880,17 @@ export default function JournalPage() {
               ? parseFloat(row.nominal)
               : 0,
         };
-        // ✅ ALWAYS CREATE NEW - Add timestamp to ensure uniqueness
-        const timestamp = Date.now();
-        const uniqueId = `${baseEntry.accountId}-${selectedDate}-${timestamp}`;
-        console.log(`✅ CREATING NEW ENTRY (ID: ${uniqueId}):`, baseEntry);
-        // Handle different transaction types
+
+        // ✅ FIXED: HRD should always create new entries with unique data
         if (divisionType === "HRD") {
-          // Untuk HRD, jangan overwrite nilai dengan row.nominal!
+          // ✅ HRD: ALWAYS CREATE NEW - Add timestamp to ensure uniqueness
+          const timestamp = Date.now();
+          const uniqueId = `hrd-${baseEntry.accountId}-${selectedDate}-${timestamp}`;
+          console.log(
+            `✅ CREATING NEW HRD ENTRY (ID: ${uniqueId}):`,
+            baseEntry
+          );
+
           return {
             ...baseEntry,
             attendanceStatus: row.attendanceStatus || "",
@@ -895,7 +899,17 @@ export default function JournalPage() {
             keteranganKendala: row.keteranganKendala || "",
           };
         }
+
+        // ✅ FIXED: Handle other divisions with proper logic
         if (selectedTransactionType === "KAS") {
+          // ✅ Add timestamp for uniqueness
+          const timestamp = Date.now();
+          const uniqueId = `kas-${baseEntry.accountId}-${selectedDate}-${timestamp}`;
+          console.log(
+            `✅ CREATING NEW KAS ENTRY (ID: ${uniqueId}):`,
+            baseEntry
+          );
+
           if (row.transactionType === "SALDO_AKHIR") {
             return {
               ...baseEntry,
@@ -911,6 +925,14 @@ export default function JournalPage() {
             };
           }
         } else if (selectedTransactionType === "PIUTANG") {
+          // ✅ Add timestamp for uniqueness
+          const timestamp = Date.now();
+          const uniqueId = `piutang-${baseEntry.accountId}-${selectedDate}-${timestamp}`;
+          console.log(
+            `✅ CREATING NEW PIUTANG ENTRY (ID: ${uniqueId}):`,
+            baseEntry
+          );
+
           return {
             accountId: parseInt(row.accountId),
             tanggalTransaksi: selectedDate,
@@ -920,6 +942,14 @@ export default function JournalPage() {
             keterangan: row.keterangan || "",
           };
         } else if (selectedTransactionType === "UTANG") {
+          // ✅ Add timestamp for uniqueness
+          const timestamp = Date.now();
+          const uniqueId = `utang-${baseEntry.accountId}-${selectedDate}-${timestamp}`;
+          console.log(
+            `✅ CREATING NEW UTANG ENTRY (ID: ${uniqueId}):`,
+            baseEntry
+          );
+
           return {
             accountId: parseInt(row.accountId),
             tanggalTransaksi: selectedDate,
@@ -929,6 +959,17 @@ export default function JournalPage() {
             keterangan: row.keterangan || "",
           };
         }
+
+        // ✅ FIXED: Handle other divisions (non-KEUANGAN) with timestamp
+        const timestamp = Date.now();
+        const uniqueId = `${divisionType.toLowerCase()}-${
+          baseEntry.accountId
+        }-${selectedDate}-${timestamp}`;
+        console.log(
+          `✅ CREATING NEW ${divisionType} ENTRY (ID: ${uniqueId}):`,
+          baseEntry
+        );
+
         return baseEntry;
       });
 
@@ -942,8 +983,17 @@ export default function JournalPage() {
         `🚀 SAVING ${validEntries.length} NEW ENTRIES:`,
         validEntries
       );
-      // ✅ ALWAYS CREATE NEW ENTRIES
-      if (selectedTransactionType === "KAS") {
+      // ✅ FIXED: Handle different divisions properly
+      if (divisionType === "HRD") {
+        // ✅ HRD: Always use batch save for HRD entries
+        const hrdEntries = validEntries.filter(
+          (e: any) => typeof e.nilai !== "undefined"
+        );
+        await toastPromise.save(
+          saveEntriHarianBatch(hrdEntries as any),
+          "jurnal HRD"
+        );
+      } else if (selectedTransactionType === "KAS") {
         // Hanya kirim entry yang punya field nilai (bukan baseEntry kosong)
         const kasEntries = validEntries.filter(
           (e: any) => typeof e.nilai !== "undefined"
@@ -964,6 +1014,15 @@ export default function JournalPage() {
           await utangAPI.create(entry as any);
         }
         toastSuccess.custom("Data utang berhasil disimpan");
+      } else {
+        // ✅ Handle other divisions (non-KEUANGAN) with batch save
+        const otherEntries = validEntries.filter(
+          (e: any) => typeof e.nilai !== "undefined"
+        );
+        await toastPromise.save(
+          saveEntriHarianBatch(otherEntries as any),
+          `jurnal ${divisionType}`
+        );
       }
       console.log("✅ ALL NEW ENTRIES SAVED SUCCESSFULLY");
       // Reset form dan reload data
@@ -2333,18 +2392,14 @@ export default function JournalPage() {
 
   // Fungsi untuk render tabel jurnal sesuai divisi
   function renderJournalTable() {
-    // Untuk divisi selain PEMASARAN dan PRODUKSI/BLENDING
-    if (
-      divisionType === "KEUANGAN" ||
-      divisionType === "GENERAL" ||
-      divisionType === "HRD"
-    ) {
+    // === TABEL KHUSUS KEUANGAN & GENERAL ===
+    if (divisionType === "KEUANGAN" || divisionType === "GENERAL") {
       return (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-gray-600" />
-              Jurnal Harian - {selectedDate}
+              Tabel Jurnal Keuangan - {selectedDate}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -2353,101 +2408,148 @@ export default function JournalPage() {
                 <TableRow>
                   <TableHead>No</TableHead>
                   <TableHead>Akun</TableHead>
-                  <TableHead>Keterangan</TableHead>
+                  <TableHead>Nilai</TableHead>
                   <TableHead>Jenis Transaksi</TableHead>
                   <TableHead>Kategori</TableHead>
-                  <TableHead>Nilai</TableHead>
+                  <TableHead>Keterangan</TableHead>
                   <TableHead>Waktu</TableHead>
                   <TableHead>Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {existingEntries.map((entry, index) => {
-                  const account = accounts.find(
-                    (a) => a.id === entry.accountId
-                  );
-
-                  // ✅ Debug logging for table display
-                  if (!account && entry.accountId) {
-                    console.log("❌ ACCOUNT NOT FOUND IN TABLE:", {
-                      entryId: entry.id,
-                      accountId: entry.accountId,
-                      availableAccounts: accounts.map((a) => ({
-                        id: a.id,
-                        name: a.accountName,
-                      })),
-                    });
-                  }
-                  return (
+                {existingEntries.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={8}
+                      className="text-center text-gray-500"
+                    >
+                      Belum ada data jurnal untuk tanggal {selectedDate}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  existingEntries.map((entry: any, idx: number) => (
                     <TableRow key={entry.id}>
-                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>{idx + 1}</TableCell>
                       <TableCell>
-                        <div className="font-medium">
-                          {account?.accountCode || "N/A"}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {account?.accountName ||
-                            `⚠️ Account ID ${entry.accountId} tidak ditemukan`}
-                        </div>
+                        {getAccountDisplay(entry.accountId)}
                       </TableCell>
                       <TableCell>
-                        {entry.description || entry.keterangan}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {(entry as any).transactionType ||
-                            (entry as any).piutangType ||
-                            (entry as any).utangType ||
-                            "REGULAR"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {/* ✅ Display kategori for utang/piutang entries */}
-                        {(entry as any).kategori ? (
-                          <Badge variant="secondary" className="text-xs">
-                            {(entry as any).kategori}
-                          </Badge>
-                        ) : (
-                          <span className="text-gray-400 text-sm">-</span>
+                        {formatDisplayValue(
+                          entry.accountId,
+                          accounts.find((a) => a.id === entry.accountId)
+                            ?.valueType || "NOMINAL",
+                          entry
                         )}
                       </TableCell>
-                      <TableCell className="font-medium">
-                        {/* ✅ FIXED: Untuk HRD, tampilkan absentCount bukan nilai */}
-                        {divisionType === "HRD"
-                          ? `${(entry as any).absentCount || 0} orang`
-                          : account?.valueType === "NOMINAL" ||
-                            account?.id === "SALES"
-                          ? formatCurrency(getDisplayValue(entry)) // ✅ Use getDisplayValue to handle SALDO_AKHIR properly
-                          : `${getDisplayValue(entry).toLocaleString(
-                              "id-ID"
-                            )} unit`}
-                      </TableCell>
+                      <TableCell>{entry.transactionType || "-"}</TableCell>
+                      <TableCell>{entry.kategori || "-"}</TableCell>
+                      <TableCell>{entry.description || "-"}</TableCell>
                       <TableCell>
-                        {new Date(entry.createdAt).toLocaleTimeString("id-ID", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {entry.createdAt
+                          ? new Date(entry.createdAt).toLocaleTimeString(
+                              "id-ID"
+                            )
+                          : "-"}
                       </TableCell>
                       <TableCell>
                         <Button
-                          variant="ghost"
                           size="sm"
+                          variant="destructive"
                           onClick={() => removeExistingEntry(entry.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>
                     </TableRow>
-                  );
-                })}
+                  ))
+                )}
               </TableBody>
             </Table>
-            {existingEntries.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                Belum ada entri jurnal untuk tanggal {selectedDate}
-              </div>
-            )}
+          </CardContent>
+        </Card>
+      );
+    }
+    // === TABEL KHUSUS HRD ===
+    if (divisionType === "HRD") {
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-gray-600" />
+              Tabel Absensi Karyawan - {selectedDate}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <thead>
+                <tr>
+                  <th className="text-center">No</th>
+                  <th className="text-center">Akun</th>
+                  <th className="text-center">Status Kehadiran</th>
+                  <th className="text-center">Jumlah</th>
+                  <th className="text-center">Shift</th>
+                  <th className="text-center">Keterangan</th>
+                  <th className="text-center">Waktu</th>
+                  <th className="text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {existingEntries.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="text-center text-gray-500 py-6">
+                      Belum ada data absensi untuk tanggal ini.
+                    </td>
+                  </tr>
+                ) : (
+                  existingEntries.map((entry, idx) => {
+                    const account = accounts.find(
+                      (a) => a.id === entry.accountId
+                    );
+                    return (
+                      <tr key={entry.id}>
+                        <td className="text-center">{idx + 1}</td>
+                        <td className="text-center">
+                          <div className="font-semibold text-blue-800">
+                            {account?.accountCode || "-"}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {account?.accountName || "-"}
+                          </div>
+                        </td>
+                        <td className="text-center">
+                          {entry.attendanceStatus || "-"}
+                        </td>
+                        <td className="text-center">
+                          {entry.absentCount || 0} orang
+                        </td>
+                        <td className="text-center">{entry.shift || "-"}</td>
+                        <td className="text-center">
+                          {entry.keteranganKendala || "-"}
+                        </td>
+                        <td className="text-center">
+                          {entry.createdAt
+                            ? new Date(entry.createdAt).toLocaleTimeString(
+                                "id-ID",
+                                { hour: "2-digit", minute: "2-digit" }
+                              )
+                            : "-"}
+                        </td>
+                        <td className="text-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeExistingEntry(entry.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </Table>
           </CardContent>
         </Card>
       );
@@ -3827,26 +3929,25 @@ export default function JournalPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* ✅ FIXED: Total Karyawan dari absentCount */}
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                {/* Total Karyawan */}
+                <div className="p-4 bg-violet-50 rounded-lg border border-violet-200">
                   <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-blue-600" />
-                    <h3 className="font-semibold text-blue-800">
+                    <Users className="h-4 w-4 text-violet-600" />
+                    <h3 className="font-semibold text-violet-800">
                       Total Karyawan
                     </h3>
                   </div>
-                  <p className="text-2xl font-bold text-blue-900 mt-2">
+                  <p className="text-2xl font-bold text-violet-900 mt-2">
                     {(() => {
                       const summary = getHRDSummary();
                       return `${summary.totalKaryawan} orang`;
                     })()}
                   </p>
                 </div>
-
-                {/* Total Hadir */}
+                {/* Hadir */}
                 <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                   <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-green-600" />
+                    <Users className="h-4 w-4 text-green-600" />
                     <h3 className="font-semibold text-green-800">Hadir</h3>
                   </div>
                   <p className="text-2xl font-bold text-green-900 mt-2">
@@ -3856,8 +3957,7 @@ export default function JournalPage() {
                     })()}
                   </p>
                 </div>
-
-                {/* Total Tidak Hadir */}
+                {/* Tidak Hadir */}
                 <div className="p-4 bg-red-50 rounded-lg border border-red-200">
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-red-600" />
@@ -3866,15 +3966,13 @@ export default function JournalPage() {
                   <p className="text-2xl font-bold text-red-900 mt-2">
                     {(() => {
                       const summary = getHRDSummary();
+                      // Tidak Hadir = totalKaryawan - hadirCount
                       return `${
-                        summary.tidakHadirCount +
-                        summary.sakitCount +
-                        summary.izinCount
+                        summary.totalKaryawan - summary.hadirCount
                       } orang`;
                     })()}
                   </p>
                 </div>
-
                 {/* Tingkat Kehadiran */}
                 <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
                   <div className="flex items-center gap-2">

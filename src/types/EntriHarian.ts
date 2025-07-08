@@ -22,7 +22,7 @@ export interface EntriHarian {
 
   // ✅ FIXED: Standardized HRD fields
   attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
-  absentCount?: number; // Jumlah yang tidak hadir
+  absentCount?: number; // Jumlah yang Total Orang
   shift?: "REGULER" | "LEMBUR"; // ✅ BENAR: Sesuai meeting
   keteranganKendala?: string; // Untuk kendala HRD
 

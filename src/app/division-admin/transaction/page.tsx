@@ -494,7 +494,7 @@ export default function TransactionPage() {
               return (
                 hasAttendanceData && (entry as any).attendanceStatus === "HADIR"
               );
-            } else if (filterType === "Tidak Hadir") {
+            } else if (filterType === "Total Orang") {
               return (
                 hasAttendanceData &&
                 ((entry as any).attendanceStatus === "TIDAK_HADIR" ||
@@ -1151,7 +1151,7 @@ export default function TransactionPage() {
           return (
             <Badge className="bg-red-100 text-red-800">
               <Users className="h-3 w-3 mr-1" />
-              Tidak Hadir
+              Total Orang
             </Badge>
           );
         } else {
@@ -1318,8 +1318,8 @@ export default function TransactionPage() {
             color: "text-green-600",
           },
           {
-            value: "Tidak Hadir",
-            label: "Tidak Hadir/Sakit/Izin",
+            value: "Total Orang",
+            label: "Total Orang/Sakit/Izin",
             icon: Users,
             color: "text-red-600",
           },

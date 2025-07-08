@@ -1121,59 +1121,25 @@ function generateSummarySection(data: PDFReportData): string {
     return ""; // Tidak ada data, tidak tampilkan summary
   }
 
-  // HRD: Summary HRD
+  // HRD: Summary HRD (rollback to simple/standard)
   if (divisionName.includes("HRD")) {
-    if (allEntries.some((entry) => entry.attendanceStatus)) {
-      let totalKaryawan = 0;
-      let hadirCount = 0;
-      let tidakHadirCount = 0;
-      let totalAbsentCount = 0;
-
-      allEntries.forEach((entry) => {
-        if (entry.attendanceStatus) {
-          totalKaryawan++;
-          if (entry.attendanceStatus === "HADIR") {
-            hadirCount++;
-          } else {
-            tidakHadirCount++;
-          }
-        }
-        if (entry.absentCount) {
-          totalAbsentCount += Number(entry.absentCount);
-        }
-      });
-
-      const attendanceRate =
-        totalKaryawan > 0 ? (hadirCount / totalKaryawan) * 100 : 0;
-
-      return `
-        <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
-          <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">👥 RINGKASAN HRD HARIAN</h3>
-          <table class="summary-table" style="width: 100%; border-collapse: collapse;">
-            <thead>
-              <tr style="background-color: #f5f5f5;">
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Metrik</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Nilai</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Karyawan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalKaryawan} orang</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Karyawan Hadir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${hadirCount} orang</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Karyawan Tidak Hadir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${tidakHadirCount} orang</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Absen</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalAbsentCount} orang</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Tingkat Kehadiran</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: ${
-                attendanceRate >= 90
-                  ? "green"
-                  : attendanceRate >= 80
-                  ? "orange"
-                  : "red"
-              }>${attendanceRate.toFixed(1)}%</td></tr>
-            </tbody>
-          </table>
-        </div>
-      `;
-    }
-    return ""; // Tidak ada data, tidak tampilkan summary
+    return `
+      <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
+        <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">� RINGKASAN ABSENSI HARIAN</h3>
+        <table class="summary-table" style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background-color: #f5f5f5;">
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Divisi</th>
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">${divisionName}</th>
+            </tr>
+            <tr>
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Tanggal</th>
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">${data.date}</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
+    `;
   }
 
   // ✅ DEFAULT: Summary umum untuk divisi lainnya
@@ -1201,10 +1167,53 @@ function generateDetailsSection(data: PDFReportData): string {
   const divisionName = data.divisionName.toUpperCase();
   const allEntries = getAllTransformedEntries(data);
 
-  // ✅ ADD: Debug logging untuk troubleshooting
-  console.log("🔍 [PDF DETAILS DEBUG] Division:", divisionName);
-  console.log("🔍 [PDF DETAILS DEBUG] All entries received:", allEntries);
-  console.log("🔍 [PDF DETAILS DEBUG] Entries count:", allEntries.length);
+  // Debug logging
+  console.log("[PDF DETAILS DEBUG] Division:", divisionName);
+  console.log("[PDF DETAILS DEBUG] All entries received:", allEntries);
+  console.log("[PDF DETAILS DEBUG] Entries count:", allEntries.length);
+
+  // === HRD: Tabel simple/standar ===
+  if (divisionName.includes("HRD")) {
+    return `
+      <div class="details-section">
+        <div class="details-title">DETAIL ABSENSI</div>
+        <table class="details-table">
+          <thead>
+            <tr>
+              <th style="text-align:center;">No</th>
+              <th style="text-align:center;">Nama Akun</th>
+              <th style="text-align:center;">Status Kehadiran</th>
+              <th style="text-align:center;">Jumlah</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${allEntries
+              .map((entry, idx) => {
+                const account = data.accounts.find(
+                  (a) =>
+                    a.id === entry.accountId || a.accountId === entry.accountId
+                );
+                return `
+                  <tr>
+                    <td style="text-align:center;">${idx + 1}</td>
+                    <td style="text-align:center;">${
+                      account?.accountName || "-"
+                    }</td>
+                    <td style="text-align:center;">${
+                      entry.attendanceStatus || "-"
+                    }</td>
+                    <td style="text-align:center;">${
+                      entry.absentCount || 0
+                    } orang</td>
+                  </tr>
+                `;
+              })
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
 
   let headerColumns = "";
 
@@ -1234,7 +1243,7 @@ function generateDetailsSection(data: PDFReportData): string {
     }
   } else if (divisionName.includes("HRD")) {
     headerColumns =
-      "<th>Status Kehadiran</th><th>Tidak Hadir</th><th>Shift</th><th>Jam Lembur</th>";
+      "<th>Status Kehadiran</th><th>Total Orang</th><th>Shift</th><th>Jam Lembur</th>";
   } else {
     headerColumns = "<th>Nilai</th>";
   }

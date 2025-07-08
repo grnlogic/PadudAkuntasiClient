@@ -805,7 +805,7 @@ export default function ReportsPage() {
             "Nama Akun",
             "Total Karyawan",
             "Hadir",
-            "Tidak Hadir",
+            "Total Orang",
             "Overtime",
             "Attendance Rate (%)",
             "Jumlah Transaksi",
@@ -1579,7 +1579,7 @@ export default function ReportsPage() {
                               <div className="space-y-1">
                                 <div>Hadir: {item.hadirCount || 0} orang</div>
                                 <div className="text-red-600 text-xs">
-                                  Tidak Hadir: {item.tidakHadirCount || 0} orang
+                                  Total Orang: {item.tidakHadirCount || 0} orang
                                 </div>
                                 <div className="text-purple-600 text-xs">
                                   Lembur: {item.overtimeHours || 0} jam
