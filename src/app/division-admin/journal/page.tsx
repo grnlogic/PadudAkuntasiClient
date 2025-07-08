@@ -847,6 +847,15 @@ export default function JournalPage() {
           console.warn("⚠️ Skipping row with missing accountId:", row);
           return false;
         }
+        // === Tambahan validasi khusus HRD ===
+        if (divisionType === "HRD") {
+          return (
+            row.attendanceStatus ||
+            row.absentCount ||
+            row.shift ||
+            row.keteranganKendala
+          );
+        }
         // Validate based on transaction type
         if (selectedTransactionType === "KAS") {
           if (row.transactionType === "SALDO_AKHIR") {
@@ -859,16 +868,33 @@ export default function JournalPage() {
         }
       })
       .map((row) => {
+        // === Tambahan mapping khusus HRD agar nilai tidak null ===
         const baseEntry = {
           accountId: parseInt(row.accountId),
           tanggal: selectedDate,
           description: row.keterangan || "",
+          nilai:
+            divisionType === "HRD"
+              ? Number(row.absentCount) || 0
+              : row.nominal
+              ? parseFloat(row.nominal)
+              : 0,
         };
         // ✅ ALWAYS CREATE NEW - Add timestamp to ensure uniqueness
         const timestamp = Date.now();
         const uniqueId = `${baseEntry.accountId}-${selectedDate}-${timestamp}`;
         console.log(`✅ CREATING NEW ENTRY (ID: ${uniqueId}):`, baseEntry);
         // Handle different transaction types
+        if (divisionType === "HRD") {
+          // Untuk HRD, jangan overwrite nilai dengan row.nominal!
+          return {
+            ...baseEntry,
+            attendanceStatus: row.attendanceStatus || "",
+            absentCount: Number(row.absentCount) || 0,
+            shift: row.shift || "",
+            keteranganKendala: row.keteranganKendala || "",
+          };
+        }
         if (selectedTransactionType === "KAS") {
           if (row.transactionType === "SALDO_AKHIR") {
             return {
