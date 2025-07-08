@@ -962,6 +962,18 @@ export const saveLaporanPenjualanProduk = async (data: any) => {
   return response.data;
 };
 
+export const deleteLaporanPenjualanProduk = async (
+  id: number
+): Promise<boolean> => {
+  try {
+    const response = await laporanPenjualanProdukAPI.delete(id);
+    return response.success;
+  } catch (error) {
+    console.error("❌ Error deleting laporan penjualan produk:", error);
+    throw error;
+  }
+};
+
 export const getPerusahaan = async () => {
   const response = await perusahaanAPI.getAll();
   if (response.success && response.data) return response.data;

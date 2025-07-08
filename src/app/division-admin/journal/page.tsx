@@ -920,9 +920,12 @@ export default function JournalPage() {
       if (selectedTransactionType === "KAS") {
         // Hanya kirim entry yang punya field nilai (bukan baseEntry kosong)
         const kasEntries = validEntries.filter(
-          (e) => typeof e.nilai !== "undefined"
+          (e: any) => typeof e.nilai !== "undefined"
         );
-        await toastPromise.save(saveEntriHarianBatch(kasEntries), "jurnal kas");
+        await toastPromise.save(
+          saveEntriHarianBatch(kasEntries as any),
+          "jurnal kas"
+        );
       } else if (selectedTransactionType === "PIUTANG") {
         // Save each piutang entry individually
         for (const entry of validEntries) {
@@ -1020,7 +1023,7 @@ export default function JournalPage() {
         entityType = "entri jurnal";
       }
 
-      await toastPromise.delete(deletePromise, entityType);
+      await toastPromise.delete(deletePromise as any, entityType);
       console.log(`✅ Successfully deleted ${entityType} with ID:`, id);
       loadData();
     } catch (error) {
@@ -1167,11 +1170,25 @@ export default function JournalPage() {
       // Dynamic import to avoid SSR issues
       import("@/lib/enhanced-pdf")
         .then(({ downloadEnhancedPDF }) => {
+          // ✅ FIXED: Enhanced accounts data untuk divisi pemasaran
+          let enhancedAccounts = accounts;
+          if (divisionType === "PEMASARAN") {
+            // ✅ FIXED: Pastikan accounts berisi data produk yang lengkap
+            enhancedAccounts = accounts.map((account) => ({
+              ...account,
+              accountCode:
+                account.accountCode ||
+                account.accountName?.substring(0, 10) ||
+                "N/A",
+              accountId: account.id, // ✅ Tambahkan accountId untuk konsistensi
+            }));
+          }
+
           const reportData = {
             date: selectedDate,
             divisionName: user?.division?.name || "UNKNOWN",
             entries: existingEntries,
-            accounts: accounts,
+            accounts: enhancedAccounts, // ✅ Gunakan enhanced accounts
             // ✅ FIXED: Include specialized division data
             ...(divisionType === "PEMASARAN" && {
               laporanPenjualanSales,
@@ -1190,6 +1207,8 @@ export default function JournalPage() {
             divisionType,
             selectedDate,
             entriesCount: existingEntries.length,
+            accountsCount: enhancedAccounts.length,
+            accountsSample: enhancedAccounts[0],
             laporanSalesCount: laporanPenjualanSales.length,
             laporanProdukCount: laporanPenjualanProduk.length,
             sampleSalesData: laporanPenjualanSales[0],
@@ -1202,7 +1221,7 @@ export default function JournalPage() {
           console.log("=== DEBUG PDF GENERATION ===");
           console.log("divisionType:", divisionType);
           console.log("selectedDate:", selectedDate);
-          console.log("accounts:", accounts);
+          console.log("enhancedAccounts:", enhancedAccounts);
           console.log("existingEntries:", existingEntries);
 
           if (divisionType === "PERSEDIAAN_BAHAN_BAKU") {
@@ -1242,11 +1261,25 @@ export default function JournalPage() {
     try {
       import("@/lib/enhanced-pdf")
         .then(({ previewEnhancedPDF }) => {
+          // ✅ FIXED: Enhanced accounts data untuk divisi pemasaran
+          let enhancedAccounts = accounts;
+          if (divisionType === "PEMASARAN") {
+            // ✅ FIXED: Pastikan accounts berisi data produk yang lengkap
+            enhancedAccounts = accounts.map((account) => ({
+              ...account,
+              accountCode:
+                account.accountCode ||
+                account.accountName?.substring(0, 10) ||
+                "N/A",
+              accountId: account.id, // ✅ Tambahkan accountId untuk konsistensi
+            }));
+          }
+
           const reportData = {
             date: selectedDate,
             divisionName: user?.division?.name || "UNKNOWN",
             entries: existingEntries,
-            accounts: accounts,
+            accounts: enhancedAccounts, // ✅ Gunakan enhanced accounts
             // ✅ FIXED: Include specialized division data
             ...(divisionType === "PEMASARAN" && {
               laporanPenjualanSales,
@@ -1265,6 +1298,8 @@ export default function JournalPage() {
             divisionType,
             selectedDate,
             entriesCount: existingEntries.length,
+            accountsCount: enhancedAccounts.length,
+            accountsSample: enhancedAccounts[0],
             laporanSalesCount: laporanPenjualanSales.length,
             laporanProdukCount: laporanPenjualanProduk.length,
             sampleSalesData: laporanPenjualanSales[0],

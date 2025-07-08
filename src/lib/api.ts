@@ -875,4 +875,8 @@ export const laporanPenjualanProdukAPI = {
     apiRequest<LaporanPenjualanProduk[]>(
       `/api/v1/laporan-penjualan-produk/filter?${new URLSearchParams(params)}`
     ),
+  delete: async (id: number) =>
+    apiRequest(`/api/v1/laporan-penjualan-produk/${id}`, {
+      method: "DELETE",
+    }),
 };

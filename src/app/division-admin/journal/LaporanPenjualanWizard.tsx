@@ -10,6 +10,7 @@ import {
   getEntriHarianByDate,
   getLaporanPenjualanSales,
   deleteSalesperson,
+  deleteLaporanPenjualanProduk,
 } from "@/lib/data";
 import { createSalesperson } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,11 @@ export default function LaporanPenjualanWizard() {
   const [deletingSalesperson, setDeletingSalesperson] = useState<number | null>(
     null
   );
+
+  // ✅ NEW: State untuk delete laporan produk
+  const [deletingLaporanProduk, setDeletingLaporanProduk] = useState<
+    number | null
+  >(null);
 
   // ✅ Helper function untuk filter data berdasarkan tanggal hari ini
   const filterDataForToday = (data: any[]) => {
@@ -172,7 +178,16 @@ export default function LaporanPenjualanWizard() {
       if (divisionId) {
         getProductAccounts(divisionId).then((list) => {
           console.log("📦 Products fetched:", list);
-          setProductList(list);
+          setProductList(
+            list.map((product) => ({
+              ...product,
+              accountCode:
+                product.accountCode ||
+                (product as any)?.kodeAkun ||
+                (product as any)?.code ||
+                "N/A",
+            }))
+          );
         });
       } else {
         console.error("❌ No valid divisionId found, cannot fetch products");
@@ -366,6 +381,54 @@ export default function LaporanPenjualanWizard() {
     }
   };
 
+  // ✅ NEW: Fungsi untuk delete laporan penjualan produk
+  const handleDeleteLaporanProduk = async (
+    laporanId: number,
+    laporanInfo: string
+  ) => {
+    if (
+      !confirm(
+        `Apakah Anda yakin ingin menghapus laporan penjualan produk "${laporanInfo}"?`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingLaporanProduk(laporanId);
+    try {
+      await deleteLaporanPenjualanProduk(laporanId);
+      toastSuccess.custom(`Laporan penjualan produk berhasil dihapus!`);
+
+      // ✅ FIXED: Refresh laporan produk data
+      getLaporanPenjualanProduk().then((data) => {
+        console.log(
+          "🔍 LAPORAN PENJUALAN WIZARD - After delete, received data:",
+          data
+        );
+
+        // Filter data untuk hari ini saja menggunakan helper function
+        const filteredData = filterDataForToday(data);
+
+        console.log(
+          "🔍 LAPORAN PENJUALAN WIZARD - After delete, filtered data:",
+          {
+            total: data.length,
+            filtered: filteredData.length,
+            today: new Date().toISOString().split("T")[0],
+          }
+        );
+
+        setLaporanProduk(filteredData);
+      });
+    } catch (error: any) {
+      toastError.custom(
+        error.message || "Gagal menghapus laporan penjualan produk"
+      );
+    } finally {
+      setDeletingLaporanProduk(null);
+    }
+  };
+
   // Debug function to check all accounts in division
   const debugAllAccountsInDivision = async () => {
     const user = getCurrentUser();
@@ -479,10 +542,10 @@ export default function LaporanPenjualanWizard() {
       .then(({ downloadEnhancedPDF }) => {
         const user = getCurrentUser();
         const today = new Date().toISOString().slice(0, 10);
-        
+
         // Filter laporan produk untuk hari ini
         const todayLaporanProduk = filterDataForToday(laporanProduk);
-        
+
         console.log("🔍 [PDF GENERATION DEBUG] Data for PDF:", {
           today,
           divisionName: user?.division?.name,
@@ -494,7 +557,7 @@ export default function LaporanPenjualanWizard() {
           date: today,
           divisionName: user?.division?.name || "DIVISI PEMASARAN & PENJUALAN",
           entries: [], // Entri harian kosong untuk wizard ini
-          laporanPenjualanSales: [], // Sales kosong untuk wizard ini  
+          laporanPenjualanSales: [], // Sales kosong untuk wizard ini
           laporanProduksi: [], // Produksi kosong
           laporanGudang: [], // Gudang kosong
           laporanPenjualanProduk: todayLaporanProduk, // ✅ Data laporan produk
@@ -502,7 +565,7 @@ export default function LaporanPenjualanWizard() {
         };
 
         console.log("📊 Final reportData for PDF:", reportData);
-        
+
         downloadEnhancedPDF(reportData);
         toastSuccess.custom("PDF laporan berhasil diunduh");
       })
@@ -518,15 +581,15 @@ export default function LaporanPenjualanWizard() {
       .then(({ previewEnhancedPDF }) => {
         const user = getCurrentUser();
         const today = new Date().toISOString().slice(0, 10);
-        
+
         // Filter laporan produk untuk hari ini
         const todayLaporanProduk = filterDataForToday(laporanProduk);
-        
+
         const reportData = {
           date: today,
           divisionName: user?.division?.name || "DIVISI PEMASARAN & PENJUALAN",
           entries: [], // Entri harian kosong untuk wizard ini
-          laporanPenjualanSales: [], // Sales kosong untuk wizard ini  
+          laporanPenjualanSales: [], // Sales kosong untuk wizard ini
           laporanProduksi: [], // Produksi kosong
           laporanGudang: [], // Gudang kosong
           laporanPenjualanProduk: todayLaporanProduk, // ✅ Data laporan produk
@@ -586,6 +649,12 @@ export default function LaporanPenjualanWizard() {
             <Plus className="h-4 w-4 text-orange-600" />
             <span className="text-orange-600 font-medium">
               Klik "Tambah Baris Produk" untuk menambah entri baru
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Trash2 className="h-4 w-4 text-red-600" />
+            <span className="text-red-600 font-medium">
+              Klik "Hapus" pada tabel untuk menghapus laporan
             </span>
           </div>
         </div>
@@ -1126,6 +1195,11 @@ export default function LaporanPenjualanWizard() {
                   <div className="text-2xl font-bold text-purple-900 mt-2">
                     {jumlahLaporan}
                   </div>
+                  {jumlahLaporan > 0 && (
+                    <div className="text-sm text-purple-600 mt-1">
+                      Klik "Hapus" untuk menghapus laporan
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -1133,77 +1207,132 @@ export default function LaporanPenjualanWizard() {
         </div>
         {/* Tabel ringkasan laporan produk */}
         <div className="mt-8">
-          <h3 className="font-semibold mb-2">
-            Ringkasan Laporan Penjualan Produk Hari Ini
-          </h3>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Perusahaan</TableHead>
-                <TableHead>Sales</TableHead>
-                <TableHead>Produk</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>Realisasi</TableHead>
-                <TableHead>Kendala</TableHead>
-                <TableHead>Waktu</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {laporanProduk.map((row: any) => (
-                <TableRow key={row.id}>
-                  <TableCell>{row.namaPerusahaan}</TableCell>
-                  <TableCell>{row.namaSalesperson}</TableCell>
-                  <TableCell>{row.namaAccount}</TableCell>
-                  <TableCell>{row.targetKuantitas}</TableCell>
-                  <TableCell>{row.realisasiKuantitas}</TableCell>
-                  <TableCell>{row.keteranganKendala || "-"}</TableCell>
-                  <TableCell>
-                    {row.createdAt
-                      ? new Date(row.createdAt).toLocaleTimeString("id-ID", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "-"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          
-          {/* ✅ NEW: PDF Export Info */}
-          {laporanProduk.length > 0 && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-medium text-blue-800">📄 Export Laporan PDF</h4>
-                  <p className="text-sm text-blue-600 mt-1">
-                    Data yang tersedia untuk export: <strong>{laporanProduk.length} laporan penjualan produk</strong> hari ini
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={previewPDFReport}
-                    className="text-blue-600 hover:text-blue-700 border-blue-200"
-                  >
-                    <FileText className="h-4 w-4 mr-1" />
-                    Preview
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={generatePDFReport}
-                    className="text-green-600 hover:text-green-700 border-green-200"
-                  >
-                    <Download className="h-4 w-4 mr-1" />
-                    Download
-                  </Button>
-                </div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold">
+              Ringkasan Laporan Penjualan Produk Hari Ini
+            </h3>
+            {laporanProduk.length > 0 && (
+              <Badge variant="outline" className="text-sm">
+                {laporanProduk.length} laporan tersedia
+              </Badge>
+            )}
+          </div>
+
+          {laporanProduk.length === 0 ? (
+            <div className="p-8 text-center bg-gray-50 rounded-lg border border-dashed">
+              <div className="text-gray-400 mb-2">
+                <FileText className="h-12 w-12 mx-auto" />
               </div>
+              <h4 className="text-lg font-medium text-gray-600 mb-2">
+                Belum ada laporan penjualan produk hari ini
+              </h4>
+              <p className="text-sm text-gray-500">
+                Laporan yang Anda buat akan muncul di sini
+              </p>
             </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Perusahaan</TableHead>
+                  <TableHead>Sales</TableHead>
+                  <TableHead>Produk</TableHead>
+                  <TableHead>Target</TableHead>
+                  <TableHead>Realisasi</TableHead>
+                  <TableHead>Kendala</TableHead>
+                  <TableHead>Waktu</TableHead>
+                  <TableHead>Aksi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {laporanProduk.map((row: any) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.namaPerusahaan}</TableCell>
+                    <TableCell>{row.namaSalesperson}</TableCell>
+                    <TableCell>{row.namaAccount}</TableCell>
+                    <TableCell>{row.targetKuantitas}</TableCell>
+                    <TableCell>{row.realisasiKuantitas}</TableCell>
+                    <TableCell>{row.keteranganKendala || "-"}</TableCell>
+                    <TableCell>
+                      {row.createdAt
+                        ? new Date(row.createdAt).toLocaleTimeString("id-ID", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "-"}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          handleDeleteLaporanProduk(
+                            row.id,
+                            `${row.namaPerusahaan} - ${row.namaSalesperson} - ${row.namaAccount}`
+                          )
+                        }
+                        disabled={deletingLaporanProduk === row.id}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                      >
+                        {deletingLaporanProduk === row.id ? (
+                          <>
+                            <div className="animate-spin mr-1 h-3 w-3 border border-red-600 border-t-transparent rounded-full" />
+                            Menghapus...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Hapus
+                          </>
+                        )}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </div>
+
+        {/* ✅ NEW: PDF Export Info */}
+        {laporanProduk.length > 0 && (
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium text-blue-800">
+                  📄 Export Laporan PDF
+                </h4>
+                <p className="text-sm text-blue-600 mt-1">
+                  Data yang tersedia untuk export:{" "}
+                  <strong>
+                    {laporanProduk.length} laporan penjualan produk
+                  </strong>{" "}
+                  hari ini
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={previewPDFReport}
+                  className="text-blue-600 hover:text-blue-700 border-blue-200"
+                >
+                  <FileText className="h-4 w-4 mr-1" />
+                  Preview
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={generatePDFReport}
+                  className="text-green-600 hover:text-green-700 border-green-200"
+                >
+                  <Download className="h-4 w-4 mr-1" />
+                  Download
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

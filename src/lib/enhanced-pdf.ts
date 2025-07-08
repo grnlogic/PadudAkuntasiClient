@@ -153,6 +153,9 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
           accountId:
             produk.productAccountId?.toString() ||
             produk.product_account_id?.toString(),
+          // ✅ FIXED: Tambahkan accountCode untuk laporan penjualan produk
+          accountCode:
+            produk.accountCode || produk.productAccountId?.toString() || "N/A",
           description: `${
             produk.namaAccount || produk.nama_account || "Produk"
           } - ${
@@ -813,9 +816,12 @@ function generateSummarySection(data: PDFReportData): string {
         (item: any) => Number(item.stokAkhir || 0) < 100
       ).length;
       const statusGudang = itemStokRendah > 0 ? "Perlu Perhatian" : "Stok Aman";
-      
+
       // Special template for DIVISI BLENDING PERSEDIAAN BAHAN BAKU
-      if (divisionName.includes("BLENDING") && divisionName.includes("PERSEDIAAN")) {
+      if (
+        divisionName.includes("BLENDING") &&
+        divisionName.includes("PERSEDIAAN")
+      ) {
         return `
           <div class="blending-summary-section" style="margin: 20px 0; page-break-inside: avoid;">
             <!-- Header Section -->
@@ -860,19 +866,49 @@ function generateSummarySection(data: PDFReportData): string {
                 <tbody>
                   <tr style="background-color: #f8f9fa;">
                     <td style="border: 1px solid #dee2e6; padding: 10px; font-weight: 500;">Efisiensi Penggunaan</td>
-                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">${totalMasuk > 0 ? ((totalPakai / totalMasuk) * 100).toFixed(1) : 0}%</td>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">${
+                      totalMasuk > 0
+                        ? ((totalPakai / totalMasuk) * 100).toFixed(1)
+                        : 0
+                    }%</td>
                     <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">
-                      <span style="color: ${(totalMasuk > 0 && (totalPakai / totalMasuk) < 0.8) ? '#28a745' : ((totalPakai / totalMasuk) > 0.9) ? '#dc3545' : '#ffc107'}; font-weight: bold;">
-                        ${(totalMasuk > 0 && (totalPakai / totalMasuk) < 0.8) ? 'EFISIEN' : ((totalPakai / totalMasuk) > 0.9) ? 'BOROS' : 'NORMAL'}
+                      <span style="color: ${
+                        totalMasuk > 0 && totalPakai / totalMasuk < 0.8
+                          ? "#28a745"
+                          : totalPakai / totalMasuk > 0.9
+                          ? "#dc3545"
+                          : "#ffc107"
+                      }; font-weight: bold;">
+                        ${
+                          totalMasuk > 0 && totalPakai / totalMasuk < 0.8
+                            ? "EFISIEN"
+                            : totalPakai / totalMasuk > 0.9
+                            ? "BOROS"
+                            : "NORMAL"
+                        }
                       </span>
                     </td>
                   </tr>
                   <tr>
                     <td style="border: 1px solid #dee2e6; padding: 10px; font-weight: 500;">Rata-rata Stok per Item</td>
-                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">${rataStok.toFixed(1)} unit</td>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">${rataStok.toFixed(
+                      1
+                    )} unit</td>
                     <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">
-                      <span style="color: ${rataStok > 200 ? '#28a745' : rataStok > 100 ? '#ffc107' : '#dc3545'}; font-weight: bold;">
-                        ${rataStok > 200 ? 'TINGGI' : rataStok > 100 ? 'SEDANG' : 'RENDAH'}
+                      <span style="color: ${
+                        rataStok > 200
+                          ? "#28a745"
+                          : rataStok > 100
+                          ? "#ffc107"
+                          : "#dc3545"
+                      }; font-weight: bold;">
+                        ${
+                          rataStok > 200
+                            ? "TINGGI"
+                            : rataStok > 100
+                            ? "SEDANG"
+                            : "RENDAH"
+                        }
                       </span>
                     </td>
                   </tr>
@@ -880,16 +916,32 @@ function generateSummarySection(data: PDFReportData): string {
                     <td style="border: 1px solid #dee2e6; padding: 10px; font-weight: 500;">Item Kritis (< 100 unit)</td>
                     <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">${itemStokRendah} item</td>
                     <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">
-                      <span style="color: ${itemStokRendah === 0 ? '#28a745' : itemStokRendah < 3 ? '#ffc107' : '#dc3545'}; font-weight: bold;">
-                        ${itemStokRendah === 0 ? 'AMAN' : itemStokRendah < 3 ? 'PERHATIAN' : 'KRITIS'}
+                      <span style="color: ${
+                        itemStokRendah === 0
+                          ? "#28a745"
+                          : itemStokRendah < 3
+                          ? "#ffc107"
+                          : "#dc3545"
+                      }; font-weight: bold;">
+                        ${
+                          itemStokRendah === 0
+                            ? "AMAN"
+                            : itemStokRendah < 3
+                            ? "PERHATIAN"
+                            : "KRITIS"
+                        }
                       </span>
                     </td>
                   </tr>
                   <tr>
                     <td style="border: 1px solid #dee2e6; padding: 10px; font-weight: 500;">Status Keseluruhan Gudang</td>
-                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">${laporanBlendingData.length} item</td>
+                    <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">${
+                      laporanBlendingData.length
+                    } item</td>
                     <td style="border: 1px solid #dee2e6; padding: 10px; text-align: center;">
-                      <span style="color: ${statusGudang === "Stok Aman" ? '#28a745' : '#ffc107'}; font-weight: bold; text-transform: uppercase;">
+                      <span style="color: ${
+                        statusGudang === "Stok Aman" ? "#28a745" : "#ffc107"
+                      }; font-weight: bold; text-transform: uppercase;">
                         ${statusGudang}
                       </span>
                     </td>
@@ -928,9 +980,12 @@ function generateSummarySection(data: PDFReportData): string {
         </div>
       `;
     }
-    
+
     // ✅ Enhanced: Special template for empty BLENDING data
-    if (divisionName.includes("BLENDING") && divisionName.includes("PERSEDIAAN")) {
+    if (
+      divisionName.includes("BLENDING") &&
+      divisionName.includes("PERSEDIAAN")
+    ) {
       return `
         <div class="blending-summary-section" style="margin: 20px 0; page-break-inside: avoid;">
           <!-- Header Section -->
@@ -952,7 +1007,7 @@ function generateSummarySection(data: PDFReportData): string {
         </div>
       `;
     }
-    
+
     // ✅ FIXED: Tampilkan summary default untuk BLENDING/GUDANG tanpa data
     return `
       <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
@@ -1167,7 +1222,10 @@ function generateDetailsSection(data: PDFReportData): string {
     divisionName.includes("BLENDING")
   ) {
     // Enhanced header for DIVISI BLENDING PERSEDIAAN BAHAN BAKU
-    if (divisionName.includes("BLENDING") && divisionName.includes("PERSEDIAAN")) {
+    if (
+      divisionName.includes("BLENDING") &&
+      divisionName.includes("PERSEDIAAN")
+    ) {
       headerColumns =
         "<th>Barang Masuk<br/><span style='font-size: 10px; font-weight: normal;'>(Unit)</span></th><th>Pemakaian<br/><span style='font-size: 10px; font-weight: normal;'>(Unit)</span></th><th>Stok Akhir<br/><span style='font-size: 10px; font-weight: normal;'>(Unit & Status)</span></th><th>Turnover & Keterangan</th>";
     } else {
@@ -1187,8 +1245,12 @@ function generateDetailsSection(data: PDFReportData): string {
       let account = data.accounts.find((acc) => {
         return (
           acc.id?.toString() === entry.accountId?.toString() ||
+          acc.id?.toString() === entry.productAccountId?.toString() ||
           acc.id === entry.accountId ||
-          acc.accountId?.toString() === entry.accountId?.toString()
+          acc.id === entry.productAccountId ||
+          acc.accountId?.toString() === entry.accountId?.toString() ||
+          acc.accountId?.toString() === entry.productAccountId?.toString() ||
+          acc.accountCode === entry.accountCode
         );
       });
 
@@ -1197,11 +1259,12 @@ function generateDetailsSection(data: PDFReportData): string {
         account = entry.account;
       }
 
-      // Jika masih tidak ketemu, buat fallback
+      // ✅ FIXED: Enhanced fallback dengan accountCode yang benar
       if (!account) {
         account = {
-          id: entry.accountId,
-          accountCode: "N/A",
+          id: entry.accountId || entry.productAccountId,
+          accountCode:
+            entry.accountCode || entry.productAccountId?.toString() || "N/A",
           accountName: entry.namaAccount || "Unknown Account",
         };
       }
@@ -1293,14 +1356,38 @@ function generateDetailsSection(data: PDFReportData): string {
         const keterangan = entry.keterangan || "-";
 
         // Enhanced template for DIVISI BLENDING PERSEDIAAN BAHAN BAKU
-        if (divisionName.includes("BLENDING") && divisionName.includes("PERSEDIAAN")) {
-          const stokStatus = stokAkhir < 50 ? "KRITIS" : stokAkhir < 100 ? "RENDAH" : stokAkhir < 200 ? "SEDANG" : "AMAN";
-          const statusColor = stokAkhir < 50 ? "#dc3545" : stokAkhir < 100 ? "#fd7e14" : stokAkhir < 200 ? "#ffc107" : "#28a745";
-          const turnover = barangMasuk > 0 ? ((pemakaian / barangMasuk) * 100).toFixed(1) : "0";
-          
+        if (
+          divisionName.includes("BLENDING") &&
+          divisionName.includes("PERSEDIAAN")
+        ) {
+          const stokStatus =
+            stokAkhir < 50
+              ? "KRITIS"
+              : stokAkhir < 100
+              ? "RENDAH"
+              : stokAkhir < 200
+              ? "SEDANG"
+              : "AMAN";
+          const statusColor =
+            stokAkhir < 50
+              ? "#dc3545"
+              : stokAkhir < 100
+              ? "#fd7e14"
+              : stokAkhir < 200
+              ? "#ffc107"
+              : "#28a745";
+          const turnover =
+            barangMasuk > 0
+              ? ((pemakaian / barangMasuk) * 100).toFixed(1)
+              : "0";
+
           dataCells = `
-            <td style="text-align: right; font-weight: 500; ${barangMasuk > 0 ? 'color: #28a745;' : ''}">${barangMasuk.toLocaleString("id-ID")}</td>
-            <td style="text-align: right; font-weight: 500; ${pemakaian > 0 ? 'color: #dc3545;' : ''}">${pemakaian.toLocaleString("id-ID")}</td>
+            <td style="text-align: right; font-weight: 500; ${
+              barangMasuk > 0 ? "color: #28a745;" : ""
+            }">${barangMasuk.toLocaleString("id-ID")}</td>
+            <td style="text-align: right; font-weight: 500; ${
+              pemakaian > 0 ? "color: #dc3545;" : ""
+            }">${pemakaian.toLocaleString("id-ID")}</td>
             <td style="text-align: right; font-weight: bold; color: ${statusColor};">
               ${stokAkhir.toLocaleString("id-ID")}
               <div style="font-size: 10px; font-weight: normal; margin-top: 2px;">[${stokStatus}]</div>
@@ -1313,9 +1400,15 @@ function generateDetailsSection(data: PDFReportData): string {
         } else {
           // Default template for other GUDANG divisions
           dataCells = `
-            <td style="text-align: right;">${barangMasuk.toLocaleString("id-ID")}</td>
-            <td style="text-align: right;">${pemakaian.toLocaleString("id-ID")}</td>
-            <td style="text-align: right;">${stokAkhir.toLocaleString("id-ID")}</td>
+            <td style="text-align: right;">${barangMasuk.toLocaleString(
+              "id-ID"
+            )}</td>
+            <td style="text-align: right;">${pemakaian.toLocaleString(
+              "id-ID"
+            )}</td>
+            <td style="text-align: right;">${stokAkhir.toLocaleString(
+              "id-ID"
+            )}</td>
             <td style="text-align: left;">${keterangan}</td>
           `;
         }
@@ -1378,9 +1471,12 @@ function generateDetailsSection(data: PDFReportData): string {
 
 function generateSignatureSection(data: PDFReportData): string {
   const divisionName = data.divisionName.toUpperCase();
-  
+
   // Enhanced signature section for DIVISI BLENDING PERSEDIAAN BAHAN BAKU
-  if (divisionName.includes("BLENDING") && divisionName.includes("PERSEDIAAN")) {
+  if (
+    divisionName.includes("BLENDING") &&
+    divisionName.includes("PERSEDIAAN")
+  ) {
     return `
       <div class="signature-section" style="margin-top: 40px; page-break-inside: avoid;">
         <!-- Note/Catatan Section -->
