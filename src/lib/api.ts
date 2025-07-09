@@ -381,8 +381,18 @@ export const laporanPenjualanSalesAPI = {
     });
   },
 
+  // ✅ PERBAIKAN: Tambahkan user filter
   getAll: async () => {
-    return apiRequest<LaporanPenjualanSales[]>("/api/v1/laporan-penjualan");
+    return apiRequest<LaporanPenjualanSales[]>(
+      "/api/v1/laporan-penjualan?userOwned=true"
+    );
+  },
+
+  // ✅ PERBAIKAN: Tambahkan user filter untuk get by date
+  getByDate: async (date: string) => {
+    return apiRequest<LaporanPenjualanSales[]>(
+      `/api/v1/laporan-penjualan/by-date/${date}?userOwned=true`
+    );
   },
 
   delete: async (id: number) => {
@@ -525,7 +535,9 @@ function getToken() {
 export async function getSalespeople(): Promise<Salesperson[]> {
   const token = getToken();
   if (!token) throw new Error("User belum login atau token tidak ditemukan");
-  const res = await fetch(`${BASE_URL}/api/v1/salespeople`, {
+
+  // ✅ PERBAIKAN: Tambahkan user filter untuk isolasi
+  const res = await fetch(`${BASE_URL}/api/v1/salespeople?userOwned=true`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -826,7 +838,9 @@ export const perusahaanAPI = {
 // ================== SALESPERSON BY PERUSAHAAN ==================
 export const salespersonAPI = {
   getByPerusahaan: async (perusahaanId: number) =>
-    apiRequest<any[]>(`/api/v1/salespeople/by-perusahaan/${perusahaanId}`),
+    apiRequest<any[]>(
+      `/api/v1/salespeople/by-perusahaan/${perusahaanId}?userOwned=true`
+    ),
 };
 
 // ================== LAPORAN PENJUALAN PRODUK ==================
@@ -869,11 +883,16 @@ export const laporanPenjualanProdukAPI = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  // ✅ PERBAIKAN: Tambahkan user filter
   getAll: async () =>
-    apiRequest<LaporanPenjualanProduk[]>("/api/v1/laporan-penjualan-produk"),
+    apiRequest<LaporanPenjualanProduk[]>(
+      "/api/v1/laporan-penjualan-produk?userOwned=true"
+    ),
   filter: async (params: any) =>
     apiRequest<LaporanPenjualanProduk[]>(
-      `/api/v1/laporan-penjualan-produk/filter?${new URLSearchParams(params)}`
+      `/api/v1/laporan-penjualan-produk/filter?${new URLSearchParams(
+        params
+      )}&userOwned=true`
     ),
   delete: async (id: number) =>
     apiRequest(`/api/v1/laporan-penjualan-produk/${id}`, {

@@ -654,21 +654,33 @@ export const deleteEntriHarian = async (id: string): Promise<boolean> => {
   }
 };
 
-// Users CRUD - now using API
-export const getUsers = async (): Promise<AppUser[]> => {
+export const getUsers = async (divisionId?: string): Promise<AppUser[]> => {
   try {
     const response = await usersAPI.getAll();
-    return response.success && response.data ? response.data : [];
+    if (response.success && response.data) {
+      let users = response.data;
+      if (divisionId) {
+        users = users.filter(
+          (user: AppUser) => user.division?.id === divisionId
+        );
+      }
+      return users;
+    }
+    return [];
   } catch (error) {
     return [];
   }
 };
 
-// Update saveUser function untuk menggunakan RegisterRequest format
 export const saveUser = async (
-  user: Omit<AppUser, "id" | "createdAt">
+  user: Omit<AppUser, "id" | "createdAt" | "division">
 ): Promise<AppUser> => {
-  const response = await usersAPI.create(user);
+  // Ensure divisionId is included in the payload
+  const payload = {
+    ...user,
+    divisionId: user.division?.id || null,
+  };
+  const response = await usersAPI.create(payload);
   if (!response.success) {
     throw new Error(response.error || "Failed to create user");
   }
@@ -681,6 +693,10 @@ export const saveUserWithDTO = async (createRequest: {
   role: string;
   divisionId: number | null;
 }): Promise<AppUser> => {
+  // Ensure divisionId is present and valid
+  if (!createRequest.divisionId) {
+    throw new Error("Division ID must be provided when creating a user");
+  }
   const response = await usersAPI.create(createRequest);
   if (!response.success) {
     throw new Error(response.error || "Failed to create user");
@@ -706,6 +722,7 @@ export const getLaporanPenjualanSales = async (): Promise<
   LaporanPenjualanSales[]
 > => {
   try {
+    // ✅ PERBAIKAN: Hanya ambil laporan milik user
     const response = await laporanPenjualanSalesAPI.getAll();
     if (response.success && response.data) {
       // ✅ FIXED: Mapping snake_case ke camelCase dengan field yang konsisten
@@ -734,6 +751,7 @@ export const getLaporanPenjualanSales = async (): Promise<
     }
     return [];
   } catch (error) {
+    console.error("❌ Error fetching user laporan penjualan:", error);
     return [];
   }
 };
@@ -981,6 +999,7 @@ export const getPerusahaan = async () => {
 };
 
 export const getSalespeopleByPerusahaan = async (perusahaanId: number) => {
+  // ✅ PERBAIKAN: Gunakan API yang sudah ada user filter
   const response = await salespersonAPI.getByPerusahaan(perusahaanId);
   if (response.success && response.data) return response.data;
   return [];

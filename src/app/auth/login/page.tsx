@@ -189,7 +189,7 @@ Terima kasih.`;
             <CardTitle className="text-2xl font-bold">
               Sistem Akuntansi Perusahaan
             </CardTitle>
-            <CardDescription>Masuk ke ruang kerja Anda</CardDescription>
+            <CardDescription>PT Padud Jayaputera</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
