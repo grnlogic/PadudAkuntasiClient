@@ -233,10 +233,6 @@ export default function JournalPage() {
     "KAS" | "PIUTANG" | "UTANG"
   >("KAS");
 
-  // ✅ NEW: State untuk laporan penjualan sales
-  const [laporanPenjualanSales, setLaporanPenjualanSales] = useState<
-    LaporanPenjualanSales[]
-  >([]);
   const [users, setUsers] = useState<any[]>([]);
   const [salespeople, setSalespeople] = useState<Salesperson[]>([]);
   const [newSalespersonName, setNewSalespersonName] = useState("");
@@ -253,6 +249,9 @@ export default function JournalPage() {
   const [laporanPenjualanProduk, setLaporanPenjualanProduk] = useState<any[]>(
     []
   );
+
+  // ✅ NEW: State untuk laporan penjualan sales (sebenarnya menggunakan data produk)
+  const [laporanPenjualanSales, setLaporanPenjualanSales] = useState<any[]>([]);
 
   // Ganti state tab pemasaran
   const [selectedPemasaranTab, setSelectedPemasaranTab] = useState<
@@ -398,7 +397,7 @@ export default function JournalPage() {
             : Promise.resolve([]);
         const laporanPromise =
           divisionType === "PEMASARAN"
-            ? getLaporanPenjualanSales()
+            ? getLaporanPenjualanProduk()
             : Promise.resolve([]);
         const laporanProdukPromise =
           divisionType === "PEMASARAN"
@@ -443,6 +442,7 @@ export default function JournalPage() {
 
         if (divisionType === "PEMASARAN") {
           filteredLaporanSales = laporanData.filter((laporan) => {
+            if (!laporan) return false;
             const laporanDate = laporan.tanggalLaporan || laporan.createdAt;
             if (!laporanDate) return false;
 
@@ -1255,26 +1255,63 @@ export default function JournalPage() {
       // Dynamic import to avoid SSR issues
       import("@/lib/enhanced-pdf")
         .then(({ downloadEnhancedPDF }) => {
-          // ✅ FIXED: Enhanced accounts data untuk divisi pemasaran
+          // --- PERBAIKAN: Untuk HRD, pastikan accounts yang dikirim ke PDF adalah accounts yang benar-benar dipakai di entries ---
           let enhancedAccounts = accounts;
+          let mappedEntries = existingEntries;
           if (divisionType === "PEMASARAN") {
-            // ✅ FIXED: Pastikan accounts berisi data produk yang lengkap
             enhancedAccounts = accounts.map((account) => ({
               ...account,
               accountCode:
                 account.accountCode ||
                 account.accountName?.substring(0, 10) ||
                 "N/A",
-              accountId: account.id, // ✅ Tambahkan accountId untuk konsistensi
+              accountId: account.id,
             }));
+          } else if (divisionType === "HRD") {
+            // Filter hanya accounts yang digunakan di entries
+            const usedAccountIds = Array.from(
+              new Set(existingEntries.map((e) => String(e.accountId)))
+            );
+            enhancedAccounts = accounts.filter((acc) =>
+              usedAccountIds.includes(String(acc.id))
+            );
+            // PATCH: Mapping ulang entries HRD agar field attendanceStatus & absentCount SELALU ADA
+            mappedEntries = existingEntries.map((entry) => {
+              // Paksa field attendanceStatus dan absentCount selalu ada
+              let attendanceStatus:
+                | "HADIR"
+                | "TIDAK_HADIR"
+                | "SAKIT"
+                | "IZIN"
+                | undefined = undefined;
+              let absentCount = 0;
+              let shift: "REGULER" | "LEMBUR" | undefined = undefined;
+              if (typeof (entry as any).attendanceStatus !== "undefined") {
+                attendanceStatus = (entry as any).attendanceStatus || undefined;
+              }
+              if (typeof (entry as any).absentCount !== "undefined") {
+                absentCount = Number((entry as any).absentCount) || 0;
+              } else if (typeof (entry as any).nilai !== "undefined") {
+                // fallback: jika tidak ada absentCount, gunakan nilai
+                absentCount = Number((entry as any).nilai) || 0;
+              }
+              if (typeof (entry as any).shift !== "undefined") {
+                shift = (entry as any).shift || undefined;
+              }
+              return {
+                ...entry,
+                attendanceStatus,
+                absentCount,
+                shift,
+              };
+            });
           }
 
           const reportData = {
             date: selectedDate,
             divisionName: user?.division?.name || "UNKNOWN",
-            entries: existingEntries,
-            accounts: enhancedAccounts, // ✅ Gunakan enhanced accounts
-            // ✅ FIXED: Include specialized division data
+            entries: mappedEntries,
+            accounts: enhancedAccounts,
             ...(divisionType === "PEMASARAN" && {
               laporanPenjualanSales,
               laporanPenjualanProduk,
@@ -1282,52 +1319,24 @@ export default function JournalPage() {
             ...(divisionType === "PRODUKSI" && { laporanProduksi }),
             ...(divisionType === "PERSEDIAAN_BAHAN_BAKU" && { laporanGudang }),
             ...(divisionType === "KEUANGAN" && { summary: keuanganSummary }),
-            // ✅ ADD: Include users and salespeople for reference
             users,
             salespeople,
           };
 
-          // ✅ FIXED: Debug logging untuk memastikan data lengkap
+          // Debug logging untuk memastikan data lengkap
           console.log("🔍 [PDF GENERATION DEBUG] reportData:", {
             divisionType,
             selectedDate,
-            entriesCount: existingEntries.length,
+            entriesCount: mappedEntries.length,
             accountsCount: enhancedAccounts.length,
             accountsSample: enhancedAccounts[0],
-            laporanSalesCount: laporanPenjualanSales.length,
-            laporanProdukCount: laporanPenjualanProduk.length,
-            sampleSalesData: laporanPenjualanSales[0],
-            sampleProdukData: laporanPenjualanProduk[0],
-            allSalesData: laporanPenjualanSales,
-            allProdukData: laporanPenjualanProduk,
+            laporanSalesCount: laporanPenjualanSales?.length || 0,
+            laporanProdukCount: laporanPenjualanProduk?.length || 0,
+            sampleSalesData: laporanPenjualanSales?.[0],
+            sampleProdukData: laporanPenjualanProduk?.[0],
+            allSalesData: laporanPenjualanSales || [],
+            allProdukData: laporanPenjualanProduk || [],
           });
-
-          // ✅ DEBUG: Enhanced logging untuk troubleshooting account mapping
-          console.log("=== DEBUG PDF GENERATION ===");
-          console.log("divisionType:", divisionType);
-          console.log("selectedDate:", selectedDate);
-          console.log("enhancedAccounts:", enhancedAccounts);
-          console.log("existingEntries:", existingEntries);
-
-          if (divisionType === "PERSEDIAAN_BAHAN_BAKU") {
-            console.log("=== DEBUG PERSEDIAAN_BAHAN_BAKU SPECIFIC ===");
-            console.log("laporanGudang:", laporanGudang);
-            console.log(
-              "laporanGudang accounts:",
-              laporanGudang.map((lg) => ({
-                id: lg.id,
-                account: lg.account,
-                accountId: lg.account?.id,
-              }))
-            );
-          }
-
-          if (divisionType === "PRODUKSI") {
-            console.log("=== DEBUG PRODUKSI SPECIFIC ===");
-            console.log("laporanProduksi:", laporanProduksi);
-          }
-
-          console.log("reportData:", reportData);
 
           downloadEnhancedPDF(reportData);
           toastSuccess.custom("Jendela print PDF telah dibuka");
@@ -1367,8 +1376,8 @@ export default function JournalPage() {
             accounts: enhancedAccounts, // ✅ Gunakan enhanced accounts
             // ✅ FIXED: Include specialized division data
             ...(divisionType === "PEMASARAN" && {
-              laporanPenjualanSales,
-              laporanPenjualanProduk,
+              laporanPenjualanSales: laporanPenjualanSales,
+              laporanPenjualanProduk: laporanPenjualanProduk,
             }),
             ...(divisionType === "PRODUKSI" && { laporanProduksi }),
             ...(divisionType === "PERSEDIAAN_BAHAN_BAKU" && { laporanGudang }),
@@ -1385,12 +1394,12 @@ export default function JournalPage() {
             entriesCount: existingEntries.length,
             accountsCount: enhancedAccounts.length,
             accountsSample: enhancedAccounts[0],
-            laporanSalesCount: laporanPenjualanSales.length,
-            laporanProdukCount: laporanPenjualanProduk.length,
-            sampleSalesData: laporanPenjualanSales[0],
-            sampleProdukData: laporanPenjualanProduk[0],
-            allSalesData: laporanPenjualanSales,
-            allProdukData: laporanPenjualanProduk,
+            laporanSalesCount: laporanPenjualanSales?.length || 0,
+            laporanProdukCount: laporanPenjualanProduk?.length || 0,
+            sampleSalesData: laporanPenjualanSales?.[0],
+            sampleProdukData: laporanPenjualanProduk?.[0],
+            allSalesData: laporanPenjualanSales || [],
+            allProdukData: laporanPenjualanProduk || [],
           });
 
           previewEnhancedPDF(reportData);
@@ -2234,7 +2243,8 @@ export default function JournalPage() {
     let totalRealisasi = 0;
     let totalRetur = 0;
 
-    laporanPenjualanSales.forEach((laporan) => {
+    (laporanPenjualanSales || []).forEach((laporan) => {
+      if (!laporan) return;
       totalTarget += laporan.targetPenjualan || 0;
       totalRealisasi += laporan.realisasiPenjualan || 0;
       totalRetur += laporan.returPenjualan || 0;
@@ -2244,7 +2254,7 @@ export default function JournalPage() {
       totalTarget,
       totalRealisasi,
       totalRetur,
-      jumlahSales: laporanPenjualanSales.length,
+      jumlahSales: laporanPenjualanSales?.length || 0,
     };
   };
 
@@ -2524,7 +2534,9 @@ export default function JournalPage() {
                         </td>
                         <td className="text-center">{entry.shift || "-"}</td>
                         <td className="text-center">
-                          {entry.keteranganKendala || "-"}
+                          {(entry as any).keteranganKendala ||
+                            (entry as any).keterangan ||
+                            "-"}
                         </td>
                         <td className="text-center">
                           {entry.createdAt
@@ -2775,8 +2787,8 @@ export default function JournalPage() {
                   keuanganSummary.totalPengeluaran > 0 ||
                   keuanganSummary.totalSaldoAkhir > 0)) ||
               (divisionType === "PEMASARAN" &&
-                (laporanPenjualanProduk.length > 0 ||
-                  laporanPenjualanSales.length > 0)) ||
+                (laporanPenjualanProduk?.length > 0 ||
+                  laporanPenjualanSales?.length > 0)) ||
               (divisionType === "PRODUKSI" && laporanProduksi.length > 0) ||
               (divisionType === "PERSEDIAAN_BAHAN_BAKU" &&
                 laporanGudang.length > 0) ||

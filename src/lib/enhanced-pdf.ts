@@ -1125,18 +1125,25 @@ function generateSummarySection(data: PDFReportData): string {
   if (divisionName.includes("HRD")) {
     return `
       <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
-        <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">� RINGKASAN ABSENSI HARIAN</h3>
+        <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">👥 RINGKASAN KEHADIRAN HARIAN</h3>
         <table class="summary-table" style="width: 100%; border-collapse: collapse;">
           <thead>
             <tr style="background-color: #f5f5f5;">
-              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Divisi</th>
-              <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">${divisionName}</th>
-            </tr>
-            <tr>
-              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Tanggal</th>
-              <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">${data.date}</th>
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Metrik</th>
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Nilai</th>
             </tr>
           </thead>
+          <tbody>
+            <tr><td>Total Karyawan</td><td style="text-align: right;">${allEntries.length} orang</td></tr>
+            <tr><td>Hadir</td><td style="text-align: right; color: #28a745;">${allEntries.filter((entry) => entry.attendanceStatus === "HADIR").length} orang</td></tr>
+            <tr><td>Tidak Hadir</td><td style="text-align: right; color: #dc3545;">${allEntries.filter((entry) => entry.attendanceStatus === "TIDAK_HADIR").length} orang</td></tr>
+            <tr><td>Sakit</td><td style="text-align: right; color: #fd7e14;">${allEntries.filter((entry) => entry.attendanceStatus === "SAKIT").length} orang</td></tr>
+            <tr><td>Izin</td><td style="text-align: right; color: #ffc107;">${allEntries.filter((entry) => entry.attendanceStatus === "IZIN").length} orang</td></tr>
+            <tr><td>Lembur</td><td style="text-align: right; color: #6f42c1;">${allEntries.filter((entry) => entry.attendanceStatus === "LEMBUR").length} orang</td></tr>
+            <tr><td>Tingkat Kehadiran</td><td style="text-align: right; color: #3498db; font-weight: bold;">${((allEntries.filter((entry) => entry.attendanceStatus === "HADIR").length / allEntries.length) * 100).toFixed(1)}%</td></tr>
+            <tr><td>Status Kehadiran</td><td style="text-align: right; color: #3498db; font-weight: bold;">${allEntries.filter((entry) => entry.attendanceStatus === "HADIR").length / allEntries.length >= 0.9 ? "Excellent" : allEntries.filter((entry) => entry.attendanceStatus === "HADIR").length / allEntries.length >= 0.8 ? "Good" : "Needs Improvement"}</td></tr>
+            <tr><td>Jumlah Laporan</td><td style="text-align: right;">${allEntries.length} laporan</td></tr>
+          </tbody>
         </table>
       </div>
     `;
@@ -1184,6 +1191,8 @@ function generateDetailsSection(data: PDFReportData): string {
               <th style="text-align:center;">Nama Akun</th>
               <th style="text-align:center;">Status Kehadiran</th>
               <th style="text-align:center;">Jumlah</th>
+              <th style="text-align:center;">Shift</th>
+              <th style="text-align:center;">Jam Lembur</th>
             </tr>
           </thead>
           <tbody>
@@ -1196,15 +1205,11 @@ function generateDetailsSection(data: PDFReportData): string {
                 return `
                   <tr>
                     <td style="text-align:center;">${idx + 1}</td>
-                    <td style="text-align:center;">${
-                      account?.accountName || "-"
-                    }</td>
-                    <td style="text-align:center;">${
-                      entry.attendanceStatus || "-"
-                    }</td>
-                    <td style="text-align:center;">${
-                      entry.absentCount || 0
-                    } orang</td>
+                    <td style="text-align:center;">${account?.accountName || "-"}</td>
+                    <td style="text-align:center;">${entry.attendanceStatus || "-"}</td>
+                    <td style="text-align:center;">${entry.absentCount || 0} orang</td>
+                    <td style="text-align:center;">${entry.shift || "-"}</td>
+                    <td style="text-align:center;">${entry.overtimeHours || 0} jam</td>
                   </tr>
                 `;
               })
