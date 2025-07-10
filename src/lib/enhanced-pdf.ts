@@ -650,11 +650,12 @@ function generateSummarySection(data: PDFReportData): string {
         .filter((entry) => entry.transactionType === "PIUTANG_MACET")
         .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
       const saldoAkhirPiutang = allEntries
-        .filter((entry) => entry.transactionType === "SALDO_AKHIR")
-        .reduce(
-          (sum, entry) => sum + (entry.saldoAkhir || entry.nilai || 0),
-          0
-        );
+        .filter(
+          (entry) =>
+            entry.transactionType === "SALDO_AKHIR" ||
+            entry.transactionType === "SALDO_AKHIR_PIUTANG"
+        )
+        .reduce((sum, entry) => sum + (entry.saldoAkhir || entry.nilai || 0), 0);
 
       summaryHTML += `
         <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
@@ -688,12 +689,13 @@ function generateSummarySection(data: PDFReportData): string {
       const bahanBaku = allEntries
         .filter((entry) => entry.kategori === "BAHAN_BAKU")
         .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      const bankTotal = allEntries
-        .filter(
-          (entry) =>
-            entry.kategori === "BANK_HM" || entry.kategori === "BANK_HENRY"
-        )
-        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      // TAMBAH: saldo akhir utang
+      const saldoAkhirUtang = allEntries
+        .filter((entry) => entry.transactionType === "SALDO_AKHIR_UTANG")
+        .reduce(
+          (sum, entry) => sum + (entry.saldoAkhir || entry.nilai || 0),
+          0
+        );
 
       summaryHTML += `
         <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
@@ -709,7 +711,7 @@ function generateSummarySection(data: PDFReportData): string {
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Utang Baru</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${utangBaru.toLocaleString()}</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Utang Dibayar</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${utangDibayar.toLocaleString()}</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Bahan Baku</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${bahanBaku.toLocaleString()}</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Bank (HM + Henry)</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${bankTotal.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir Utang</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${saldoAkhirUtang.toLocaleString()}</td></tr>
             </tbody>
           </table>
         </div>
@@ -1134,15 +1136,53 @@ function generateSummarySection(data: PDFReportData): string {
             </tr>
           </thead>
           <tbody>
-            <tr><td>Total Karyawan</td><td style="text-align: right;">${allEntries.length} orang</td></tr>
-            <tr><td>Hadir</td><td style="text-align: right; color: #28a745;">${allEntries.filter((entry) => entry.attendanceStatus === "HADIR").length} orang</td></tr>
-            <tr><td>Tidak Hadir</td><td style="text-align: right; color: #dc3545;">${allEntries.filter((entry) => entry.attendanceStatus === "TIDAK_HADIR").length} orang</td></tr>
-            <tr><td>Sakit</td><td style="text-align: right; color: #fd7e14;">${allEntries.filter((entry) => entry.attendanceStatus === "SAKIT").length} orang</td></tr>
-            <tr><td>Izin</td><td style="text-align: right; color: #ffc107;">${allEntries.filter((entry) => entry.attendanceStatus === "IZIN").length} orang</td></tr>
-            <tr><td>Lembur</td><td style="text-align: right; color: #6f42c1;">${allEntries.filter((entry) => entry.attendanceStatus === "LEMBUR").length} orang</td></tr>
-            <tr><td>Tingkat Kehadiran</td><td style="text-align: right; color: #3498db; font-weight: bold;">${((allEntries.filter((entry) => entry.attendanceStatus === "HADIR").length / allEntries.length) * 100).toFixed(1)}%</td></tr>
-            <tr><td>Status Kehadiran</td><td style="text-align: right; color: #3498db; font-weight: bold;">${allEntries.filter((entry) => entry.attendanceStatus === "HADIR").length / allEntries.length >= 0.9 ? "Excellent" : allEntries.filter((entry) => entry.attendanceStatus === "HADIR").length / allEntries.length >= 0.8 ? "Good" : "Needs Improvement"}</td></tr>
-            <tr><td>Jumlah Laporan</td><td style="text-align: right;">${allEntries.length} laporan</td></tr>
+            <tr><td>Total Karyawan</td><td style="text-align: right;">${
+              allEntries.length
+            } orang</td></tr>
+            <tr><td>Hadir</td><td style="text-align: right; color: #28a745;">${
+              allEntries.filter((entry) => entry.attendanceStatus === "HADIR")
+                .length
+            } orang</td></tr>
+            <tr><td>Tidak Hadir</td><td style="text-align: right; color: #dc3545;">${
+              allEntries.filter(
+                (entry) => entry.attendanceStatus === "TIDAK_HADIR"
+              ).length
+            } orang</td></tr>
+            <tr><td>Sakit</td><td style="text-align: right; color: #fd7e14;">${
+              allEntries.filter((entry) => entry.attendanceStatus === "SAKIT")
+                .length
+            } orang</td></tr>
+            <tr><td>Izin</td><td style="text-align: right; color: #ffc107;">${
+              allEntries.filter((entry) => entry.attendanceStatus === "IZIN")
+                .length
+            } orang</td></tr>
+            <tr><td>Lembur</td><td style="text-align: right; color: #6f42c1;">${
+              allEntries.filter((entry) => entry.attendanceStatus === "LEMBUR")
+                .length
+            } orang</td></tr>
+            <tr><td>Tingkat Kehadiran</td><td style="text-align: right; color: #3498db; font-weight: bold;">${(
+              (allEntries.filter((entry) => entry.attendanceStatus === "HADIR")
+                .length /
+                allEntries.length) *
+              100
+            ).toFixed(1)}%</td></tr>
+            <tr><td>Status Kehadiran</td><td style="text-align: right; color: #3498db; font-weight: bold;">${
+              allEntries.filter((entry) => entry.attendanceStatus === "HADIR")
+                .length /
+                allEntries.length >=
+              0.9
+                ? "Excellent"
+                : allEntries.filter(
+                    (entry) => entry.attendanceStatus === "HADIR"
+                  ).length /
+                    allEntries.length >=
+                  0.8
+                ? "Good"
+                : "Needs Improvement"
+            }</td></tr>
+            <tr><td>Jumlah Laporan</td><td style="text-align: right;">${
+              allEntries.length
+            } laporan</td></tr>
           </tbody>
         </table>
       </div>
@@ -1205,11 +1245,19 @@ function generateDetailsSection(data: PDFReportData): string {
                 return `
                   <tr>
                     <td style="text-align:center;">${idx + 1}</td>
-                    <td style="text-align:center;">${account?.accountName || "-"}</td>
-                    <td style="text-align:center;">${entry.attendanceStatus || "-"}</td>
-                    <td style="text-align:center;">${entry.absentCount || 0} orang</td>
+                    <td style="text-align:center;">${
+                      account?.accountName || "-"
+                    }</td>
+                    <td style="text-align:center;">${
+                      entry.attendanceStatus || "-"
+                    }</td>
+                    <td style="text-align:center;">${
+                      entry.absentCount || 0
+                    } orang</td>
                     <td style="text-align:center;">${entry.shift || "-"}</td>
-                    <td style="text-align:center;">${entry.overtimeHours || 0} jam</td>
+                    <td style="text-align:center;">${
+                      entry.overtimeHours || 0
+                    } jam</td>
                   </tr>
                 `;
               })
@@ -1255,34 +1303,21 @@ function generateDetailsSection(data: PDFReportData): string {
 
   const rows = allEntries
     .map((entry, index) => {
-      // ✅ FIXED: Improved account lookup dengan multiple fallbacks yang lebih comprehensive
-      let account = data.accounts.find((acc) => {
-        return (
-          acc.id?.toString() === entry.accountId?.toString() ||
-          acc.id?.toString() === entry.productAccountId?.toString() ||
-          acc.id === entry.accountId ||
-          acc.id === entry.productAccountId ||
-          acc.accountId?.toString() === entry.accountId?.toString() ||
-          acc.accountId?.toString() === entry.productAccountId?.toString() ||
-          acc.accountCode === entry.accountCode
-        );
-      });
-
-      // Fallback: gunakan account dari entry jika ada (untuk laporanGudang)
-      if (!account && entry.account) {
-        account = entry.account;
+      // Lookup account berdasarkan id (string)
+      let account = data.accounts.find(
+        (acc) => acc.id?.toString() === entry.accountId?.toString()
+      );
+      let akunCell = "";
+      if (account) {
+        akunCell = `<div style="font-weight: bold; color: #3498db;">${
+          account.accountCode || "-"
+        } - ${account.accountName || "Unknown Account"} (${
+          account.valueType === "NOMINAL" ? "💰 Nominal" : "📦 Kuantitas"
+        })</div>`;
+      } else {
+        akunCell = `<div style="color: red; font-weight: bold;">Akun tidak ditemukan (ID: ${entry.accountId})</div>`;
       }
-
-      // ✅ FIXED: Enhanced fallback dengan accountCode yang benar
-      if (!account) {
-        account = {
-          id: entry.accountId || entry.productAccountId,
-          accountCode:
-            entry.accountCode || entry.productAccountId?.toString() || "N/A",
-          accountName: entry.namaAccount || "Unknown Account",
-        };
-      }
-
+      // DataCells logic (copied from original)
       let dataCells = "";
       if (divisionName.includes("KEUANGAN")) {
         const transactionType = entry.transactionType || "-";
@@ -1290,10 +1325,7 @@ function generateDetailsSection(data: PDFReportData): string {
           transactionType === "SALDO_AKHIR"
             ? entry.saldoAkhir ?? entry.nilai
             : entry.nilai;
-
-        // Get kategori for utang/piutang entries
         const kategori = entry.kategori || "-";
-
         dataCells = `
           <td style="text-align: center;">${transactionType}</td>
           <td style="text-align: center;">${kategori}</td>
@@ -1307,8 +1339,6 @@ function generateDetailsSection(data: PDFReportData): string {
         const achievement =
           target > 0 ? ((realisasi / target) * 100).toFixed(1) + "%" : "-";
         const kendala = entry.keteranganKendala || "-";
-
-        // ✅ Enhanced: Handle both legacy sales data and new product data
         const perusahaan =
           entry.namaPerusahaan || entry.salesperson?.perusahaan?.nama || "-";
         const salesperson =
@@ -1317,7 +1347,6 @@ function generateDetailsSection(data: PDFReportData): string {
           entry.salesperson?.nama ||
           "-";
         const produk = entry.namaAccount || account?.accountName || "Produk";
-
         dataCells = `
         <td style="text-align: left;">${perusahaan}</td>
         <td style="text-align: left;">${salesperson}</td>
@@ -1368,8 +1397,6 @@ function generateDetailsSection(data: PDFReportData): string {
         const pemakaian = entry.pemakaian || 0;
         const stokAkhir = entry.stokAkhir || 0;
         const keterangan = entry.keterangan || "-";
-
-        // Enhanced template for DIVISI BLENDING PERSEDIAAN BAHAN BAKU
         if (
           divisionName.includes("BLENDING") &&
           divisionName.includes("PERSEDIAAN")
@@ -1394,7 +1421,6 @@ function generateDetailsSection(data: PDFReportData): string {
             barangMasuk > 0
               ? ((pemakaian / barangMasuk) * 100).toFixed(1)
               : "0";
-
           dataCells = `
             <td style="text-align: right; font-weight: 500; ${
               barangMasuk > 0 ? "color: #28a745;" : ""
@@ -1412,7 +1438,6 @@ function generateDetailsSection(data: PDFReportData): string {
             </td>
           `;
         } else {
-          // Default template for other GUDANG divisions
           dataCells = `
             <td style="text-align: right;">${barangMasuk.toLocaleString(
               "id-ID"
@@ -1448,18 +1473,11 @@ function generateDetailsSection(data: PDFReportData): string {
       return `
       <tr>
         <td style="text-align: center;">${index + 1}</td>
-        <td>
-          <div style="font-weight: bold; color: #3498db;">${
-            account?.accountCode || "-"
-          }</div>
-          <div style="font-size: 10px; color: #7f8c8d;">${
-            account?.accountName || "Unknown Account"
-          }</div>
-        </td>
+        <td>${akunCell}</td>
         <td>${entry.description || entry.keterangan || "-"}</td>
         ${dataCells}
       </tr>
-    `;
+      `;
     })
     .join("");
 

@@ -628,6 +628,13 @@ export default function TransactionPage() {
             : sum;
         }, 0);
 
+        const totalSaldoAkhirUtang = filteredEntries.reduce((sum, entry) => {
+          const transactionType = (entry as any).transactionType;
+          return transactionType === "SALDO_AKHIR_UTANG"
+            ? sum + Math.abs(entry.nilai)
+            : sum;
+        }, 0);
+
         // ✅ CLEAN DEBUG: Hanya untuk development
         if (process.env.NODE_ENV === "development") {
           console.log("🏦 KEUANGAN METRICS DEBUG:", {
@@ -636,6 +643,7 @@ export default function TransactionPage() {
             totalPengeluaran,
             totalUtangBaru,
             totalUtangDibayar,
+            totalSaldoAkhirUtang,
             entriesBreakdown: filteredEntries.map((entry) => ({
               id: entry.id,
               type: (entry as any).transactionType,
@@ -1618,6 +1626,26 @@ export default function TransactionPage() {
                       )}
                     </p>
                   </div>
+
+                  {/* Total Saldo Akhir Piutang Manual */}
+                  <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-indigo-600">📊</span>
+                      <h3 className="font-semibold text-indigo-800">
+                        Saldo Akhir Piutang Manual
+                      </h3>
+                    </div>
+                    <p className="text-2xl font-bold text-indigo-900 mt-2">
+                      {formatCurrency(
+                        entries
+                          .filter(
+                            (entry) =>
+                              (entry as any).transactionType === "SALDO_AKHIR_PIUTANG"
+                          )
+                          .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                      )}
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1704,6 +1732,26 @@ export default function TransactionPage() {
                             ["BANK_HM", "BANK_HENRY"].includes(
                               (entry as any).kategori
                             )
+                          )
+                          .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Total Saldo Akhir Utang Manual */}
+                  <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-indigo-600">📊</span>
+                      <h3 className="font-semibold text-indigo-800">
+                        Saldo Akhir Utang Manual
+                      </h3>
+                    </div>
+                    <p className="text-2xl font-bold text-indigo-900 mt-2">
+                      {formatCurrency(
+                        entries
+                          .filter(
+                            (entry) =>
+                              (entry as any).transactionType === "SALDO_AKHIR_UTANG"
                           )
                           .reduce((sum, entry) => sum + Number(entry.nilai), 0)
                       )}

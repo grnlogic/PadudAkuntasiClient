@@ -117,11 +117,14 @@ interface JournalRow {
   nominal: string;
   kuantitas: string;
 
-  kategori?: "KARYAWAN" | "TOKO" | "BAHAN_BAKU";
+  // ✅ REMOVED: Piutang kategori karena sudah diset otomatis oleh sistem
   //piutang
-  piutangType?: "PIUTANG_BARU" | "PIUTANG_TERTAGIH" | "PIUTANG_MACET";
-  // ✅ NEW: Utang fields
-  utangKategori?: "BAHAN_BAKU" | "BANK_HM" | "BANK_HENRY";
+  piutangType?:
+    | "PIUTANG_BARU"
+    | "PIUTANG_TERTAGIH"
+    | "PIUTANG_MACET"
+    | "SALDO_AKHIR_PIUTANG";
+  // ✅ REMOVED: Utang kategori karena sudah diset otomatis oleh sistem
   // ✅ New fields for specialized divisions
   transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR"; // For Keuangan with 3 options
   targetAmount?: string; // For Pemasaran
@@ -135,7 +138,7 @@ interface JournalRow {
   // ✅ NEW: Keuangan field - Saldo Akhir
   saldoAkhir?: string; // For Keuangan
   // ✅ NEW: UTANG fields - Updated
-  utangType?: "UTANG_BARU" | "UTANG_DIBAYAR"; // For Keuangan
+  utangType?: "UTANG_BARU" | "UTANG_DIBAYAR" | "SALDO_AKHIR_UTANG"; // For Keuangan
 
   // ✅ NEW: Pemasaran Sales fields
   salesUserId?: string;
@@ -210,7 +213,7 @@ export default function JournalPage() {
       absentCount: "",
       shift: undefined,
       utangType: undefined,
-      utangKategori: undefined,
+      // utangKategori removed - set otomatis oleh sistem
       // ✅ NEW: Initialize pemasaran sales fields
       salesUserId: "",
       returPenjualan: "",
@@ -588,7 +591,7 @@ export default function JournalPage() {
               nilai: Number(p.nominal) || 0,
               description: p.keterangan || "",
               transactionType: p.tipeTransaksi,
-              kategori: p.kategori,
+              // kategori removed - set otomatis oleh sistem
               keterangan: p.keterangan || "",
               date: p.tanggalTransaksi || p.createdAt,
               tanggal: p.tanggalTransaksi || p.createdAt,
@@ -640,7 +643,7 @@ export default function JournalPage() {
               nilai: Number(u.nominal) || 0,
               description: u.keterangan || "",
               transactionType: u.tipe_transaksi || u.tipeTransaksi,
-              kategori: u.kategori,
+              // kategori removed - set otomatis oleh sistem
               // ✅ ADD: Required EntriHarian fields
               keterangan: u.keterangan || "",
               date: u.tanggal_transaksi || u.tanggalTransaksi || u.created_at,
@@ -739,7 +742,7 @@ export default function JournalPage() {
       absentCount: "",
       shift: undefined,
       utangType: undefined,
-      utangKategori: undefined,
+      // utangKategori removed - set otomatis oleh sistem
       // ✅ NEW: Initialize pemasaran sales fields
       salesUserId: "",
       returPenjualan: "",
@@ -937,7 +940,7 @@ export default function JournalPage() {
             accountId: parseInt(row.accountId),
             tanggalTransaksi: selectedDate,
             tipeTransaksi: row.transactionType,
-            kategori: row.kategori,
+            // kategori removed - set otomatis oleh sistem
             nominal: parseFloat(row.nominal),
             keterangan: row.keterangan || "",
           };
@@ -954,7 +957,7 @@ export default function JournalPage() {
             accountId: parseInt(row.accountId),
             tanggalTransaksi: selectedDate,
             tipeTransaksi: row.transactionType,
-            kategori: row.utangKategori,
+            kategori: "UTANG", // <-- Set otomatis
             nominal: parseFloat(row.nominal),
             keterangan: row.keterangan || "",
           };
@@ -1044,7 +1047,7 @@ export default function JournalPage() {
           absentCount: "",
           shift: undefined,
           utangType: undefined,
-          utangKategori: undefined,
+          // utangKategori removed - set otomatis oleh sistem
           salesUserId: "",
           returPenjualan: "",
           keteranganKendala: "",
@@ -1528,52 +1531,8 @@ export default function JournalPage() {
                   </div>
                 </div>
               </div>
-              {/* Dropdown kategori piutang hanya muncul jika tipe transaksi piutang dipilih */}
-              {["PIUTANG_BARU", "PIUTANG_TERTAGIH", "PIUTANG_MACET"].includes(
-                row.transactionType || ""
-              ) && (
-                <div className="mt-4">
-                  <Label>Kategori Piutang</Label>
-                  <Select
-                    value={row.kategori || ""}
-                    onValueChange={(value) =>
-                      updateRow(row.id, "kategori", value)
-                    }
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Pilih kategori piutang..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="KARYAWAN">Karyawan</SelectItem>
-                      <SelectItem value="TOKO">Toko</SelectItem>
-                      <SelectItem value="BAHAN_BAKU">Bahan Baku</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {/* ✅ NEW: Dropdown kategori utang hanya muncul jika tipe transaksi utang dipilih */}
-              {["UTANG_BARU", "UTANG_DIBAYAR"].includes(
-                row.transactionType || ""
-              ) && (
-                <div className="mt-4">
-                  <Label>Kategori Utang</Label>
-                  <Select
-                    value={row.utangKategori || ""}
-                    onValueChange={(value) =>
-                      updateRow(row.id, "utangKategori", value)
-                    }
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue placeholder="Pilih kategori utang..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="BAHAN_BAKU">Bahan Baku</SelectItem>
-                      <SelectItem value="BANK_HM">Bank HM</SelectItem>
-                      <SelectItem value="BANK_HENRY">Bank Henry</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              {/* ✅ REMOVED: Dropdown kategori piutang karena sudah diset otomatis oleh sistem */}
+              {/* ✅ REMOVED: Dropdown kategori utang karena sudah diset otomatis oleh sistem */}
             </div>
           );
         }
@@ -2097,27 +2056,13 @@ export default function JournalPage() {
                   <SelectItem value="PIUTANG_MACET">
                     ⚠️ Piutang Macet
                   </SelectItem>
+                  <SelectItem value="SALDO_AKHIR_PIUTANG">
+                    📊 Saldo Akhir Piutang
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Kategori Piutang</Label>
-              <Select
-                value={journalRows[0].kategori || ""}
-                onValueChange={(value) =>
-                  updateRow(journalRows[0].id, "kategori", value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="KARYAWAN">👥 Karyawan</SelectItem>
-                  <SelectItem value="TOKO">🏪 Toko</SelectItem>
-                  <SelectItem value="BAHAN_BAKU">📦 Bahan Baku</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* ✅ REMOVED: Kategori Piutang dropdown karena sudah diset otomatis oleh sistem */}
             <div>
               <Label>Nominal</Label>
               <Input
@@ -2184,27 +2129,13 @@ export default function JournalPage() {
                   <SelectItem value="UTANG_DIBAYAR">
                     💰 Utang Dibayar
                   </SelectItem>
+                  <SelectItem value="SALDO_AKHIR_UTANG">
+                    📊 Saldo Akhir Utang
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Kategori Utang</Label>
-              <Select
-                value={journalRows[0].utangKategori || ""}
-                onValueChange={(value) =>
-                  updateRow(journalRows[0].id, "utangKategori", value)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pilih kategori" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="BAHAN_BAKU">📦 Bahan Baku</SelectItem>
-                  <SelectItem value="BANK_HM">🏦 Bank HM</SelectItem>
-                  <SelectItem value="BANK_HENRY">🏦 Bank Henry</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* ✅ REMOVED: Kategori Utang dropdown karena sudah diset otomatis oleh sistem */}
             <div>
               <Label>Nominal</Label>
               <Input
@@ -3033,31 +2964,13 @@ export default function JournalPage() {
                                   <SelectItem value="PIUTANG_MACET">
                                     ⚠️ Piutang Macet
                                   </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <Label>Kategori Piutang</Label>
-                              <Select
-                                value={row.kategori || ""}
-                                onValueChange={(value) =>
-                                  updateRow(row.id, "kategori", value)
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Pilih kategori" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="KARYAWAN">
-                                    👥 Karyawan
-                                  </SelectItem>
-                                  <SelectItem value="TOKO">🏪 Toko</SelectItem>
-                                  <SelectItem value="BAHAN_BAKU">
-                                    📦 Bahan Baku
+                                  <SelectItem value="SALDO_AKHIR_PIUTANG">
+                                    📊 Saldo Akhir Piutang
                                   </SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
+                            {/* ✅ REMOVED: Kategori Piutang dropdown karena sudah diset otomatis oleh sistem */}
                             <div>
                               <Label>Nominal</Label>
                               <Input
@@ -3133,33 +3046,13 @@ export default function JournalPage() {
                                   <SelectItem value="UTANG_DIBAYAR">
                                     💰 Utang Dibayar
                                   </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <Label>Kategori Utang</Label>
-                              <Select
-                                value={row.utangKategori || ""}
-                                onValueChange={(value) =>
-                                  updateRow(row.id, "utangKategori", value)
-                                }
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Pilih kategori" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="BAHAN_BAKU">
-                                    📦 Bahan Baku
-                                  </SelectItem>
-                                  <SelectItem value="BANK_HM">
-                                    🏦 Bank HM
-                                  </SelectItem>
-                                  <SelectItem value="BANK_HENRY">
-                                    🏦 Bank Henry
+                                  <SelectItem value="SALDO_AKHIR_UTANG">
+                                    📊 Saldo Akhir Utang
                                   </SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
+                            {/* ✅ REMOVED: Kategori Utang dropdown karena sudah diset otomatis oleh sistem */}
                             <div>
                               <Label>Nominal</Label>
                               <Input
@@ -3708,6 +3601,27 @@ export default function JournalPage() {
                     )}
                   </p>
                 </div>
+
+                {/* Total Saldo Akhir Utang */}
+                <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-indigo-600">📊</span>
+                    <h3 className="font-semibold text-indigo-800">
+                      Saldo Akhir Utang
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-indigo-900 mt-2">
+                    {formatCurrency(
+                      existingEntries
+                        .filter(
+                          (entry) =>
+                            (entry as any).transactionType ===
+                            "SALDO_AKHIR_UTANG"
+                        )
+                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                    )}
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -3842,6 +3756,27 @@ export default function JournalPage() {
                   </div>
                   <p className="text-2xl font-bold text-purple-900 mt-2">
                     {formatCurrency(piutangSummary.saldoAkhir)}
+                  </p>
+                </div>
+
+                {/* Total Saldo Akhir Piutang */}
+                <div className="p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                  <div className="flex items-center gap-2">
+                    <span className="text-indigo-600">📊</span>
+                    <h3 className="font-semibold text-indigo-800">
+                      Saldo Akhir Piutang
+                    </h3>
+                  </div>
+                  <p className="text-2xl font-bold text-indigo-900 mt-2">
+                    {formatCurrency(
+                      existingEntries
+                        .filter(
+                          (entry) =>
+                            (entry as any).transactionType ===
+                            "SALDO_AKHIR_PIUTANG"
+                        )
+                        .reduce((sum, entry) => sum + Number(entry.nilai), 0)
+                    )}
                   </p>
                 </div>
               </div>

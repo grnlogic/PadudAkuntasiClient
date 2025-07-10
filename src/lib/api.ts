@@ -283,7 +283,11 @@ export const usersAPI = {
 //piutang API (untuk yang belum ada endpoint)
 export interface CreatePiutangRequest {
   tanggalTransaksi: string; // format: 'YYYY-MM-DD'
-  tipeTransaksi: "PIUTANG_BARU" | "PIUTANG_TERTAGIH" | "PIUTANG_MACET";
+  tipeTransaksi:
+    | "PIUTANG_BARU"
+    | "PIUTANG_TERTAGIH"
+    | "PIUTANG_MACET"
+    | "SALDO_AKHIR_PIUTANG";
   kategori: "KARYAWAN" | "TOKO" | "BAHAN_BAKU";
   nominal: number;
   keterangan?: string;
@@ -404,7 +408,7 @@ export const laporanPenjualanSalesAPI = {
 // ✅ NEW: Utang API interface and functions
 export interface CreateUtangRequest {
   tanggalTransaksi: string; // format: 'YYYY-MM-DD'
-  tipeTransaksi: "UTANG_BARU" | "UTANG_DIBAYAR";
+  tipeTransaksi: "UTANG_BARU" | "UTANG_DIBAYAR" | "SALDO_AKHIR_UTANG";
   kategori: "BAHAN_BAKU" | "BANK_HM" | "BANK_HENRY";
   nominal: number;
   keterangan?: string;
