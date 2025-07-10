@@ -1083,11 +1083,35 @@ function generateSummarySection(data: PDFReportData): string {
 
   // HRD: Summary HRD (rollback to simple/standard)
   if (divisionName.includes("HRD")) {
-    // Hitung total karyawan sebagai penjumlahan absentCount
-    const totalKaryawan = allEntries.reduce(
-      (sum, entry) => sum + (Number(entry.absentCount) || 0),
-      0
-    );
+    // Hitung total untuk setiap metrik dan shift
+    const countByStatusAndShift = (status: string, shift: string) =>
+      allEntries
+        .filter(
+          (entry) => entry.attendanceStatus === status && entry.shift === shift
+        )
+        .reduce((sum, entry) => sum + (Number(entry.absentCount) || 0), 0);
+
+    const totalKaryawanReguler = allEntries
+      .filter((entry) => entry.shift === "REGULER")
+      .reduce((sum, entry) => sum + (Number(entry.absentCount) || 0), 0);
+    const totalKaryawanLembur = allEntries
+      .filter((entry) => entry.shift === "LEMBUR")
+      .reduce((sum, entry) => sum + (Number(entry.absentCount) || 0), 0);
+
+    const hadirReguler = countByStatusAndShift("HADIR", "REGULER");
+    const hadirLembur = countByStatusAndShift("HADIR", "LEMBUR");
+    const tingkatKehadiranReguler =
+      totalKaryawanReguler > 0
+        ? (hadirReguler / totalKaryawanReguler) * 100
+        : 0;
+    const tingkatKehadiranLembur =
+      totalKaryawanLembur > 0 ? (hadirLembur / totalKaryawanLembur) * 100 : 0;
+    function getStatusKehadiran(rate: number) {
+      if (rate >= 90) return "Excellent";
+      if (rate >= 80) return "Good";
+      return "Needs Improvement";
+    }
+
     return `
       <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
         <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">👥 RINGKASAN KEHADIRAN HARIAN</h3>
@@ -1095,79 +1119,56 @@ function generateSummarySection(data: PDFReportData): string {
           <thead>
             <tr style="background-color: #f5f5f5;">
               <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Metrik</th>
-              <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Nilai</th>
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Reguler</th>
+              <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Lembur</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>Total Karyawan</td><td style="text-align: right;">${totalKaryawan} orang</td></tr>
-            <tr><td>Hadir</td><td style="text-align: right; color: #28a745;">${allEntries
-              .filter((entry) => entry.attendanceStatus === "HADIR")
-              .reduce(
-                (sum, entry) => sum + (Number(entry.absentCount) || 0),
-                0
-              )} orang</td></tr>
-            <tr><td>Tidak Hadir</td><td style="text-align: right; color: #dc3545;">${allEntries
-              .filter((entry) => entry.attendanceStatus === "TIDAK_HADIR")
-              .reduce(
-                (sum, entry) => sum + (Number(entry.absentCount) || 0),
-                0
-              )} orang</td></tr>
-            <tr><td>Sakit</td><td style="text-align: right; color: #fd7e14;">${allEntries
-              .filter((entry) => entry.attendanceStatus === "SAKIT")
-              .reduce(
-                (sum, entry) => sum + (Number(entry.absentCount) || 0),
-                0
-              )} orang</td></tr>
-            <tr><td>Izin</td><td style="text-align: right; color: #ffc107;">${allEntries
-              .filter((entry) => entry.attendanceStatus === "IZIN")
-              .reduce(
-                (sum, entry) => sum + (Number(entry.absentCount) || 0),
-                0
-              )} orang</td></tr>
-            <tr><td>Lembur</td><td style="text-align: right; color: #6f42c1;">${allEntries
-              .filter((entry) => entry.attendanceStatus === "LEMBUR")
-              .reduce(
-                (sum, entry) => sum + (Number(entry.absentCount) || 0),
-                0
-              )} orang</td></tr>
-            <tr><td>Tingkat Kehadiran</td><td style="text-align: right; color: #3498db; font-weight: bold;">${(totalKaryawan >
-            0
-              ? (allEntries
-                  .filter((entry) => entry.attendanceStatus === "HADIR")
-                  .reduce(
-                    (sum, entry) => sum + (Number(entry.absentCount) || 0),
-                    0
-                  ) /
-                  totalKaryawan) *
-                100
-              : 0
-            ).toFixed(1)}%</td></tr>
-            <tr><td>Status Kehadiran</td><td style="text-align: right; color: #3498db; font-weight: bold;">${
-              totalKaryawan > 0
-                ? allEntries
-                    .filter((entry) => entry.attendanceStatus === "HADIR")
-                    .reduce(
-                      (sum, entry) => sum + (Number(entry.absentCount) || 0),
-                      0
-                    ) /
-                    totalKaryawan >=
-                  0.9
-                  ? "Excellent"
-                  : allEntries
-                      .filter((entry) => entry.attendanceStatus === "HADIR")
-                      .reduce(
-                        (sum, entry) => sum + (Number(entry.absentCount) || 0),
-                        0
-                      ) /
-                      totalKaryawan >=
-                    0.8
-                  ? "Good"
-                  : "Needs Improvement"
-                : "-"
-            }</td></tr>
-            <tr><td>Jumlah Laporan</td><td style="text-align: right;">${
-              allEntries.length
-            } laporan</td></tr>
+            <tr>
+              <td>Total Karyawan</td>
+              <td style="text-align: right;">${totalKaryawanReguler} orang</td>
+              <td style="text-align: right;">${totalKaryawanLembur} orang</td>
+            </tr>
+            <tr>
+              <td>Hadir</td>
+              <td style="text-align: right; color: #28a745;">${countByStatusAndShift(
+                "HADIR",
+                "REGULER"
+              )} orang</td>
+              <td style="text-align: right; color: #28a745;">${countByStatusAndShift(
+                "HADIR",
+                "LEMBUR"
+              )} orang</td>
+            </tr>
+            <tr>
+              <td>Tidak Hadir</td>
+              <td style="text-align: right; color: #dc3545;">${countByStatusAndShift(
+                "TIDAK_HADIR",
+                "REGULER"
+              )} orang</td>
+              <td style="text-align: right; color: #dc3545;">${countByStatusAndShift(
+                "TIDAK_HADIR",
+                "LEMBUR"
+              )} orang</td>
+            </tr>
+            <tr>
+              <td>Tingkat Kehadiran</td>
+              <td style="text-align: right; color: #3498db; font-weight: bold;">${tingkatKehadiranReguler.toFixed(
+                1
+              )}%</td>
+              <td style="text-align: right; color: #3498db; font-weight: bold;">${tingkatKehadiranLembur.toFixed(
+                1
+              )}%</td>
+            </tr>
+            <tr>
+              <td>Status Kehadiran</td>
+              <td style="text-align: right; color: #3498db; font-weight: bold;">${getStatusKehadiran(
+                tingkatKehadiranReguler
+              )}</td>
+              <td style="text-align: right; color: #3498db; font-weight: bold;">${getStatusKehadiran(
+                tingkatKehadiranLembur
+              )}</td>
+            </tr>
           </tbody>
         </table>
       </div>

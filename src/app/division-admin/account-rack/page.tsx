@@ -90,14 +90,26 @@ export default function AccountRackPage() {
     }
   };
 
-  const filteredAccounts = accounts.filter((account) => {
-    const matchesSearch =
-      account.accountName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      account.accountCode.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter =
-      filterType === "all" || account.valueType === filterType;
-    return matchesSearch && matchesFilter;
-  });
+  // Filtering COA berdasarkan perusahaan user (seperti di jurnal)
+  const username = user?.username?.toLowerCase() || "";
+  let allowedPrefixes: string[] = [];
+  if (username.includes("pjp")) allowedPrefixes = ["1-1", "1-2", "2-1", "5-1"];
+  else if (username.includes("sp"))
+    allowedPrefixes = ["1-3", "1-4", "2-2", "5-2"];
+  else if (username.includes("prima"))
+    allowedPrefixes = ["1-5", "1-6", "2-3", "5-3"];
+  else if (username.includes("blending"))
+    allowedPrefixes = ["1-7", "1-8", "2-3", "5-4"];
+  else if (username.includes("holding")) allowedPrefixes = ["1-9"];
+
+  const filteredAccounts =
+    allowedPrefixes.length > 0
+      ? accounts.filter((account) =>
+          allowedPrefixes.some((prefix) =>
+            new RegExp(`^${prefix}\\d+`).test(account.accountCode)
+          )
+        )
+      : accounts;
 
   const getTypeColor = (type: string) => {
     const colors: { [key: string]: string } = {

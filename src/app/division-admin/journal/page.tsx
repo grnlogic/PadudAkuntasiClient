@@ -99,6 +99,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import dynamic from "next/dynamic";
 import { getPerusahaan } from "@/lib/data";
+import { NumericFormat } from "react-number-format";
 
 const LaporanPenjualanWizard = dynamic(
   () => import("./LaporanPenjualanWizard"),
@@ -818,6 +819,26 @@ export default function JournalPage() {
             row.keteranganKendala
           );
         }
+        // ====== PERBAIKAN VALIDASI KAS, PIUTANG, UTANG ======
+        if (["KAS", "PIUTANG", "UTANG"].includes(selectedTransactionType)) {
+          if (!row.transactionType) {
+            // Tampilkan error hanya sekali (untuk baris pertama yang error)
+            toastError.custom(
+              "Jenis transaksi wajib dipilih pada semua entri!"
+            );
+            return false;
+          }
+          if (selectedTransactionType === "KAS") {
+            if (row.transactionType === "SALDO_AKHIR") {
+              return row.saldoAkhir && parseFloat(row.saldoAkhir) > 0;
+            } else {
+              return row.nominal && parseFloat(row.nominal) > 0;
+            }
+          } else {
+            // PIUTANG & UTANG
+            return row.nominal && parseFloat(row.nominal) > 0;
+          }
+        }
         // Validate based on transaction type
         if (selectedTransactionType === "KAS") {
           if (row.transactionType === "SALDO_AKHIR") {
@@ -1450,26 +1471,27 @@ export default function JournalPage() {
                       ? "Saldo Akhir"
                       : "Nominal"}
                   </Label>
-                  <Input
-                    type="number"
-                    placeholder="Rp 0"
+                  <NumericFormat
                     value={
                       row.transactionType === "SALDO_AKHIR"
                         ? row.saldoAkhir || ""
                         : row.nominal || ""
                     }
-                    onChange={(e) =>
+                    thousandSeparator="."
+                    decimalSeparator=","
+                    allowNegative={false}
+                    onValueChange={(values: { value: string }) =>
                       updateRow(
                         row.id,
                         row.transactionType === "SALDO_AKHIR"
                           ? "saldoAkhir"
                           : "nominal",
-                        e.target.value
+                        values.value
                       )
                     }
-                    className="mt-1"
-                    min="0"
-                    step="1000"
+                    className="mt-1 w-full border rounded px-3 py-2"
+                    placeholder="Rp 0"
+                    customInput={Input}
                   />
                 </div>
                 <div>
@@ -1504,61 +1526,68 @@ export default function JournalPage() {
                 <label className="block text-xs font-medium text-green-700 mb-1">
                   🏭 Hasil Produksi (Unit)
                 </label>
-                <Input
-                  type="number"
-                  placeholder="0 unit"
+                <NumericFormat
                   value={row.hasilProduksi}
-                  onChange={(e) =>
-                    updateRow(row.id, "hasilProduksi", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "hasilProduksi", values.value)
                   }
                   className="text-right text-sm"
                   min="0"
+                  customInput={Input}
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
                   ❌ Barang Gagal (Unit)
                 </label>
-                <Input
-                  type="number"
-                  placeholder="0 unit"
+                <NumericFormat
                   value={row.barangGagal}
-                  onChange={(e) =>
-                    updateRow(row.id, "barangGagal", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "barangGagal", values.value)
                   }
                   className="text-right text-sm"
                   min="0"
+                  customInput={Input}
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
                   📦 Stock Barang Jadi (Unit)
                 </label>
-                <Input
-                  type="number"
-                  placeholder="0 unit"
+                <NumericFormat
                   value={row.stockBarangJadi}
-                  onChange={(e) =>
-                    updateRow(row.id, "stockBarangJadi", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "stockBarangJadi", values.value)
                   }
                   className="text-right text-sm"
                   min="0"
+                  customInput={Input}
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
                   Harga Pokok Barang Jadi (Rp)
                 </label>
-                <Input
-                  type="number"
-                  placeholder="0"
+                <NumericFormat
                   value={row.hpBarangJadi}
-                  onChange={(e) =>
-                    updateRow(row.id, "hpBarangJadi", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "hpBarangJadi", values.value)
                   }
                   className="text-right text-sm"
                   min="0"
-                  step="1000"
+                  customInput={Input}
                 />
               </div>
             </div>
@@ -1591,15 +1620,17 @@ export default function JournalPage() {
                 <label className="block text-xs font-medium text-green-700 mb-1">
                   📦 Stok Awal (Opsional)
                 </label>
-                <Input
-                  type="number"
-                  placeholder="0 unit"
+                <NumericFormat
                   value={row.barangMasuk}
-                  onChange={(e) =>
-                    updateRow(row.id, "barangMasuk", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "barangMasuk", values.value)
                   }
                   className="text-right text-sm"
                   min="0"
+                  customInput={Input}
                 />
                 <div className="text-xs text-gray-500 mt-1">
                   Kosongkan jika ingin dihitung otomatis
@@ -1609,30 +1640,34 @@ export default function JournalPage() {
                 <label className="block text-xs font-medium text-green-700 mb-1">
                   🔄 Pemakaian
                 </label>
-                <Input
-                  type="number"
-                  placeholder="0 unit"
+                <NumericFormat
                   value={row.pemakaian}
-                  onChange={(e) =>
-                    updateRow(row.id, "pemakaian", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "pemakaian", values.value)
                   }
                   className="text-right text-sm"
                   min="0"
+                  customInput={Input}
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-green-700 mb-1">
                   📦 Stok Akhir
                 </label>
-                <Input
-                  type="number"
-                  placeholder="0 unit"
+                <NumericFormat
                   value={row.stokAkhir}
-                  onChange={(e) =>
-                    updateRow(row.id, "stokAkhir", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "stokAkhir", values.value)
                   }
                   className="text-right text-sm"
                   min="0"
+                  customInput={Input}
                 />
               </div>
               <div>
@@ -1677,43 +1712,49 @@ export default function JournalPage() {
               {/* Target Penjualan */}
               <div>
                 <Label>Target Penjualan</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
+                <NumericFormat
                   value={row.targetAmount}
-                  onChange={(e) =>
-                    updateRow(row.id, "targetAmount", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "targetAmount", values.value)
                   }
                   className="mt-1"
                   min="0"
+                  customInput={Input}
                 />
               </div>
               {/* Realisasi Penjualan */}
               <div>
                 <Label>Realisasi Penjualan</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
+                <NumericFormat
                   value={row.realisasiAmount}
-                  onChange={(e) =>
-                    updateRow(row.id, "realisasiAmount", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "realisasiAmount", values.value)
                   }
                   className="mt-1"
                   min="0"
+                  customInput={Input}
                 />
               </div>
               {/* Retur/Potongan */}
               <div>
                 <Label>Retur/Potongan</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
+                <NumericFormat
                   value={row.returPenjualan}
-                  onChange={(e) =>
-                    updateRow(row.id, "returPenjualan", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "returPenjualan", values.value)
                   }
                   className="mt-1"
                   min="0"
+                  customInput={Input}
                 />
               </div>
               {/* Kendala Penjualan */}
@@ -1742,14 +1783,16 @@ export default function JournalPage() {
                   <Warehouse className="inline h-3 w-3 mr-1" />
                   Pemakaian Hari Ini
                 </label>
-                <Input
-                  type="number"
-                  placeholder="0 unit"
+                <NumericFormat
                   value={row.pemakaianAmount}
-                  onChange={(e) =>
-                    updateRow(row.id, "pemakaianAmount", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "pemakaianAmount", values.value)
                   }
                   className="text-right text-sm"
+                  customInput={Input}
                 />
                 <div className="text-xs text-gray-500 mt-1">
                   Yang dipakai untuk produksi
@@ -1760,14 +1803,16 @@ export default function JournalPage() {
                   <Package className="inline h-3 w-3 mr-1" />
                   Stok Akhir
                 </label>
-                <Input
-                  type="number"
-                  placeholder="0 unit"
+                <NumericFormat
                   value={row.stokAkhir}
-                  onChange={(e) =>
-                    updateRow(row.id, "stokAkhir", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "stokAkhir", values.value)
                   }
                   className="text-right text-sm"
+                  customInput={Input}
                 />
                 <div className="text-xs text-gray-500 mt-1">
                   Sisa stok di gudang
@@ -1807,20 +1852,22 @@ export default function JournalPage() {
               <div>
                 <label className="block text-xs font-medium text-indigo-700 mb-1">
                   <Users className="inline h-3 w-3 mr-1" />
-                  Jumlah Tidak Hadir
+                  Jumlah Karyawan
                 </label>
-                <Input
-                  type="number"
-                  placeholder="0"
+                <NumericFormat
                   value={row.absentCount}
-                  onChange={(e) =>
-                    updateRow(row.id, "absentCount", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(row.id, "absentCount", values.value)
                   }
                   className="text-right text-sm"
                   min="0"
+                  customInput={Input}
                 />
                 <div className="text-xs text-gray-500 mt-1">
-                  Orang yang tidak hadir
+                  Jumlah karyawan
                 </div>
               </div>
               <div>
@@ -1932,31 +1979,33 @@ export default function JournalPage() {
             {journalRows[0].transactionType === "SALDO_AKHIR" ? (
               <div>
                 <Label>Saldo Akhir</Label>
-                <Input
-                  type="number"
-                  placeholder="Rp 0"
+                <NumericFormat
                   value={journalRows[0].saldoAkhir || ""}
-                  onChange={(e) =>
-                    updateRow(journalRows[0].id, "saldoAkhir", e.target.value)
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(journalRows[0].id, "saldoAkhir", values.value)
                   }
-                  className="mt-1"
-                  min="0"
-                  step="1000"
+                  className="mt-1 w-full border rounded px-3 py-2"
+                  placeholder="Rp 0"
+                  customInput={Input}
                 />
               </div>
             ) : (
               <div>
                 <Label>Nominal</Label>
-                <Input
-                  type="number"
-                  placeholder="Rp 0"
-                  value={journalRows[0].nominal}
-                  onChange={(e) =>
-                    updateRow(journalRows[0].id, "nominal", e.target.value)
+                <NumericFormat
+                  value={journalRows[0].nominal || ""}
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  allowNegative={false}
+                  onValueChange={(values: { value: string }) =>
+                    updateRow(journalRows[0].id, "nominal", values.value)
                   }
-                  className="mt-1"
-                  min="0"
-                  step="1000"
+                  className="mt-1 w-full border rounded px-3 py-2"
+                  placeholder="Rp 0"
+                  customInput={Input}
                 />
               </div>
             )}
@@ -2024,16 +2073,17 @@ export default function JournalPage() {
             {/* ✅ REMOVED: Kategori Piutang dropdown karena sudah diset otomatis oleh sistem */}
             <div>
               <Label>Nominal</Label>
-              <Input
-                type="number"
-                placeholder="Rp 0"
-                value={journalRows[0].nominal}
-                onChange={(e) =>
-                  updateRow(journalRows[0].id, "nominal", e.target.value)
+              <NumericFormat
+                value={journalRows[0].nominal || ""}
+                thousandSeparator="."
+                decimalSeparator=","
+                allowNegative={false}
+                onValueChange={(values: { value: string }) =>
+                  updateRow(journalRows[0].id, "nominal", values.value)
                 }
-                className="mt-1"
-                min="0"
-                step="1000"
+                className="mt-1 w-full border rounded px-3 py-2"
+                placeholder="Rp 0"
+                customInput={Input}
               />
             </div>
             <div className="md:col-span-2">
@@ -2097,16 +2147,17 @@ export default function JournalPage() {
             {/* ✅ REMOVED: Kategori Utang dropdown karena sudah diset otomatis oleh sistem */}
             <div>
               <Label>Nominal</Label>
-              <Input
-                type="number"
-                placeholder="Rp 0"
-                value={journalRows[0].nominal}
-                onChange={(e) =>
-                  updateRow(journalRows[0].id, "nominal", e.target.value)
+              <NumericFormat
+                value={journalRows[0].nominal || ""}
+                thousandSeparator="."
+                decimalSeparator=","
+                allowNegative={false}
+                onValueChange={(values: { value: string }) =>
+                  updateRow(journalRows[0].id, "nominal", values.value)
                 }
-                className="mt-1"
-                min="0"
-                step="1000"
+                className="mt-1 w-full border rounded px-3 py-2"
+                placeholder="Rp 0"
+                customInput={Input}
               />
             </div>
             <div className="md:col-span-2">
@@ -2423,8 +2474,17 @@ export default function JournalPage() {
                           {entry.absentCount || 0} orang
                         </td>
                         <td className="text-center">{entry.shift || "-"}</td>
-                        <td className="text-center" style={{ whiteSpace: 'pre-line', wordBreak: 'break-word', maxWidth: 200 }}>
-                          {(entry as any).keteranganKendala || (entry as any).keterangan || "-"}
+                        <td
+                          className="text-center"
+                          style={{
+                            whiteSpace: "pre-line",
+                            wordBreak: "break-word",
+                            maxWidth: 200,
+                          }}
+                        >
+                          {(entry as any).keteranganKendala ||
+                            (entry as any).keterangan ||
+                            "-"}
                         </td>
                         <td className="text-center">
                           {entry.createdAt
@@ -2646,6 +2706,43 @@ export default function JournalPage() {
     }
   };
 
+  // Filtering COA berdasarkan perusahaan user
+  const username = user?.username?.toLowerCase() || "";
+  let allowedPrefixes: string[] = [];
+  if (username.includes("pjp")) allowedPrefixes = ["1-1", "1-2", "2-1", "5-1"];
+  else if (username.includes("sp"))
+    allowedPrefixes = ["1-3", "1-4", "2-2", "5-2"];
+  else if (username.includes("prima"))
+    allowedPrefixes = ["1-5", "1-6", "2-3", "5-3"];
+  else if (username.includes("blending"))
+    allowedPrefixes = ["1-7", "1-8", "2-3", "5-4"];
+  else if (username.includes("holding")) allowedPrefixes = ["1-9"];
+
+  const filteredAccounts =
+    allowedPrefixes.length > 0
+      ? accounts.filter((acc) =>
+          allowedPrefixes.some((prefix) =>
+            new RegExp(`^${prefix}\\d+`).test(acc.accountCode)
+          )
+        )
+      : accounts;
+
+  // Untuk tab KAS
+  const kasAccounts = filteredAccounts.filter((acc) =>
+    acc.accountName.toLowerCase().includes("kas")
+  );
+
+  // Untuk tab PIUTANG
+  const piutangAccounts = filteredAccounts.filter((acc) =>
+    acc.accountName.toLowerCase().includes("piutang")
+  );
+
+  // Untuk tab UTANG
+  const utangAccounts = filteredAccounts.filter((acc) => {
+    const name = acc.accountName.toLowerCase();
+    return name.includes("utang") && !name.includes("piutang");
+  });
+
   return (
     <ClientErrorBoundary>
       <div className="p-6 space-y-6">
@@ -2787,7 +2884,7 @@ export default function JournalPage() {
                                   <SelectValue placeholder="Pilih akun kas" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {accounts.map((account) => (
+                                  {kasAccounts.map((account) => (
                                     <SelectItem
                                       key={account.id}
                                       value={account.id}
@@ -2825,35 +2922,37 @@ export default function JournalPage() {
                             {row.transactionType === "SALDO_AKHIR" ? (
                               <div>
                                 <Label>Saldo Akhir</Label>
-                                <Input
-                                  type="number"
-                                  placeholder="Rp 0"
+                                <NumericFormat
                                   value={row.saldoAkhir || ""}
-                                  onChange={(e) =>
+                                  thousandSeparator="."
+                                  decimalSeparator=","
+                                  allowNegative={false}
+                                  onValueChange={(values: { value: string }) =>
                                     updateRow(
                                       row.id,
                                       "saldoAkhir",
-                                      e.target.value
+                                      values.value
                                     )
                                   }
-                                  className="mt-1"
-                                  min="0"
-                                  step="1000"
+                                  className="mt-1 w-full border rounded px-3 py-2"
+                                  placeholder="Rp 0"
+                                  customInput={Input}
                                 />
                               </div>
                             ) : (
                               <div>
                                 <Label>Nominal</Label>
-                                <Input
-                                  type="number"
-                                  placeholder="Rp 0"
-                                  value={row.nominal}
-                                  onChange={(e) =>
-                                    updateRow(row.id, "nominal", e.target.value)
+                                <NumericFormat
+                                  value={row.nominal || ""}
+                                  thousandSeparator="."
+                                  decimalSeparator=","
+                                  allowNegative={false}
+                                  onValueChange={(values: { value: string }) =>
+                                    updateRow(row.id, "nominal", values.value)
                                   }
-                                  className="mt-1"
-                                  min="0"
-                                  step="1000"
+                                  className="mt-1 w-full border rounded px-3 py-2"
+                                  placeholder="Rp 0"
+                                  customInput={Input}
                                 />
                               </div>
                             )}
@@ -2889,7 +2988,7 @@ export default function JournalPage() {
                                   <SelectValue placeholder="Pilih akun piutang" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {accounts.map((account) => (
+                                  {piutangAccounts.map((account) => (
                                     <SelectItem
                                       key={account.id}
                                       value={account.id}
@@ -2930,16 +3029,17 @@ export default function JournalPage() {
                             {/* ✅ REMOVED: Kategori Piutang dropdown karena sudah diset otomatis oleh sistem */}
                             <div>
                               <Label>Nominal</Label>
-                              <Input
-                                type="number"
-                                placeholder="Rp 0"
-                                value={row.nominal}
-                                onChange={(e) =>
-                                  updateRow(row.id, "nominal", e.target.value)
+                              <NumericFormat
+                                value={row.nominal || ""}
+                                thousandSeparator="."
+                                decimalSeparator=","
+                                allowNegative={false}
+                                onValueChange={(values: { value: string }) =>
+                                  updateRow(row.id, "nominal", values.value)
                                 }
-                                className="mt-1"
-                                min="0"
-                                step="1000"
+                                className="mt-1 w-full border rounded px-3 py-2"
+                                placeholder="Rp 0"
+                                customInput={Input}
                               />
                             </div>
                             <div className="md:col-span-2">
@@ -2974,7 +3074,7 @@ export default function JournalPage() {
                                   <SelectValue placeholder="Pilih akun utang" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {accounts.map((account) => (
+                                  {utangAccounts.map((account) => (
                                     <SelectItem
                                       key={account.id}
                                       value={account.id}
@@ -3012,16 +3112,17 @@ export default function JournalPage() {
                             {/* ✅ REMOVED: Kategori Utang dropdown karena sudah diset otomatis oleh sistem */}
                             <div>
                               <Label>Nominal</Label>
-                              <Input
-                                type="number"
-                                placeholder="Rp 0"
-                                value={row.nominal}
-                                onChange={(e) =>
-                                  updateRow(row.id, "nominal", e.target.value)
+                              <NumericFormat
+                                value={row.nominal || ""}
+                                thousandSeparator="."
+                                decimalSeparator=","
+                                allowNegative={false}
+                                onValueChange={(values: { value: string }) =>
+                                  updateRow(row.id, "nominal", values.value)
                                 }
-                                className="mt-1"
-                                min="0"
-                                step="1000"
+                                className="mt-1 w-full border rounded px-3 py-2"
+                                placeholder="Rp 0"
+                                customInput={Input}
                               />
                             </div>
                             <div className="md:col-span-2">
