@@ -629,9 +629,6 @@ function generateSummarySection(data: PDFReportData): string {
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Penerimaan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalPenerimaan.toLocaleString()}</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Pengeluaran</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalPengeluaran.toLocaleString()}</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalSaldoAkhir.toLocaleString()}</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Bersih</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${(
-                summary.totalPenerimaan - summary.totalPengeluaran
-              ).toLocaleString()}</td></tr>
             </tbody>
           </table>
         </div>
@@ -649,12 +646,9 @@ function generateSummarySection(data: PDFReportData): string {
       const piutangMacet = allEntries
         .filter((entry) => entry.transactionType === "PIUTANG_MACET")
         .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
+      // Saldo Akhir Piutang hanya dari entri manual user
       const saldoAkhirPiutang = allEntries
-        .filter(
-          (entry) =>
-            entry.transactionType === "SALDO_AKHIR" ||
-            entry.transactionType === "SALDO_AKHIR_PIUTANG"
-        )
+        .filter((entry) => entry.transactionType === "SALDO_AKHIR_PIUTANG")
         .reduce((sum, entry) => sum + (entry.saldoAkhir || entry.nilai || 0), 0);
 
       summaryHTML += `
@@ -710,7 +704,6 @@ function generateSummarySection(data: PDFReportData): string {
             <tbody>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Utang Baru</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${utangBaru.toLocaleString()}</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Utang Dibayar</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${utangDibayar.toLocaleString()}</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Bahan Baku</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${bahanBaku.toLocaleString()}</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir Utang</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${saldoAkhirUtang.toLocaleString()}</td></tr>
             </tbody>
           </table>

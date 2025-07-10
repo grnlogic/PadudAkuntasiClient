@@ -38,14 +38,7 @@ async function apiRequest<T>(
     const token =
       typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
-    // ✅ Add request logging for debugging
-    console.log("🌐 [API REQUEST]", {
-      method: options.method || "GET",
-      endpoint,
-      fullUrl: `${API_BASE_URL}${endpoint}`,
-      hasToken: !!token,
-      body: options.body ? JSON.parse(options.body as string) : null,
-    });
+    
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: {
@@ -63,14 +56,7 @@ async function apiRequest<T>(
       data = null;
     }
 
-    // ✅ Add response logging for debugging
-    console.log("📨 [API RESPONSE]", {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-      data,
-      endpoint,
-    });
+ 
 
     if (!response.ok) {
       // ✅ Enhanced error logging
