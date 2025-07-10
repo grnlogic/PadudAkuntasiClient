@@ -565,6 +565,7 @@ export default function LaporanPenjualanWizard() {
         };
 
         console.log("📊 Final reportData for PDF:", reportData);
+        console.log("Isi accounts yang dikirim ke PDF:", productList);
 
         downloadEnhancedPDF(reportData);
         toastSuccess.custom("PDF laporan berhasil diunduh");
@@ -610,27 +611,7 @@ export default function LaporanPenjualanWizard() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Laporan Penjualan Produk</CardTitle>
-          {/* ✅ NEW: PDF Export Buttons */}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={previewPDFReport}
-              className="text-blue-600 hover:text-blue-700 border-blue-200"
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              Preview PDF
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={generatePDFReport}
-              className="text-green-600 hover:text-green-700 border-green-200"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download PDF
-            </Button>
-          </div>
+          
         </div>
         <div className="mt-2 flex items-center gap-4 text-sm">
           <div className="flex items-center gap-2">
@@ -1294,45 +1275,7 @@ export default function LaporanPenjualanWizard() {
           )}
         </div>
 
-        {/* ✅ NEW: PDF Export Info */}
-        {laporanProduk.length > 0 && (
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <h4 className="font-medium text-blue-800">
-                  📄 Export Laporan PDF
-                </h4>
-                <p className="text-sm text-blue-600 mt-1">
-                  Data yang tersedia untuk export:{" "}
-                  <strong>
-                    {laporanProduk.length} laporan penjualan produk
-                  </strong>{" "}
-                  hari ini
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={previewPDFReport}
-                  className="text-blue-600 hover:text-blue-700 border-blue-200"
-                >
-                  <FileText className="h-4 w-4 mr-1" />
-                  Preview
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={generatePDFReport}
-                  className="text-green-600 hover:text-green-700 border-green-200"
-                >
-                  <Download className="h-4 w-4 mr-1" />
-                  Download
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+       
       </CardContent>
     </Card>
   );

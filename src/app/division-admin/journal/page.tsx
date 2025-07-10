@@ -2423,10 +2423,8 @@ export default function JournalPage() {
                           {entry.absentCount || 0} orang
                         </td>
                         <td className="text-center">{entry.shift || "-"}</td>
-                        <td className="text-center">
-                          {(entry as any).keteranganKendala ||
-                            (entry as any).keterangan ||
-                            "-"}
+                        <td className="text-center" style={{ whiteSpace: 'pre-line', wordBreak: 'break-word', maxWidth: 200 }}>
+                          {(entry as any).keteranganKendala || (entry as any).keterangan || "-"}
                         </td>
                         <td className="text-center">
                           {entry.createdAt

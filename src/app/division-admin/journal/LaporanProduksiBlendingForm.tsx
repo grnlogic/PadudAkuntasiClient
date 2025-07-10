@@ -782,7 +782,7 @@ export default function LaporanProduksiBlendingForm({
                     <>
                       {/* Hasil Produksi */}
                       <div className="space-y-2">
-                        <Label>Hasil Produksi (unit)</Label>
+                        <Label>Hasil Produksi (gr/pcs)</Label>
                         <Input
                           type="number"
                           value={entry.hasilProduksi}
@@ -811,7 +811,7 @@ export default function LaporanProduksiBlendingForm({
 
                       {/* Barang Gagal/Cacat */}
                       <div className="space-y-2">
-                        <Label>Barang Gagal/Cacat (unit)</Label>
+                        <Label>Barang Gagal/Cacat (pcs)</Label>
                         <Input
                           type="number"
                           value={entry.barangGagal}
@@ -887,7 +887,7 @@ export default function LaporanProduksiBlendingForm({
                     <>
                       {/* Barang Masuk */}
                       <div className="space-y-2">
-                        <Label>Barang Masuk (kg/unit)</Label>
+                        <Label>Barang Masuk (gr/pcs)</Label>
                         <Input
                           type="number"
                           value={entry.barangMasuk}
@@ -912,7 +912,7 @@ export default function LaporanProduksiBlendingForm({
 
                       {/* Pemakaian */}
                       <div className="space-y-2">
-                        <Label>Pemakaian (kg/unit)</Label>
+                        <Label>Pemakaian (gr/pcs)</Label>
                         <Input
                           type="number"
                           value={entry.pemakaian}
@@ -937,7 +937,7 @@ export default function LaporanProduksiBlendingForm({
 
                       {/* Stok Akhir */}
                       <div className="space-y-2">
-                        <Label>Stok Akhir (kg/unit)</Label>
+                        <Label>Stok Akhir (gr/pcs)</Label>
                         <Input
                           type="number"
                           value={entry.stokAkhir}

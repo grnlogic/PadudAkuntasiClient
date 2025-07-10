@@ -115,33 +115,7 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
       transformBackendData
     );
 
-    // ✅ FIXED: Gunakan semua data tanpa filter tambahan
-    if (data.laporanPenjualanSales && data.laporanPenjualanSales.length > 0) {
-      console.log(
-        "🔍 [PDF DEBUG] ALL laporanPenjualanSales:",
-        data.laporanPenjualanSales.length
-      );
-      const salesEntries = data.laporanPenjualanSales.map((sales: any) => {
-        const transformed = transformBackendData(sales);
-        return {
-          ...transformed,
-          id: `sales-${sales.id}`,
-          accountId:
-            sales.account_id?.toString() || sales.accountId?.toString(),
-          description: `Laporan Sales - ${
-            sales.salesperson?.username || sales.salesperson?.nama || "Unknown"
-          }`,
-          nilai: Number(transformed.realisasiAmount) || 0,
-          targetAmount: Number(transformed.targetAmount) || 0,
-          realisasiAmount: Number(transformed.realisasiAmount) || 0,
-          returPenjualan: Number(transformed.returPenjualan) || 0,
-          keteranganKendala: transformed.keteranganKendala || "",
-        };
-      });
-      transformedEntries.push(...salesEntries);
-    }
-
-    // ✅ FIXED: Gunakan semua data laporanPenjualanProduk tanpa filter tambahan
+    // Tetap proses produkEntries
     if (data.laporanPenjualanProduk && data.laporanPenjualanProduk.length > 0) {
       console.log(
         "🔍 [PDF DEBUG] ALL laporanPenjualanProduk:",
@@ -153,7 +127,6 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
           accountId:
             produk.productAccountId?.toString() ||
             produk.product_account_id?.toString(),
-          // ✅ FIXED: Tambahkan accountCode untuk laporan penjualan produk
           accountCode:
             produk.accountCode || produk.productAccountId?.toString() || "N/A",
           description: `${
@@ -175,7 +148,6 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
           namaPerusahaan: produk.namaPerusahaan || produk.nama_perusahaan,
           namaSalesperson: produk.namaSalesperson || produk.nama_salesperson,
           namaAccount: produk.namaAccount || produk.nama_account,
-          // ✅ Tambahan fields untuk PDF
           createdAt:
             produk.tanggalLaporan ||
             produk.tanggal_laporan ||
@@ -189,6 +161,7 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
       transformedEntries.push(...produkEntries);
     }
 
+    // Tidak perlu filter duplikat, karena hanya satu sumber data
     console.log(
       "🔍 [PDF DEBUG] Total PEMASARAN entries:",
       transformedEntries.length
@@ -649,7 +622,10 @@ function generateSummarySection(data: PDFReportData): string {
       // Saldo Akhir Piutang hanya dari entri manual user
       const saldoAkhirPiutang = allEntries
         .filter((entry) => entry.transactionType === "SALDO_AKHIR_PIUTANG")
-        .reduce((sum, entry) => sum + (entry.saldoAkhir || entry.nilai || 0), 0);
+        .reduce(
+          (sum, entry) => sum + (entry.saldoAkhir || entry.nilai || 0),
+          0
+        );
 
       summaryHTML += `
         <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
@@ -1050,26 +1026,15 @@ function generateSummarySection(data: PDFReportData): string {
   if (divisionName.includes("PEMASARAN")) {
     let totalTarget = 0;
     let totalRealisasi = 0;
-    let totalLaporan = 0;
-
-    // Hitung dari laporan penjualan sales
-    if (data.laporanPenjualanSales) {
-      data.laporanPenjualanSales.forEach((sales: any) => {
-        totalTarget += Number(sales.targetAmount || sales.targetPenjualan || 0);
-        totalRealisasi += Number(
-          sales.realisasiAmount || sales.realisasiPenjualan || 0
-        );
-      });
-      totalLaporan += data.laporanPenjualanSales.length;
-    }
-
-    // Hitung dari laporan penjualan produk
+    // Hanya hitung dari laporan penjualan produk
+    const totalLaporan = data.laporanPenjualanProduk
+      ? data.laporanPenjualanProduk.length
+      : 0;
     if (data.laporanPenjualanProduk) {
       data.laporanPenjualanProduk.forEach((produk: any) => {
         totalTarget += Number(produk.targetKuantitas || 0);
         totalRealisasi += Number(produk.realisasiKuantitas || 0);
       });
-      totalLaporan += data.laporanPenjualanProduk.length;
     }
 
     // Hanya tampilkan jika ada data
@@ -1118,6 +1083,11 @@ function generateSummarySection(data: PDFReportData): string {
 
   // HRD: Summary HRD (rollback to simple/standard)
   if (divisionName.includes("HRD")) {
+    // Hitung total karyawan sebagai penjumlahan absentCount
+    const totalKaryawan = allEntries.reduce(
+      (sum, entry) => sum + (Number(entry.absentCount) || 0),
+      0
+    );
     return `
       <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
         <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">👥 RINGKASAN KEHADIRAN HARIAN</h3>
@@ -1129,49 +1099,71 @@ function generateSummarySection(data: PDFReportData): string {
             </tr>
           </thead>
           <tbody>
-            <tr><td>Total Karyawan</td><td style="text-align: right;">${
-              allEntries.length
-            } orang</td></tr>
-            <tr><td>Hadir</td><td style="text-align: right; color: #28a745;">${
-              allEntries.filter((entry) => entry.attendanceStatus === "HADIR")
-                .length
-            } orang</td></tr>
-            <tr><td>Tidak Hadir</td><td style="text-align: right; color: #dc3545;">${
-              allEntries.filter(
-                (entry) => entry.attendanceStatus === "TIDAK_HADIR"
-              ).length
-            } orang</td></tr>
-            <tr><td>Sakit</td><td style="text-align: right; color: #fd7e14;">${
-              allEntries.filter((entry) => entry.attendanceStatus === "SAKIT")
-                .length
-            } orang</td></tr>
-            <tr><td>Izin</td><td style="text-align: right; color: #ffc107;">${
-              allEntries.filter((entry) => entry.attendanceStatus === "IZIN")
-                .length
-            } orang</td></tr>
-            <tr><td>Lembur</td><td style="text-align: right; color: #6f42c1;">${
-              allEntries.filter((entry) => entry.attendanceStatus === "LEMBUR")
-                .length
-            } orang</td></tr>
-            <tr><td>Tingkat Kehadiran</td><td style="text-align: right; color: #3498db; font-weight: bold;">${(
-              (allEntries.filter((entry) => entry.attendanceStatus === "HADIR")
-                .length /
-                allEntries.length) *
-              100
+            <tr><td>Total Karyawan</td><td style="text-align: right;">${totalKaryawan} orang</td></tr>
+            <tr><td>Hadir</td><td style="text-align: right; color: #28a745;">${allEntries
+              .filter((entry) => entry.attendanceStatus === "HADIR")
+              .reduce(
+                (sum, entry) => sum + (Number(entry.absentCount) || 0),
+                0
+              )} orang</td></tr>
+            <tr><td>Tidak Hadir</td><td style="text-align: right; color: #dc3545;">${allEntries
+              .filter((entry) => entry.attendanceStatus === "TIDAK_HADIR")
+              .reduce(
+                (sum, entry) => sum + (Number(entry.absentCount) || 0),
+                0
+              )} orang</td></tr>
+            <tr><td>Sakit</td><td style="text-align: right; color: #fd7e14;">${allEntries
+              .filter((entry) => entry.attendanceStatus === "SAKIT")
+              .reduce(
+                (sum, entry) => sum + (Number(entry.absentCount) || 0),
+                0
+              )} orang</td></tr>
+            <tr><td>Izin</td><td style="text-align: right; color: #ffc107;">${allEntries
+              .filter((entry) => entry.attendanceStatus === "IZIN")
+              .reduce(
+                (sum, entry) => sum + (Number(entry.absentCount) || 0),
+                0
+              )} orang</td></tr>
+            <tr><td>Lembur</td><td style="text-align: right; color: #6f42c1;">${allEntries
+              .filter((entry) => entry.attendanceStatus === "LEMBUR")
+              .reduce(
+                (sum, entry) => sum + (Number(entry.absentCount) || 0),
+                0
+              )} orang</td></tr>
+            <tr><td>Tingkat Kehadiran</td><td style="text-align: right; color: #3498db; font-weight: bold;">${(totalKaryawan >
+            0
+              ? (allEntries
+                  .filter((entry) => entry.attendanceStatus === "HADIR")
+                  .reduce(
+                    (sum, entry) => sum + (Number(entry.absentCount) || 0),
+                    0
+                  ) /
+                  totalKaryawan) *
+                100
+              : 0
             ).toFixed(1)}%</td></tr>
             <tr><td>Status Kehadiran</td><td style="text-align: right; color: #3498db; font-weight: bold;">${
-              allEntries.filter((entry) => entry.attendanceStatus === "HADIR")
-                .length /
-                allEntries.length >=
-              0.9
-                ? "Excellent"
-                : allEntries.filter(
-                    (entry) => entry.attendanceStatus === "HADIR"
-                  ).length /
-                    allEntries.length >=
-                  0.8
-                ? "Good"
-                : "Needs Improvement"
+              totalKaryawan > 0
+                ? allEntries
+                    .filter((entry) => entry.attendanceStatus === "HADIR")
+                    .reduce(
+                      (sum, entry) => sum + (Number(entry.absentCount) || 0),
+                      0
+                    ) /
+                    totalKaryawan >=
+                  0.9
+                  ? "Excellent"
+                  : allEntries
+                      .filter((entry) => entry.attendanceStatus === "HADIR")
+                      .reduce(
+                        (sum, entry) => sum + (Number(entry.absentCount) || 0),
+                        0
+                      ) /
+                      totalKaryawan >=
+                    0.8
+                  ? "Good"
+                  : "Needs Improvement"
+                : "-"
             }</td></tr>
             <tr><td>Jumlah Laporan</td><td style="text-align: right;">${
               allEntries.length
@@ -1225,7 +1217,7 @@ function generateDetailsSection(data: PDFReportData): string {
               <th style="text-align:center;">Status Kehadiran</th>
               <th style="text-align:center;">Jumlah</th>
               <th style="text-align:center;">Shift</th>
-              <th style="text-align:center;">Jam Lembur</th>
+              <th style="text-align:center; max-width:200px;">Keterangan</th>
             </tr>
           </thead>
           <tbody>
@@ -1248,9 +1240,9 @@ function generateDetailsSection(data: PDFReportData): string {
                       entry.absentCount || 0
                     } orang</td>
                     <td style="text-align:center;">${entry.shift || "-"}</td>
-                    <td style="text-align:center;">${
-                      entry.overtimeHours || 0
-                    } jam</td>
+                    <td style="text-align:center; white-space: pre-line; word-break: break-word; max-width: 200px;">${
+                      entry.keteranganKendala || entry.keterangan || "-"
+                    }</td>
                   </tr>
                 `;
               })
@@ -1264,7 +1256,7 @@ function generateDetailsSection(data: PDFReportData): string {
   let headerColumns = "";
 
   if (divisionName.includes("KEUANGAN")) {
-    headerColumns = "<th>Jenis Transaksi</th><th>Kategori</th><th>Nominal</th>";
+    headerColumns = "<th>Jenis Transaksi</th><th>Nominal</th>";
   } else if (divisionName.includes("PEMASARAN")) {
     headerColumns =
       "<th>Perusahaan</th><th>Salesperson</th><th>Produk</th><th>Target</th><th>Realisasi</th><th>Achievement</th><th>Kendala</th>";
@@ -1318,10 +1310,8 @@ function generateDetailsSection(data: PDFReportData): string {
           transactionType === "SALDO_AKHIR"
             ? entry.saldoAkhir ?? entry.nilai
             : entry.nilai;
-        const kategori = entry.kategori || "-";
         dataCells = `
           <td style="text-align: center;">${transactionType}</td>
-          <td style="text-align: center;">${kategori}</td>
           <td style="text-align: right;">${formatCurrency(
             nominalValue || 0
           )}</td>
