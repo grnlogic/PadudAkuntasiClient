@@ -2839,7 +2839,9 @@ export default function JournalPage() {
                 disabled
                 className="w-auto bg-gray-100 text-gray-700 cursor-not-allowed"
               />
-              <span className="text-xs text-gray-500">(Hanya entri untuk hari ini)</span>
+              <span className="text-xs text-gray-500">
+                (Hanya entri untuk hari ini)
+              </span>
             </div>
           </CardContent>
         </Card>

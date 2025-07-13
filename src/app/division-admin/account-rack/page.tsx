@@ -351,10 +351,597 @@ export default function AccountRackPage() {
                 formulir "Input Laporan Harian". Anda tinggal mengisi nilainya
                 tanpa perlu mengetik ulang nama akun.
               </p>
-              <p className="text-blue-700 text-xs mt-2">
-                💡 <strong>Tips:</strong> Gunakan kode seperti{" "}
-                {generateSuggestedCode()} untuk akun berikutnya
-              </p>
+
+              {/* ✅ NEW: Panduan Kode Akun berdasarkan Divisi & Perusahaan */}
+              {(() => {
+                const username = user?.username?.toLowerCase() || "";
+                const divisionName = user?.division?.name || "";
+
+                // Mapping perusahaan
+                let companyName = "UNKNOWN";
+                if (username.includes("pjp")) companyName = "PJP";
+                else if (username.includes("sp")) companyName = "SP";
+                else if (username.includes("prima")) companyName = "PRIMA";
+                else if (username.includes("blending"))
+                  companyName = "BLENDING";
+                else if (username.includes("holding")) companyName = "HOLDING";
+
+                return (
+                  <div className="mt-4 p-3 bg-white rounded-lg border border-blue-200">
+                    <h4 className="font-semibold text-blue-900 mb-2">
+                      📋 Panduan Kode Akun untuk {user?.division?.name}
+                    </h4>
+
+                    {/* Panduan berdasarkan divisi */}
+                    {(() => {
+                      if (divisionName.includes("KEUANGAN")) {
+                        return (
+                          <div className="space-y-2 text-sm">
+                            <p className="text-blue-800 font-medium">
+                              🏦{" "}
+                              <strong>{companyName} - Divisi Keuangan:</strong>
+                            </p>
+                            <div className="grid grid-cols-1 gap-1 text-xs">
+                              {(() => {
+                                if (companyName === "PJP") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 1-1xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Kas PJP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 1-2xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Piutang PJP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 2-1xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Utang PJP
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else if (companyName === "SP") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 1-3xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Kas SP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 1-4xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Piutang SP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 2-2xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Utang SP
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else if (companyName === "PRIMA") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 1-5xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Kas PRIMA
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 1-6xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Piutang PRIMA
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 2-3xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Utang PRIMA
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else if (companyName === "BLENDING") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 1-7xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Kas BLENDING
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 1-8xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Piutang BLENDING
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 2-4xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Utang BLENDING
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else if (companyName === "HOLDING") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 1-9xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Kas & Piutang HOLDING
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 2-5xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Utang HOLDING
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else {
+                                  return (
+                                    <div className="text-red-600">
+                                      Perusahaan tidak dikenali
+                                    </div>
+                                  );
+                                }
+                              })()}
+                            </div>
+                            <p className="text-blue-700 text-xs mt-2">
+                              💡 <strong>Rekomendasi:</strong> Gunakan kode{" "}
+                              {generateSuggestedCode()} untuk akun berikutnya
+                            </p>
+                          </div>
+                        );
+                      } else if (divisionName.includes("PEMASARAN")) {
+                        return (
+                          <div className="space-y-2 text-sm">
+                            <p className="text-blue-800 font-medium">
+                              📈 <strong>Divisi Pemasaran & Penjualan:</strong>
+                            </p>
+                            <div className="grid grid-cols-1 gap-1 text-xs">
+                              <div className="flex justify-between">
+                                <span>• 4-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Penjualan Produk
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>• 4-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Retur Penjualan
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>• 4-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Target Penjualan
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>• 4-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Realisasi Penjualan
+                                </span>
+                              </div>
+                            </div>
+                          
+                          </div>
+                        );
+                      } else if (divisionName.includes("PRODUKSI")) {
+                        return (
+                          <div className="space-y-2 text-sm">
+                            <p className="text-blue-800 font-medium">
+                              🏭{" "}
+                              <strong>{companyName} - Divisi Produksi:</strong>
+                            </p>
+                            <div className="grid grid-cols-1 gap-1 text-xs">
+                              {(() => {
+                                if (companyName === "PJP") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 3-1xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Hasil Produksi PJP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 3-2xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Barang Gagal PJP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-1xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          HPP Produksi PJP
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else if (companyName === "SP") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 3-3xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Hasil Produksi SP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 3-4xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Barang Gagal SP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-2xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          HPP Produksi SP
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else if (companyName === "PRIMA") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 3-5xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Hasil Produksi PRIMA
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 3-6xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Barang Gagal PRIMA
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-3xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          HPP Produksi PRIMA
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else if (companyName === "BLENDING") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 3-7xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Hasil Produksi BLENDING
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 3-8xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Barang Gagal BLENDING
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-4xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          HPP Produksi BLENDING
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else if (companyName === "HOLDING") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 3-9xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Hasil Produksi HOLDING
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-5xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          HPP Produksi HOLDING
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else {
+                                  return (
+                                    <div className="text-red-600">
+                                      Perusahaan tidak dikenali
+                                    </div>
+                                  );
+                                }
+                              })()}
+                            </div>
+                            <p className="text-blue-700 text-xs mt-2">
+                              💡 <strong>Rekomendasi:</strong> Gunakan kode{" "}
+                              {generateSuggestedCode()} untuk akun berikutnya
+                            </p>
+                          </div>
+                        );
+                      } else if (
+                        divisionName.includes("PERSEDIAAN") ||
+                        divisionName.includes("BLENDING")
+                      ) {
+                        return (
+                          <div className="space-y-2 text-sm">
+                            <p className="text-blue-800 font-medium">
+                              📦{" "}
+                              <strong>
+                                {companyName} - Divisi Persediaan/Blending:
+                              </strong>
+                            </p>
+                            <div className="grid grid-cols-1 gap-1 text-xs">
+                              {(() => {
+                                if (companyName === "PJP") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 5-1xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Barang Masuk PJP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-1xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Pemakaian Bahan PJP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-1xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Stok Akhir PJP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-1xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Kondisi Gudang PJP
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else if (companyName === "SP") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 5-2xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Barang Masuk SP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-2xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Pemakaian Bahan SP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-2xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Stok Akhir SP
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-2xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Kondisi Gudang SP
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else if (companyName === "PRIMA") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 5-3xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Barang Masuk PRIMA
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-3xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Pemakaian Bahan PRIMA
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-3xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Stok Akhir PRIMA
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-3xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Kondisi Gudang PRIMA
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else if (companyName === "BLENDING") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 5-4xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Barang Masuk BLENDING
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-4xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Pemakaian Bahan BLENDING
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-4xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Stok Akhir BLENDING
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-4xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Kondisi Gudang BLENDING
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else if (companyName === "HOLDING") {
+                                  return (
+                                    <>
+                                      <div className="flex justify-between">
+                                        <span>• 5-5xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Barang Masuk HOLDING
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-5xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Pemakaian Bahan HOLDING
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-5xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Stok Akhir HOLDING
+                                        </span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span>• 5-5xx:</span>
+                                        <span className="text-green-600 font-medium">
+                                          Kondisi Gudang HOLDING
+                                        </span>
+                                      </div>
+                                    </>
+                                  );
+                                } else {
+                                  return (
+                                    <div className="text-red-600">
+                                      Perusahaan tidak dikenali
+                                    </div>
+                                  );
+                                }
+                              })()}
+                            </div>
+                            <p className="text-blue-700 text-xs mt-2">
+                              💡 <strong>Rekomendasi:</strong> Gunakan kode{" "}
+                              {generateSuggestedCode()} untuk akun berikutnya
+                            </p>
+                          </div>
+                        );
+                      } else if (divisionName.includes("HRD")) {
+                        return (
+                          <div className="space-y-2 text-sm">
+                            <p className="text-blue-800 font-medium">
+                              👥 <strong>Divisi HRD:</strong>
+                            </p>
+                            <div className="grid grid-cols-1 gap-1 text-xs">
+                              <div className="flex justify-between">
+                                <span>• 6-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Kehadiran Karyawan
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>• 6-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Lembur Karyawan
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>• 6-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Gaji Karyawan
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>• 6-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Tunjangan Karyawan
+                                </span>
+                              </div>
+                            </div>
+                            
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="space-y-2 text-sm">
+                            <p className="text-blue-800 font-medium">
+                              📋 <strong>Panduan Umum:</strong>
+                            </p>
+                            <div className="grid grid-cols-1 gap-1 text-xs">
+                              <div className="flex justify-between">
+                                <span>• 1-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Aset (Kas, Piutang)
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>• 2-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Kewajiban (Utang, Penjualan)
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>• 3-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Produksi
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>• 4-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Persediaan
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>• 5-xxx:</span>
+                                <span className="text-green-600 font-medium">
+                                  Biaya & Pendapatan
+                                </span>
+                              </div>
+                            </div>
+                            <p className="text-blue-700 text-xs mt-2">
+                              💡 <strong>Rekomendasi:</strong> Gunakan kode{" "}
+                              {generateSuggestedCode()} untuk akun berikutnya
+                            </p>
+                          </div>
+                        );
+                      }
+                    })()}
+
+                    {/* ✅ NEW: Warning untuk perusahaan */}
+                    <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                      <p className="text-yellow-800">
+                        ⚠️ <strong>Perhatian:</strong> Pastikan kode akun sesuai
+                        dengan perusahaan Anda ({companyName}). Kode yang salah
+                        akan menyebabkan akun tidak muncul di formulir laporan.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </CardContent>
@@ -570,7 +1157,7 @@ export default function AccountRackPage() {
                   <Label htmlFor="accountName">Nama Akun</Label>
                   <Input
                     id="accountName"
-                    placeholder="Contoh: Hasil Produksi Roti, Kas Operasional Harian"
+                    placeholder="Contoh: Kas besar, Kas Operasional Harian"
                     value={newAccount.accountName}
                     onChange={(e) =>
                       setNewAccount({

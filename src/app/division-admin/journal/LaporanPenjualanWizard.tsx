@@ -824,6 +824,12 @@ export default function LaporanPenjualanWizard() {
                     </div>
                   )}
                 </div>
+                {/* Tambahan informasi setelah menambah sales */}
+                <div className="mt-2 text-xs text-blue-700">
+                  Jika sudah menambahkan salesperson baru, harap klik tombol{" "}
+                  <span className="font-semibold">Refresh</span> untuk
+                  memperbarui daftar.
+                </div>
               </div>
             )}
           </div>
