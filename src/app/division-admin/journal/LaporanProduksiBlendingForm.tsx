@@ -67,6 +67,7 @@ export default function LaporanProduksiBlendingForm({
   userDivision,
   onSuccess,
 }: LaporanProduksiBlendingFormProps) {
+  const user = getCurrentUser();
   const [tanggalLaporan, setTanggalLaporan] = useState("");
   const [entries, setEntries] = useState<ProduksiBlendingEntry[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -196,11 +197,72 @@ export default function LaporanProduksiBlendingForm({
       const accountsData = await getAccountsByDivision(userDivision.id);
 
       // Filter only KUANTITAS accounts for production/blending
-      const filteredAccounts = accountsData.filter(
+      let filteredAccounts = accountsData.filter(
         (account) => account.valueType === "KUANTITAS"
       );
 
+      // ✅ ADD: Filtering berdasarkan perusahaan user seperti di page.tsx
+      // PJP: 1-1, 1-2, 2-1, 5-1
+      // SP: 1-3, 1-4, 2-2, 5-2
+      // PRIMA: 1-5, 1-6, 2-3, 5-3
+      // BLENDING: 1-7, 1-8, 2-3, 5-4
+      // HOLDING: 1-9
+      const username = user?.username?.toLowerCase() || "";
+      let allowedPrefixes: string[] = [];
+
+      if (username.includes("pjp")) {
+        allowedPrefixes = ["1-1", "1-2", "2-1", "5-1"];
+      } else if (username.includes("sp")) {
+        allowedPrefixes = ["1-3", "1-4", "2-2", "5-2"];
+      } else if (username.includes("prima")) {
+        allowedPrefixes = ["1-5", "1-6", "2-3", "5-3"];
+      } else if (username.includes("blending")) {
+        allowedPrefixes = ["1-7", "1-8", "2-3", "5-4"];
+      } else if (username.includes("holding")) {
+        allowedPrefixes = ["1-9"];
+      }
+
+      // Apply company-based filtering if user has restrictions
+      if (allowedPrefixes.length > 0) {
+        filteredAccounts = filteredAccounts.filter((acc) =>
+          allowedPrefixes.some((prefix) =>
+            new RegExp(`^${prefix}\\d+`).test(acc.accountCode)
+          )
+        );
+        console.log(`🔍 FILTERED ACCOUNTS for ${username}:`, {
+          allowedPrefixes,
+          totalAccounts: accountsData.length,
+          filteredAccounts: filteredAccounts.length,
+          sampleFiltered: filteredAccounts[0]?.accountCode,
+        });
+      }
+
       setAccounts(filteredAccounts);
+
+      // ✅ DEBUG: Log filtering results
+      console.log(`🔍 ACCOUNT FILTERING RESULTS for ${user?.username}:`, {
+        totalAccounts: accountsData.length,
+        kuantitasAccounts: accountsData.filter(
+          (acc) => acc.valueType === "KUANTITAS"
+        ).length,
+        filteredAccounts: filteredAccounts.length,
+        userCompany: username.includes("pjp")
+          ? "PJP"
+          : username.includes("sp")
+          ? "SP"
+          : username.includes("prima")
+          ? "PRIMA"
+          : username.includes("blending")
+          ? "BLENDING"
+          : username.includes("holding")
+          ? "HOLDING"
+          : "UNKNOWN",
+        allowedPrefixes:
+          allowedPrefixes.length > 0 ? allowedPrefixes : "ALL ACCOUNTS",
+        sampleFilteredAccounts: filteredAccounts
+          .slice(0, 3)
+          .map((acc) => acc.accountCode),
+      });
 
       // Add initial entry if accounts are available
       if (filteredAccounts.length > 0) {
@@ -303,44 +365,23 @@ export default function LaporanProduksiBlendingForm({
         const stockBarangJadi = parseFloat(entry.stockBarangJadi) || 0;
         const hpBarangJadi = parseFloat(entry.hpBarangJadi) || 0;
         const hasProductionData =
-          hasilProduksi > 0 ||
-          barangGagal > 0 ||
-          stockBarangJadi > 0 ||
-          hpBarangJadi > 0;
+          hasilProduksi !== 0 ||
+          barangGagal !== 0 ||
+          stockBarangJadi !== 0 ||
+          hpBarangJadi !== 0;
         if (!hasProductionData) {
           newErrors[`${entry.id}_production`] =
             "Minimal satu field produksi harus diisi";
-        }
-        if (entry.hasilProduksi && hasilProduksi < 0) {
-          newErrors[`${entry.id}_hasilProduksi`] = "Tidak boleh negatif";
-        }
-        if (entry.barangGagal && barangGagal < 0) {
-          newErrors[`${entry.id}_barangGagal`] = "Tidak boleh negatif";
-        }
-        if (entry.stockBarangJadi && stockBarangJadi < 0) {
-          newErrors[`${entry.id}_stockBarangJadi`] = "Tidak boleh negatif";
-        }
-        if (entry.hpBarangJadi && hpBarangJadi < 0) {
-          newErrors[`${entry.id}_hpBarangJadi`] = "Tidak boleh negatif";
         }
       } else if (activeTab === "blending") {
         const barangMasuk = parseFloat(entry.barangMasuk) || 0;
         const pemakaian = parseFloat(entry.pemakaian) || 0;
         const stokAkhir = parseFloat(entry.stokAkhir) || 0;
         const hasBlendingData =
-          barangMasuk > 0 || pemakaian > 0 || stokAkhir > 0;
+          barangMasuk !== 0 || pemakaian !== 0 || stokAkhir !== 0;
         if (!hasBlendingData) {
           newErrors[`${entry.id}_blending`] =
             "Minimal satu field blending harus diisi";
-        }
-        if (entry.barangMasuk && barangMasuk < 0) {
-          newErrors[`${entry.id}_barangMasuk`] = "Tidak boleh negatif";
-        }
-        if (entry.pemakaian && pemakaian < 0) {
-          newErrors[`${entry.id}_pemakaian`] = "Tidak boleh negatif";
-        }
-        if (entry.stokAkhir && stokAkhir < 0) {
-          newErrors[`${entry.id}_stokAkhir`] = "Tidak boleh negatif";
         }
       }
     });
@@ -690,19 +731,41 @@ export default function LaporanProduksiBlendingForm({
           </AlertDescription>
         </Alert>
 
+        {/* ✅ NEW: Company Filtering Info */}
+        {user?.username && (
+          <Alert className="bg-blue-50 border-blue-200">
+            <AlertCircle className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-blue-800">
+              <strong>Filter Akun:</strong> Menampilkan akun untuk perusahaan{" "}
+              {user.username.includes("pjp")
+                ? "PJP"
+                : user.username.includes("sp")
+                ? "SP"
+                : user.username.includes("prima")
+                ? "PRIMA"
+                : user.username.includes("blending")
+                ? "BLENDING"
+                : user.username.includes("holding")
+                ? "HOLDING"
+                : "UNKNOWN"}
+              ({accounts.length} akun tersedia)
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Date Selection */}
         <div className="space-y-2">
           <Label htmlFor="tanggalLaporan">Tanggal Laporan</Label>
           <Input
             id="tanggalLaporan"
             type="date"
-            value={tanggalLaporan}
-            onChange={(e) => setTanggalLaporan(e.target.value)}
-            className={errors.tanggalLaporan ? "border-red-500" : ""}
+            value={new Date().toISOString().split("T")[0]}
+            disabled
+            className="w-auto bg-gray-100 text-gray-700 cursor-not-allowed"
           />
-          {errors.tanggalLaporan && (
-            <p className="text-sm text-red-500">{errors.tanggalLaporan}</p>
-          )}
+          <span className="text-xs text-gray-500">
+            (Hanya entri untuk hari ini)
+          </span>
         </div>
 
         <Separator />
@@ -763,7 +826,10 @@ export default function LaporanProduksiBlendingForm({
                         errors[`${entry.id}_accountId`] ? "border-red-500" : ""
                       }`}
                     >
-                      <option value={0}>Pilih Akun</option>
+                      <option value={0}>
+                        Pilih Akun{" "}
+                        {user?.username && `(${accounts.length} tersedia)`}
+                      </option>
                       {accounts.map((account) => (
                         <option key={account.id} value={account.id}>
                           {account.accountCode} - {account.accountName}
@@ -794,7 +860,6 @@ export default function LaporanProduksiBlendingForm({
                             )
                           }
                           placeholder="Jumlah unit produk yang berhasil dibuat"
-                          min="0"
                           step="0.01"
                           className={
                             errors[`${entry.id}_hasilProduksi`]
@@ -819,7 +884,6 @@ export default function LaporanProduksiBlendingForm({
                             updateEntry(entry.id, "barangGagal", e.target.value)
                           }
                           placeholder="Jumlah unit produk yang gagal/cacat"
-                          min="0"
                           step="0.01"
                           className={
                             errors[`${entry.id}_barangGagal`]
@@ -850,7 +914,6 @@ export default function LaporanProduksiBlendingForm({
                             )
                           }
                           placeholder="Total biaya produksi (HPP)"
-                          min="0"
                           step="0.01"
                           className={
                             errors[`${entry.id}_hpBarangJadi`]
@@ -895,7 +958,6 @@ export default function LaporanProduksiBlendingForm({
                             updateEntry(entry.id, "barangMasuk", e.target.value)
                           }
                           placeholder="Jumlah bahan baku yang masuk hari ini"
-                          min="0"
                           step="0.01"
                           className={
                             errors[`${entry.id}_barangMasuk`]
@@ -920,7 +982,6 @@ export default function LaporanProduksiBlendingForm({
                             updateEntry(entry.id, "pemakaian", e.target.value)
                           }
                           placeholder="Jumlah bahan baku yang digunakan"
-                          min="0"
                           step="0.01"
                           className={
                             errors[`${entry.id}_pemakaian`]
@@ -945,7 +1006,6 @@ export default function LaporanProduksiBlendingForm({
                             updateEntry(entry.id, "stokAkhir", e.target.value)
                           }
                           placeholder="Sisa stok bahan baku di gudang"
-                          min="0"
                           step="0.01"
                           className={
                             errors[`${entry.id}_stokAkhir`]
@@ -1373,6 +1433,35 @@ export default function LaporanProduksiBlendingForm({
             </Card>
           )}
         </div>
+
+        {/* ✅ DEBUG: Company Filtering Status */}
+        {process.env.NODE_ENV === "development" && user?.username && (
+          <Alert className="bg-gray-50 border-gray-200">
+            <AlertCircle className="h-4 w-4 text-gray-600" />
+            <AlertDescription className="text-gray-700 text-xs">
+              <strong>Debug Info:</strong> User: {user.username} | Company:{" "}
+              {user.username.includes("pjp")
+                ? "PJP"
+                : user.username.includes("sp")
+                ? "SP"
+                : user.username.includes("prima")
+                ? "PRIMA"
+                : user.username.includes("blending")
+                ? "BLENDING"
+                : user.username.includes("holding")
+                ? "HOLDING"
+                : "UNKNOWN"}{" "}
+              | Available Accounts: {accounts.length} | Filtering:{" "}
+              {user.username.includes("pjp") ||
+              user.username.includes("sp") ||
+              user.username.includes("prima") ||
+              user.username.includes("blending") ||
+              user.username.includes("holding")
+                ? "ACTIVE"
+                : "DISABLED"}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Submit Button */}
         <div className="flex justify-end pt-4">

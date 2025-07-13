@@ -1061,9 +1061,7 @@ function generateSummarySection(data: PDFReportData): string {
             <tbody>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Target</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalTarget.toLocaleString()} unit</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Realisasi</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalRealisasi.toLocaleString()} unit</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Achievement Rate</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${achievement.toFixed(
-                1
-              )}%</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Achievement Rate</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right; ${achievement > 100 ? 'color: green; font-weight: bold;' : ''}">${achievement.toFixed(1)}%</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Status</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: ${
                 achievement >= 100
                   ? "green"
@@ -1260,7 +1258,7 @@ function generateDetailsSection(data: PDFReportData): string {
     headerColumns = "<th>Jenis Transaksi</th><th>Nominal</th>";
   } else if (divisionName.includes("PEMASARAN")) {
     headerColumns =
-      "<th>Perusahaan</th><th>Salesperson</th><th>Produk</th><th>Target</th><th>Realisasi</th><th>Achievement</th><th>Kendala</th>";
+      "<th>Salesperson</th><th>Produk</th><th>Target</th><th>Realisasi</th><th>Achievement</th><th>Kendala</th>";
   } else if (divisionName.includes("PRODUKSI")) {
     headerColumns =
       "<th>Hasil Produksi</th><th>Barang Gagal</th><th>Stock Barang Jadi</th><th>HPP</th><th>HP/Unit</th><th>Kendala</th>";
@@ -1323,8 +1321,6 @@ function generateDetailsSection(data: PDFReportData): string {
         const achievement =
           target > 0 ? ((realisasi / target) * 100).toFixed(1) + "%" : "-";
         const kendala = entry.keteranganKendala || "-";
-        const perusahaan =
-          entry.namaPerusahaan || entry.salesperson?.perusahaan?.nama || "-";
         const salesperson =
           entry.namaSalesperson ||
           entry.salesperson?.username ||
@@ -1332,7 +1328,6 @@ function generateDetailsSection(data: PDFReportData): string {
           "-";
         const produk = entry.namaAccount || account?.accountName || "Produk";
         dataCells = `
-        <td style="text-align: left;">${perusahaan}</td>
         <td style="text-align: left;">${salesperson}</td>
         <td style="text-align: left;">${produk}</td>
         <td style="text-align: right;">${target.toLocaleString(

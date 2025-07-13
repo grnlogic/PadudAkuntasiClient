@@ -495,7 +495,7 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
           data.laporanBlendingData && data.laporanBlendingData.length > 0
             ? `
         <div class="summary-section">
-          <div class="summary-title">DETAIL LAPORAN BLENDING/GUDANG</div>
+          <div class="summary-title">DETAIL LAPORAN PERSEDIAAN BAHAN BAKU</div>
           <table class="summary-table">
             <thead>
               <tr>

@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from "react";
 import {
-  getPerusahaan,
   getSalespeople,
   getProductAccounts,
   saveLaporanPenjualanProduk,
   getLaporanPenjualanProduk,
-  getSalespeopleByPerusahaan,
+  getSalespeopleByDivision,
   getAccountsByDivision,
   getEntriHarianByDate,
   getLaporanPenjualanSales,
@@ -37,13 +36,11 @@ import { Plus, Trash2, Save, Download, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function LaporanPenjualanWizard() {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [perusahaanList, setPerusahaanList] = useState<any[]>([]);
+  const [step, setStep] = useState<1 | 2>(1);
   const [salesList, setSalesList] = useState<any[]>([]);
   const [productList, setProductList] = useState<any[]>([]);
   const [laporanProduk, setLaporanProduk] = useState<any[]>([]);
 
-  const [selectedPerusahaan, setSelectedPerusahaan] = useState<any>(null);
   const [selectedSalesperson, setSelectedSalesperson] = useState<any>(null);
   // Interface untuk multi baris entri
   interface ProductEntry {
@@ -97,7 +94,6 @@ export default function LaporanPenjualanWizard() {
   };
 
   useEffect(() => {
-    getPerusahaan().then(setPerusahaanList);
     // ✅ FIXED: Filter laporan produk berdasarkan tanggal hari ini
     getLaporanPenjualanProduk().then((data) => {
       console.log("🔍 LAPORAN PENJUALAN WIZARD - Received data:", data);
@@ -113,103 +109,66 @@ export default function LaporanPenjualanWizard() {
 
       setLaporanProduk(filteredData);
     });
-    // ✅ REMOVED: Tidak perlu load semua salespeople di awal
-    // getSalespeople().then(setSalesList);
-  }, []);
 
-  useEffect(() => {
-    if (selectedPerusahaan && selectedPerusahaan.id) {
-      console.log(
-        "🏢 Loading salespeople for company:",
-        selectedPerusahaan.nama,
-        "(ID:",
-        selectedPerusahaan.id,
-        ")"
-      );
+    // ✅ NEW: Load salespeople berdasarkan division user
+    const user = getCurrentUser();
+    const divisionId = user?.division?.id
+      ? parseInt(user.division.id)
+      : undefined;
 
-      // ✅ IMPROVED: Load salespeople by company and reset selection
-      getSalespeopleByPerusahaan(selectedPerusahaan.id).then((salesList) => {
+    if (divisionId) {
+      console.log("🏢 Loading salespeople for division:", divisionId);
+      getSalespeopleByDivision(divisionId).then((salesList) => {
         console.log(
-          "👥 Found salespeople for company:",
+          "👥 Found salespeople for division:",
           salesList.length,
           "sales:",
           salesList.map((s) => s.nama)
         );
         setSalesList(salesList);
-
-        // ✅ ADDED: Reset selected salesperson jika tidak ada di list baru
-        if (selectedSalesperson) {
-          const isSelectedSalespersonInNewList = salesList.find(
-            (s: any) => s.id === selectedSalesperson.id
-          );
-          if (!isSelectedSalespersonInNewList) {
-            console.log(
-              "🔄 Selected salesperson",
-              selectedSalesperson.nama,
-              "not found in new company, resetting selection"
-            );
-            setSelectedSalesperson(null);
-          } else {
-            console.log(
-              "✅ Selected salesperson",
-              selectedSalesperson.nama,
-              "found in new company"
-            );
-          }
-        }
       });
     } else {
-      console.log("🚫 No company selected, clearing salespeople list");
+      console.log("🚫 No valid division found, clearing salespeople list");
       setSalesList([]);
-      setSelectedSalesperson(null); // Reset jika tidak ada perusahaan dipilih
     }
-  }, [selectedPerusahaan]);
+  }, []);
 
   useEffect(() => {
-    if (selectedPerusahaan) {
-      const user = getCurrentUser();
-      const divisionId = user?.division?.id
-        ? parseInt(user.division.id)
-        : undefined;
+    const user = getCurrentUser();
+    const divisionId = user?.division?.id
+      ? parseInt(user.division.id)
+      : undefined;
 
-      console.log("🔍 DEBUG - Fetching products for division:", divisionId);
-      console.log("👤 Current user:", user);
+    console.log("🔍 DEBUG - Fetching products for division:", divisionId);
+    console.log("👤 Current user:", user);
 
-      if (divisionId) {
-        getProductAccounts(divisionId).then((list) => {
-          console.log("📦 Products fetched:", list);
-          setProductList(
-            list.map((product) => ({
-              ...product,
-              accountCode:
-                product.accountCode ||
-                (product as any)?.kodeAkun ||
-                (product as any)?.code ||
-                "N/A",
-            }))
-          );
-        });
-      } else {
-        console.error("❌ No valid divisionId found, cannot fetch products");
-        setProductList([]);
-        toastError.custom("Error: Tidak dapat mengambil data divisi pengguna");
-      }
+    if (divisionId) {
+      getProductAccounts(divisionId).then((list) => {
+        console.log("📦 Products fetched:", list);
+        setProductList(
+          list.map((product) => ({
+            ...product,
+            accountCode:
+              product.accountCode ||
+              (product as any)?.kodeAkun ||
+              (product as any)?.code ||
+              "N/A",
+          }))
+        );
+      });
     } else {
+      console.error("❌ No valid divisionId found, cannot fetch products");
       setProductList([]);
+      toastError.custom("Error: Tidak dapat mengambil data divisi pengguna");
     }
-    setStep(1);
-  }, [selectedPerusahaan]);
+  }, []);
 
   const handleNext = () => {
-    if (step === 1 && !selectedPerusahaan) {
-      toastError.validation("Pilih perusahaan terlebih dahulu");
-      return;
-    }
-    if (step === 2 && !selectedSalesperson) {
+    if (step === 1 && !selectedSalesperson) {
       toastError.validation("Pilih salesperson terlebih dahulu");
       return;
     }
-    setStep((prev) => (prev < 3 ? ((prev + 1) as any) : prev));
+    setStep((prev) => (prev < 2 ? ((prev + 1) as any) : prev));
   };
 
   const handlePrev = () =>
@@ -253,8 +212,8 @@ export default function LaporanPenjualanWizard() {
   };
 
   const handleSubmit = async () => {
-    if (!selectedPerusahaan || !selectedSalesperson) {
-      toastError.validation("Pilih perusahaan dan salesperson terlebih dahulu");
+    if (!selectedSalesperson) {
+      toastError.validation("Pilih salesperson terlebih dahulu");
       return;
     }
 
@@ -283,8 +242,6 @@ export default function LaporanPenjualanWizard() {
 
         await saveLaporanPenjualanProduk({
           tanggalLaporan: new Date().toISOString().slice(0, 10),
-          perusahaanId: selectedPerusahaan.id,
-          namaPerusahaan: selectedPerusahaan.nama,
           salespersonId: selectedSalesperson.id,
           namaSalesperson: selectedSalesperson.nama,
           productAccountId: product.id,
@@ -310,7 +267,6 @@ export default function LaporanPenjualanWizard() {
         },
       ]);
       setStep(1);
-      setSelectedPerusahaan(null);
       setSelectedSalesperson(null);
 
       // Refresh data dengan filter tanggal hari ini
@@ -359,14 +315,16 @@ export default function LaporanPenjualanWizard() {
       await deleteSalesperson(salespersonId);
       toastSuccess.custom(`Salesperson "${salespersonName}" berhasil dihapus!`);
 
-      // ✅ FIXED: Refresh salespeople list berdasarkan perusahaan yang dipilih
-      if (selectedPerusahaan && selectedPerusahaan.id) {
-        const updatedSales = await getSalespeopleByPerusahaan(
-          selectedPerusahaan.id
-        );
+      // ✅ FIXED: Refresh salespeople list berdasarkan division user
+      const user = getCurrentUser();
+      const divisionId = user?.division?.id
+        ? parseInt(user.division.id)
+        : undefined;
+
+      if (divisionId) {
+        const updatedSales = await getSalespeopleByDivision(divisionId);
         setSalesList(updatedSales);
       } else {
-        // Jika tidak ada perusahaan dipilih, kosongkan list
         setSalesList([]);
       }
 
@@ -611,7 +569,22 @@ export default function LaporanPenjualanWizard() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Laporan Penjualan Produk</CardTitle>
-          
+        </div>
+        {/* === Tanggal Jurnal (readonly) === */}
+        <div className="mt-4 mb-2 flex items-center gap-3">
+          <label htmlFor="tanggalJurnal" className="font-semibold">
+            Tgl Jurnal:
+          </label>
+          <Input
+            id="tanggalJurnal"
+            type="date"
+            value={new Date().toISOString().split("T")[0]}
+            disabled
+            className="w-auto bg-gray-100 text-gray-700 cursor-not-allowed"
+          />
+          <span className="text-xs text-gray-500">
+            (Hanya entri untuk hari ini)
+          </span>
         </div>
         <div className="mt-2 flex items-center gap-4 text-sm">
           <div className="flex items-center gap-2">
@@ -646,49 +619,17 @@ export default function LaporanPenjualanWizard() {
             variant={step === 1 ? "default" : "outline"}
             onClick={() => setStep(1)}
           >
-            1. Perusahaan
+            1. Sales
           </Button>
           <Button
             variant={step === 2 ? "default" : "outline"}
-            onClick={() => selectedPerusahaan && setStep(2)}
-            disabled={!selectedPerusahaan}
-          >
-            2. Sales
-          </Button>
-          <Button
-            variant={step === 3 ? "default" : "outline"}
-            onClick={() => selectedSalesperson && setStep(3)}
+            onClick={() => selectedSalesperson && setStep(2)}
             disabled={!selectedSalesperson}
           >
-            3. Produk & Input
+            2. Produk & Input
           </Button>
         </div>
         {step === 1 && (
-          <div className="mb-4">
-            <label className="block mb-2 font-semibold">Pilih Perusahaan</label>
-            <Select
-              value={selectedPerusahaan?.id?.toString() || ""}
-              onValueChange={(val) => {
-                const perusahaan = perusahaanList.find(
-                  (p) => p.id.toString() === val
-                );
-                setSelectedPerusahaan(perusahaan);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Pilih perusahaan..." />
-              </SelectTrigger>
-              <SelectContent>
-                {perusahaanList.map((p) => (
-                  <SelectItem key={p.id} value={p.id.toString()}>
-                    {p.nama}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        {step === 2 && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-4">
               <label className="block font-semibold">Pilih Salesperson</label>
@@ -738,12 +679,10 @@ export default function LaporanPenjualanWizard() {
                     value={newSalespersonName}
                     onChange={(e) => setNewSalespersonName(e.target.value)}
                     placeholder="Nama salesperson baru"
-                    disabled={!selectedPerusahaan}
                   />
                   <Button
                     onClick={async () => {
-                      if (!newSalespersonName.trim() || !selectedPerusahaan)
-                        return;
+                      if (!newSalespersonName.trim()) return;
                       setAddingSales(true);
                       try {
                         const user = JSON.parse(
@@ -754,14 +693,29 @@ export default function LaporanPenjualanWizard() {
                           : undefined;
                         const newSales = await createSalesperson(
                           newSalespersonName.trim(),
-                          selectedPerusahaan.id,
+                          undefined, // Tidak ada perusahaan
                           divisionId
                         );
-                        // ✅ FIXED: Refresh salespeople berdasarkan perusahaan yang dipilih
-                        const updatedSales = await getSalespeopleByPerusahaan(
-                          selectedPerusahaan.id
-                        );
-                        setSalesList(updatedSales);
+                        // ✅ FIXED: Refresh salespeople berdasarkan division
+                        if (divisionId && divisionId > 0) {
+                          console.log(
+                            "🔄 Refreshing salespeople list after adding new salesperson..."
+                          );
+                          const updatedSales = await getSalespeopleByDivision(
+                            divisionId
+                          );
+                          console.log(
+                            "✅ Updated salespeople list:",
+                            updatedSales
+                          );
+                          setSalesList(updatedSales);
+
+                          // ✅ ADD: Force re-render dengan setTimeout untuk memastikan state ter-update
+                          setTimeout(() => {
+                            console.log("🔄 Force re-render salespeople list");
+                            setSalesList([...updatedSales]);
+                          }, 100);
+                        }
                         setNewSalespersonName("");
                         toastSuccess.custom(
                           "Salesperson berhasil ditambahkan!"
@@ -774,11 +728,7 @@ export default function LaporanPenjualanWizard() {
                         setAddingSales(false);
                       }
                     }}
-                    disabled={
-                      !newSalespersonName.trim() ||
-                      !selectedPerusahaan ||
-                      addingSales
-                    }
+                    disabled={!newSalespersonName.trim() || addingSales}
                     className="bg-purple-600 hover:bg-purple-700 text-white"
                   >
                     {addingSales ? "Menyimpan..." : "Tambah"}
@@ -789,20 +739,44 @@ export default function LaporanPenjualanWizard() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <h5 className="font-medium text-sm text-gray-700">
-                      Daftar Salesperson untuk:{" "}
+                      Daftar Salesperson untuk Division:{" "}
                       <span className="text-blue-600 font-semibold">
-                        {selectedPerusahaan?.nama}
+                        {getCurrentUser()?.division?.name}
                       </span>
                     </h5>
-                    <Badge variant="outline" className="text-xs">
-                      {salesList.length} sales
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        {salesList.length} sales
+                      </Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const user = getCurrentUser();
+                          const divisionId = user?.division?.id
+                            ? parseInt(user.division.id)
+                            : undefined;
+                          if (divisionId) {
+                            getSalespeopleByDivision(divisionId).then(
+                              (list) => {
+                                setSalesList(list);
+                                toastSuccess.custom(
+                                  "Data salesperson diperbarui!"
+                                );
+                              }
+                            );
+                          }
+                        }}
+                        className="text-xs"
+                      >
+                        🔄 Refresh
+                      </Button>
+                    </div>
                   </div>
                   {salesList.length === 0 ? (
                     <div className="p-4 text-center bg-gray-50 rounded border border-dashed">
                       <p className="text-sm text-gray-500 italic">
-                        💼 Belum ada salesperson untuk{" "}
-                        <strong>{selectedPerusahaan?.nama}</strong>
+                        💼 Belum ada salesperson untuk division ini
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
                         Tambahkan salesperson baru menggunakan form di atas
@@ -821,7 +795,7 @@ export default function LaporanPenjualanWizard() {
                               (ID: {sales.id})
                             </span>
                             <Badge variant="outline" className="ml-2 text-xs">
-                              {selectedPerusahaan?.nama}
+                              {getCurrentUser()?.division?.name}
                             </Badge>
                           </div>
                           <Button
@@ -854,7 +828,7 @@ export default function LaporanPenjualanWizard() {
             )}
           </div>
         )}
-        {step === 3 && (
+        {step === 2 && (
           <div className="mb-4 space-y-4">
             {/* Header dengan info dan tombol refresh */}
             <div className="flex items-center justify-between mb-4">
@@ -1106,8 +1080,8 @@ export default function LaporanPenjualanWizard() {
               Kembali
             </Button>
           )}
-          {step < 3 && <Button onClick={handleNext}>Lanjut</Button>}
-          {step === 3 && (
+          {step < 2 && <Button onClick={handleNext}>Lanjut</Button>}
+          {step === 2 && (
             <Button
               onClick={handleSubmit}
               disabled={loading}
@@ -1215,7 +1189,7 @@ export default function LaporanPenjualanWizard() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Perusahaan</TableHead>
+                  {/* <TableHead>Perusahaan</TableHead> */}
                   <TableHead>Sales</TableHead>
                   <TableHead>Produk</TableHead>
                   <TableHead>Target</TableHead>
@@ -1228,7 +1202,7 @@ export default function LaporanPenjualanWizard() {
               <TableBody>
                 {laporanProduk.map((row: any) => (
                   <TableRow key={row.id}>
-                    <TableCell>{row.namaPerusahaan}</TableCell>
+                    {/* <TableCell>-</TableCell> */}
                     <TableCell>{row.namaSalesperson}</TableCell>
                     <TableCell>{row.namaAccount}</TableCell>
                     <TableCell>{row.targetKuantitas}</TableCell>
@@ -1249,7 +1223,7 @@ export default function LaporanPenjualanWizard() {
                         onClick={() =>
                           handleDeleteLaporanProduk(
                             row.id,
-                            `${row.namaPerusahaan} - ${row.namaSalesperson} - ${row.namaAccount}`
+                            `${row.namaSalesperson} - ${row.namaAccount}`
                           )
                         }
                         disabled={deletingLaporanProduk === row.id}
@@ -1274,8 +1248,6 @@ export default function LaporanPenjualanWizard() {
             </Table>
           )}
         </div>
-
-       
       </CardContent>
     </Card>
   );

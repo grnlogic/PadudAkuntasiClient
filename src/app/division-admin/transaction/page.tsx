@@ -196,16 +196,14 @@ export default function TransactionPage() {
             tanggal: laporan.tanggalLaporan || laporan.createdAt || "",
             date: laporan.tanggalLaporan || laporan.createdAt || "",
             nilai: Number(laporan.realisasiKuantitas || 0),
-            description: `Produk: ${laporan.namaAccount || "Unknown"} - ${
-              laporan.namaPerusahaan
-            } (${laporan.namaSalesperson})`,
+            description: `Produk: ${laporan.namaAccount || "Unknown"} (${laporan.namaSalesperson})`,
             keterangan: laporan.keteranganKendala || "",
             createdBy: laporan.createdByUsername || "system",
             createdAt: laporan.createdAt || new Date().toISOString(),
             // ✅ Add specialized product fields
             targetAmount: Number(laporan.targetKuantitas || 0),
             realisasiAmount: Number(laporan.realisasiKuantitas || 0),
-            namaPerusahaan: laporan.namaPerusahaan,
+
             namaSalesperson: laporan.namaSalesperson,
             namaAccount: laporan.namaAccount,
           })) || [];
@@ -1910,7 +1908,6 @@ export default function TransactionPage() {
                                     {(entry as any).realisasiAmount || 0} unit
                                   </div>
                                   <div className="text-gray-500 text-xs">
-                                    {(entry as any).namaPerusahaan} -{" "}
                                     {(entry as any).namaSalesperson}
                                   </div>
                                 </>

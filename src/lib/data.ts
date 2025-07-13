@@ -944,8 +944,6 @@ const transformLaporanPenjualanProdukFromBackend = (backendData: any) => {
   const transformed = {
     id: backendData.id,
     tanggalLaporan: backendData.tanggalLaporan,
-    namaPerusahaan: backendData.namaPerusahaan,
-    perusahaanId: backendData.perusahaanId,
     namaSalesperson: backendData.namaSalesperson,
     salespersonId: backendData.salespersonId,
     namaAccount: backendData.namaAccount,
@@ -992,15 +990,17 @@ export const deleteLaporanPenjualanProduk = async (
   }
 };
 
-export const getPerusahaan = async () => {
-  const response = await perusahaanAPI.getAll();
-  if (response.success && response.data) return response.data;
-  return [];
-};
-
-export const getSalespeopleByPerusahaan = async (perusahaanId: number) => {
-  // ✅ PERBAIKAN: Gunakan API yang sudah ada user filter
-  const response = await salespersonAPI.getByPerusahaan(perusahaanId);
+export const getSalespeopleByDivision = async (divisionId: number) => {
+  console.log("🔍 GET SALESPEOPLE BY DIVISION - Requesting for divisionId:", divisionId);
+  
+  const response = await salespersonAPI.getByDivision(divisionId);
+  
+  console.log("📥 GET SALESPEOPLE BY DIVISION - Response:", {
+    success: response.success,
+    dataLength: response.data?.length || 0,
+    data: response.data,
+  });
+  
   if (response.success && response.data) return response.data;
   return [];
 };

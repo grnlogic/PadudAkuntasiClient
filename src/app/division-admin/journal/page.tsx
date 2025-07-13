@@ -98,17 +98,33 @@ import {
 } from "@/lib/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import dynamic from "next/dynamic";
-import { getPerusahaan } from "@/lib/data";
+
 import { NumericFormat } from "react-number-format";
 
 const LaporanPenjualanWizard = dynamic(
-  () => import("./LaporanPenjualanWizard"),
-  { ssr: false }
+  () =>
+    import("./LaporanPenjualanWizard").then((mod) => ({
+      default: mod.default,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-4 text-center">Loading Laporan Penjualan Wizard...</div>
+    ),
+  }
 );
 
 const LaporanProduksiBlendingForm = dynamic(
-  () => import("./LaporanProduksiBlendingForm"),
-  { ssr: false }
+  () =>
+    import("./LaporanProduksiBlendingForm").then((mod) => ({
+      default: mod.default,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-4 text-center">Loading Laporan Produksi Form...</div>
+    ),
+  }
 );
 
 interface JournalRow {
@@ -272,13 +288,11 @@ export default function JournalPage() {
     },
   ]);
 
-  const [perusahaanList, setPerusahaanList] = useState<any[]>([]);
   const [selectedPerusahaanForNewSales, setSelectedPerusahaanForNewSales] =
     useState<string>("");
 
   useEffect(() => {
     loadData();
-    getPerusahaan().then(setPerusahaanList);
   }, [selectedDate]);
 
   // ✅ FIXED: Fungsi untuk menghitung summary keuangan
@@ -2821,10 +2835,11 @@ export default function JournalPage() {
               <Input
                 id="date"
                 type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-auto"
+                value={new Date().toISOString().split("T")[0]}
+                disabled
+                className="w-auto bg-gray-100 text-gray-700 cursor-not-allowed"
               />
+              <span className="text-xs text-gray-500">(Hanya entri untuk hari ini)</span>
             </div>
           </CardContent>
         </Card>
@@ -3315,11 +3330,7 @@ export default function JournalPage() {
                               <SelectValue placeholder="Pilih perusahaan..." />
                             </SelectTrigger>
                             <SelectContent>
-                              {perusahaanList.map((p) => (
-                                <SelectItem key={p.id} value={p.id.toString()}>
-                                  {p.nama}
-                                </SelectItem>
-                              ))}
+                              <SelectItem value="1">PJP (Default)</SelectItem>
                             </SelectContent>
                           </Select>
                           <div className="flex gap-2">

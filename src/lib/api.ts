@@ -38,7 +38,13 @@ async function apiRequest<T>(
     const token =
       typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
-    
+    // ✅ ADD: Log request details
+    console.log("🌐 API REQUEST:", {
+      endpoint: `${API_BASE_URL}${endpoint}`,
+      method: options.method || "GET",
+      hasToken: !!token,
+      body: options.body ? JSON.parse(options.body as string) : null,
+    });
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: {
@@ -55,8 +61,6 @@ async function apiRequest<T>(
     } catch {
       data = null;
     }
-
- 
 
     if (!response.ok) {
       // ✅ Enhanced error logging
@@ -526,14 +530,30 @@ export async function getSalespeople(): Promise<Salesperson[]> {
   const token = getToken();
   if (!token) throw new Error("User belum login atau token tidak ditemukan");
 
+  console.log("🔍 GET SALESPEOPLE - Requesting data...");
+
   // ✅ PERBAIKAN: Tambahkan user filter untuk isolasi
   const res = await fetch(`${BASE_URL}/api/v1/salespeople?userOwned=true`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
-  if (!res.ok) throw new Error("Gagal mengambil data salesperson");
-  return res.json();
+
+  console.log("📥 GET SALESPEOPLE - Response:", {
+    status: res.status,
+    statusText: res.statusText,
+    ok: res.ok,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("❌ GET SALESPEOPLE - Error:", errorText);
+    throw new Error("Gagal mengambil data salesperson");
+  }
+
+  const data = await res.json();
+  console.log("✅ GET SALESPEOPLE - Success:", data);
+  return data;
 }
 
 // CREATE salesperson
@@ -545,13 +565,20 @@ export async function createSalesperson(
   const token = getToken();
   if (!token) throw new Error("User belum login atau token tidak ditemukan");
 
-  // ✅ ENHANCED: Support untuk manual creation dengan default values
+  // ✅ FIXED: Hapus perusahaanId karena entity Salesperson tidak memiliki field perusahaan
   const requestBody = {
     nama,
-    perusahaanId: perusahaanId || 1, // Default ke PJP jika tidak ada
-    divisionId: divisionId || 6, // Default ke DIVISI PEMASARAN & PENJUALAN
+    divisionId: divisionId || 2, // Default ke DIVISI PEMASARAN & PENJUALAN (ID: 2)
     status: "AKTIF",
   };
+
+  // ✅ ADD: Log payload yang dikirim ke backend
+  console.log("🚀 CREATE SALESPERSON - Payload yang dikirim:", {
+    endpoint: `${BASE_URL}/api/v1/salespeople`,
+    method: "POST",
+    requestBody,
+    token: token.substring(0, 20) + "...", // Log sebagian token untuk keamanan
+  });
 
   const res = await fetch(`${BASE_URL}/api/v1/salespeople`, {
     method: "POST",
@@ -562,12 +589,22 @@ export async function createSalesperson(
     body: JSON.stringify(requestBody),
   });
 
+  // ✅ ADD: Log response dari backend
+  console.log("📥 CREATE SALESPERSON - Response dari backend:", {
+    status: res.status,
+    statusText: res.statusText,
+    ok: res.ok,
+  });
+
   if (!res.ok) {
     const errorText = await res.text();
+    console.error("❌ CREATE SALESPERSON - Error response:", errorText);
     throw new Error("Gagal menambah salesperson: " + errorText);
   }
 
-  return res.json();
+  const responseData = await res.json();
+  console.log("✅ CREATE SALESPERSON - Success response:", responseData);
+  return responseData;
 }
 
 // DELETE salesperson
@@ -810,35 +847,32 @@ export const notificationAPI = {
   },
 };
 
-// ================== PERUSAHAAN ==================
-export interface Perusahaan {
-  id: number;
-  nama: string;
-}
-
-export const perusahaanAPI = {
-  getAll: async () => apiRequest<Perusahaan[]>("/api/v1/perusahaan"),
-  create: async (data: { nama: string }) =>
-    apiRequest<Perusahaan>("/api/v1/perusahaan", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-};
-
-// ================== SALESPERSON BY PERUSAHAAN ==================
+// ================== SALESPERSON BY DIVISION ==================
 export const salespersonAPI = {
-  getByPerusahaan: async (perusahaanId: number) =>
-    apiRequest<any[]>(
-      `/api/v1/salespeople/by-perusahaan/${perusahaanId}?userOwned=true`
-    ),
+  getByDivision: async (divisionId: number) => {
+    console.log(
+      "🔍 SALESPERSON API - getByDivision called with divisionId:",
+      divisionId
+    );
+
+    const response = await apiRequest<any[]>(
+      `/api/v1/salespeople/by-division/${divisionId}?userOwned=true&t=${Date.now()}`
+    );
+
+    console.log("📥 SALESPERSON API - getByDivision response:", {
+      success: response.success,
+      dataLength: response.data?.length || 0,
+      data: response.data,
+    });
+
+    return response;
+  },
 };
 
 // ================== LAPORAN PENJUALAN PRODUK ==================
 export interface LaporanPenjualanProduk {
   id: number;
   tanggalLaporan: string;
-  namaPerusahaan: string;
-  perusahaanId: number;
   namaSalesperson: string;
   salespersonId: number;
   namaAccount: string;
@@ -854,8 +888,6 @@ export interface LaporanPenjualanProduk {
 interface BackendLaporanPenjualanProduk {
   id: number;
   tanggalLaporan: string;
-  namaPerusahaan: string;
-  perusahaanId: number;
   namaSalesperson: string;
   salespersonId: number;
   namaAccount: string;
