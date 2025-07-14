@@ -1258,7 +1258,7 @@ function generateDetailsSection(data: PDFReportData): string {
     headerColumns = "<th>Jenis Transaksi</th><th>Nominal</th>";
   } else if (divisionName.includes("PEMASARAN")) {
     headerColumns =
-      "<th>Salesperson</th><th>Produk</th><th>Target</th><th>Realisasi</th><th>Achievement</th><th>Kendala</th>";
+      "<th>Salesperson</th><th>Produk</th><th>Target</th><th>Realisasi</th><th>Achievement</th><th>Keterangan / Kendala</th>";
   } else if (divisionName.includes("PRODUKSI")) {
     headerColumns =
       "<th>Hasil Produksi</th><th>Barang Gagal</th><th>Stock Barang Jadi</th><th>HPP</th><th>HP/Unit</th><th>Kendala</th>";

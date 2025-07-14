@@ -1200,7 +1200,7 @@ export default function LaporanPenjualanWizard() {
                   <TableHead>Produk</TableHead>
                   <TableHead>Target</TableHead>
                   <TableHead>Realisasi</TableHead>
-                  <TableHead>Kendala</TableHead>
+                  <TableHead>Keterangan/Kendala</TableHead>
                   <TableHead>Waktu</TableHead>
                   <TableHead>Aksi</TableHead>
                 </TableRow>
