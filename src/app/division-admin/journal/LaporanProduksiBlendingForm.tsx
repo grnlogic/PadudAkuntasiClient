@@ -35,6 +35,10 @@ import { toastSuccess, toastError } from "@/lib/toast-utils";
 import { downloadSimplePDF, previewSimplePDF } from "@/lib/pdf-clean";
 import { getCurrentUser } from "@/lib/auth";
 import type { Account } from "@/lib/data";
+import {
+  downloadCombinedBlendingProduksiPDF,
+  previewCombinedBlendingProduksiPDF,
+} from "@/lib/combined-blending-produksi-pdf";
 
 interface ProduksiBlendingEntry {
   id: string;
@@ -110,6 +114,11 @@ export default function LaporanProduksiBlendingForm({
     userDivision.name === "DIVISI BLENDING PERSEDIAAN BAHAN BAKU"
       ? "Blending"
       : "Produksi";
+
+  // Helper untuk deteksi divisi gabungan
+  const isBlendingGabungan =
+    userDivision.name === "DIVISI BLENDING PERSEDIAAN BAHAN BAKU" ||
+    userDivision.name === "BLENDING PERSEDIAAN BAHAN BAKU";
 
   // Set initial tab based on user division
   useEffect(() => {
@@ -594,6 +603,67 @@ export default function LaporanProduksiBlendingForm({
     return pdfData;
   };
 
+  // Gabungan data untuk PDF khusus
+  const generateCombinedPDFData = () => {
+    const today = new Date().toISOString().split("T")[0];
+    return {
+      date: today,
+      divisionName: userDivision.name,
+      laporanProduksiData: laporanProduksiData.map((item) => ({
+        accountName: item.account?.accountName || item.accountName || "-",
+        hasilProduksi: Number(item.hasilProduksi || item.hasil_produksi || 0),
+        barangGagal: Number(item.barangGagal || item.barang_gagal || 0),
+        stockBarangJadi: Number(
+          item.stockBarangJadi || item.stock_barang_jadi || 0
+        ),
+        hpBarangJadi: Number(item.hpBarangJadi || item.hp_barang_jadi || 0),
+        keteranganKendala:
+          item.keteranganKendala || item.keterangan_kendala || "-",
+      })),
+      laporanBlendingData: laporanBlendingData.map((item) => ({
+        accountName: item.account?.accountName || item.accountName || "-",
+        barangMasuk: Number(
+          item.stokAwal ||
+            item.stok_awal ||
+            item.barangMasuk ||
+            item.barang_masuk ||
+            0
+        ),
+        pemakaian: Number(item.pemakaian || 0),
+        stokAkhir: Number(item.stokAkhir || item.stok_akhir || 0),
+        keteranganGudang:
+          item.keterangan ||
+          item.kondisiGudang ||
+          item.kondisi_gudang ||
+          item.keteranganGudang ||
+          item.keterangan_gudang ||
+          "-",
+      })),
+    };
+  };
+
+  // Handler PDF gabungan
+  const handleDownloadCombinedPDF = async () => {
+    try {
+      const pdfData = generateCombinedPDFData();
+      await downloadCombinedBlendingProduksiPDF(pdfData);
+    } catch (error) {
+      toastError.custom(
+        "Gagal mengunduh PDF gabungan: " + (error as Error).message
+      );
+    }
+  };
+  const handlePreviewCombinedPDF = async () => {
+    try {
+      const pdfData = generateCombinedPDFData();
+      await previewCombinedBlendingProduksiPDF(pdfData);
+    } catch (error) {
+      toastError.custom(
+        "Gagal preview PDF gabungan: " + (error as Error).message
+      );
+    }
+  };
+
   const handleDownloadPDF = async () => {
     try {
       console.log("🔍 DOWNLOAD PDF - Starting...");
@@ -840,6 +910,7 @@ export default function LaporanProduksiBlendingForm({
                               ? "border-red-500"
                               : ""
                           }
+                          onWheel={(e) => e.currentTarget.blur()}
                         />
                         {errors[`${entry.id}_hasilProduksi`] && (
                           <p className="text-sm text-red-500">
@@ -864,6 +935,7 @@ export default function LaporanProduksiBlendingForm({
                               ? "border-red-500"
                               : ""
                           }
+                          onWheel={(e) => e.currentTarget.blur()}
                         />
                         {errors[`${entry.id}_barangGagal`] && (
                           <p className="text-sm text-red-500">
@@ -894,6 +966,7 @@ export default function LaporanProduksiBlendingForm({
                               ? "border-red-500"
                               : ""
                           }
+                          onWheel={(e) => e.currentTarget.blur()}
                         />
                         {errors[`${entry.id}_hpBarangJadi`] && (
                           <p className="text-sm text-red-500">
@@ -938,6 +1011,7 @@ export default function LaporanProduksiBlendingForm({
                               ? "border-red-500"
                               : ""
                           }
+                          onWheel={(e) => e.currentTarget.blur()}
                         />
                         {errors[`${entry.id}_barangMasuk`] && (
                           <p className="text-sm text-red-500">
@@ -962,6 +1036,7 @@ export default function LaporanProduksiBlendingForm({
                               ? "border-red-500"
                               : ""
                           }
+                          onWheel={(e) => e.currentTarget.blur()}
                         />
                         {errors[`${entry.id}_pemakaian`] && (
                           <p className="text-sm text-red-500">
@@ -986,6 +1061,7 @@ export default function LaporanProduksiBlendingForm({
                               ? "border-red-500"
                               : ""
                           }
+                          onWheel={(e) => e.currentTarget.blur()}
                         />
                         {errors[`${entry.id}_stokAkhir`] && (
                           <p className="text-sm text-red-500">
@@ -1162,32 +1238,63 @@ export default function LaporanProduksiBlendingForm({
 
         {/* ✅ PDF Export Buttons - Moved to top */}
         <div className="flex justify-end gap-2 mb-4">
-          <Button
-            onClick={handlePreviewPDF}
-            variant="outline"
-            size="sm"
-            disabled={
-              activeTab === "produksi"
-                ? laporanProduksiData.length === 0
-                : laporanBlendingData.length === 0
-            }
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            Preview PDF
-          </Button>
-          <Button
-            onClick={handleDownloadPDF}
-            variant="outline"
-            size="sm"
-            disabled={
-              activeTab === "produksi"
-                ? laporanProduksiData.length === 0
-                : laporanBlendingData.length === 0
-            }
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Download PDF
-          </Button>
+          {isBlendingGabungan ? (
+            <>
+              <Button
+                onClick={handlePreviewCombinedPDF}
+                variant="outline"
+                size="sm"
+                disabled={
+                  laporanProduksiData.length === 0 &&
+                  laporanBlendingData.length === 0
+                }
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Preview PDF Gabungan
+              </Button>
+              <Button
+                onClick={handleDownloadCombinedPDF}
+                variant="outline"
+                size="sm"
+                disabled={
+                  laporanProduksiData.length === 0 &&
+                  laporanBlendingData.length === 0
+                }
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download PDF Gabungan
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                onClick={handlePreviewPDF}
+                variant="outline"
+                size="sm"
+                disabled={
+                  activeTab === "produksi"
+                    ? laporanProduksiData.length === 0
+                    : laporanBlendingData.length === 0
+                }
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Preview PDF
+              </Button>
+              <Button
+                onClick={handleDownloadPDF}
+                variant="outline"
+                size="sm"
+                disabled={
+                  activeTab === "produksi"
+                    ? laporanProduksiData.length === 0
+                    : laporanBlendingData.length === 0
+                }
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Download PDF
+              </Button>
+            </>
+          )}
         </div>
 
         {/* ✅ NEW: Data Table Section */}

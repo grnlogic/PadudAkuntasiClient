@@ -930,6 +930,7 @@ export default function LaporanPenjualanWizard() {
                           e.target.value
                         )
                       }
+                      onWheel={(e) => e.currentTarget.blur()}
                     />
                   </div>
                   <div>
@@ -947,6 +948,7 @@ export default function LaporanPenjualanWizard() {
                           e.target.value
                         )
                       }
+                      onWheel={(e) => e.currentTarget.blur()}
                     />
                   </div>
                   <div>
