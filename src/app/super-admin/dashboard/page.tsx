@@ -35,7 +35,16 @@ import {
   Bell,
   X,
 } from "lucide-react";
-import { getAccounts, getUsers, getEntriHarian } from "@/lib/data";
+import {
+  getAccounts,
+  getUsers,
+  getEntriHarian,
+  getPiutangTransaksi,
+  getUtangTransaksi,
+  getLaporanGudang,
+  getLaporanPenjualanProduk,
+  getLaporanProduksi,
+} from "@/lib/data";
 import { notificationAPI } from "@/lib/api";
 import ModernNotificationBell from "@/components/modern-notification-bell";
 import { Input } from "@/components/ui/input";
@@ -76,11 +85,26 @@ export default function SuperAdminDashboard() {
 
       const accounts = await getAccounts();
       const users = await getUsers();
+
+      // ✅ ENHANCED: Load data from ALL sources
       const entries = await getEntriHarian();
+      const piutangData = await getPiutangTransaksi();
+      const utangData = await getUtangTransaksi();
+      const laporanGudangData = await getLaporanGudang();
+      const laporanPenjualanProdukData = await getLaporanPenjualanProduk();
+      const laporanProduksiData = await getLaporanProduksi();
 
       console.log("Raw accounts data:", accounts);
       console.log("Raw users data:", users);
       console.log("Raw entries data:", entries);
+      console.log("Raw piutang data:", piutangData);
+      console.log("Raw utang data:", utangData);
+      console.log("Raw laporan gudang data:", laporanGudangData);
+      console.log(
+        "Raw laporan penjualan produk data:",
+        laporanPenjualanProdukData
+      );
+      console.log("Raw laporan produksi data:", laporanProduksiData);
 
       setAccounts(accounts);
 
@@ -89,8 +113,119 @@ export default function SuperAdminDashboard() {
         ...new Set(users.map((u) => u.division?.id).filter(Boolean)),
       ];
 
+      // ✅ ENHANCED: Combine all data sources for comprehensive monitoring
+      const allDataSources = [
+        // Entri Harian (existing)
+        ...entries.map((entry) => ({
+          ...entry,
+          source: "entri_harian",
+          originalData: entry,
+        })),
+
+        // Piutang Transaksi
+        ...(piutangData || []).map((piutang) => ({
+          id: `piutang-${piutang.id}`,
+          accountId: piutang.account?.id?.toString() || "PIUTANG",
+          tanggal: piutang.tanggalTransaksi || piutang.tanggal_transaksi || "",
+          date: piutang.tanggalTransaksi || piutang.tanggal_transaksi || "",
+          nilai: Number(piutang.nominal) || 0,
+          description: piutang.keterangan || "Transaksi Piutang",
+          createdBy: piutang.user?.username || "system",
+          createdAt:
+            piutang.createdAt || piutang.created_at || new Date().toISOString(),
+          transactionType:
+            piutang.tipeTransaksi || piutang.tipe_transaksi || "PIUTANG",
+          source: "piutang_transaksi",
+          originalData: piutang,
+        })),
+
+        // Utang Transaksi
+        ...(utangData || []).map((utang) => ({
+          id: `utang-${utang.id}`,
+          accountId: utang.account?.id?.toString() || "UTANG",
+          tanggal: utang.tanggalTransaksi || utang.tanggal_transaksi || "",
+          date: utang.tanggalTransaksi || utang.tanggal_transaksi || "",
+          nilai: Number(utang.nominal) || 0,
+          description: utang.keterangan || "Transaksi Utang",
+          createdBy: utang.user?.username || "system",
+          createdAt:
+            utang.createdAt || utang.created_at || new Date().toISOString(),
+          transactionType:
+            utang.tipeTransaksi || utang.tipe_transaksi || "UTANG",
+          source: "utang_transaksi",
+          originalData: utang,
+        })),
+
+        // Laporan Gudang
+        ...(laporanGudangData || []).map((gudang) => ({
+          id: `gudang-${gudang.id}`,
+          accountId: gudang.account?.id?.toString() || "GUDANG",
+          tanggal: gudang.tanggalLaporan || "",
+          date: gudang.tanggalLaporan || "",
+          nilai: Number(gudang.stokAkhir || 0),
+          description: gudang.keterangan || "Laporan Gudang",
+          createdBy: gudang.createdBy?.username || "system",
+          createdAt: gudang.createdAt || new Date().toISOString(),
+          transactionType: "GUDANG",
+          stokAwal: gudang.barangMasuk,
+          pemakaian: gudang.pemakaian,
+          stokAkhir: gudang.stokAkhir,
+          kondisiGudang: gudang.keterangan,
+          source: "laporan_gudang_harian",
+          originalData: gudang,
+        })),
+
+        // Laporan Penjualan Produk
+        ...(laporanPenjualanProdukData || []).map((penjualan) => ({
+          id: `penjualan-${penjualan?.id || "unknown"}`,
+          accountId: penjualan?.productAccountId?.toString() || "PENJUALAN",
+          tanggal: penjualan?.tanggalLaporan || "",
+          date: penjualan?.tanggalLaporan || "",
+          nilai: Number(penjualan?.realisasiKuantitas || 0),
+          description: `Penjualan ${penjualan?.namaAccount || "Unknown"} - ${
+            penjualan?.namaSalesperson || "Unknown"
+          }`,
+          createdBy: penjualan?.createdByUsername || "system",
+          createdAt: penjualan?.createdAt || new Date().toISOString(),
+          transactionType: "PENJUALAN_PRODUK",
+          targetAmount: penjualan?.targetKuantitas,
+          realisasiAmount: penjualan?.realisasiKuantitas,
+          source: "laporan_penjualan_produk",
+          originalData: penjualan,
+        })),
+
+        // Laporan Produksi
+        ...(laporanProduksiData || []).map((produksi) => ({
+          id: `produksi-${produksi.id}`,
+          accountId: produksi.account?.id?.toString() || "PRODUKSI",
+          tanggal: produksi.tanggalLaporan || "",
+          date: produksi.tanggalLaporan || "",
+          nilai: Number(produksi.hasilProduksi || 0),
+          description: "Laporan Produksi",
+          createdBy: produksi.createdBy?.username || "system",
+          createdAt: produksi.createdAt || new Date().toISOString(),
+          transactionType: "PRODUKSI",
+          hasilProduksi: produksi.hasilProduksi,
+          barangGagal: produksi.barangGagal,
+          stockBarangJadi: produksi.stockBarangJadi,
+          hpBarangJadi: produksi.hpBarangJadi,
+          source: "laporan_produksi_harian",
+          originalData: produksi,
+        })),
+      ];
+
+      console.log("📊 Combined data sources:", {
+        totalEntries: entries.length,
+        totalPiutang: piutangData?.length || 0,
+        totalUtang: utangData?.length || 0,
+        totalGudang: laporanGudangData?.length || 0,
+        totalPenjualanProduk: laporanPenjualanProdukData?.length || 0,
+        totalProduksi: laporanProduksiData?.length || 0,
+        combinedTotal: allDataSources.length,
+      });
+
       // ✅ FIXED: Use applied filter variables instead of startDate/endDate
-      const rangeEntries = entries.filter((entry) => {
+      const rangeEntries = allDataSources.filter((entry) => {
         const entryDate = entry.tanggal || entry.date;
         let entryDateOnly = null;
 
@@ -112,7 +247,7 @@ export default function SuperAdminDashboard() {
         const isInRange =
           entryDateOnly >= startDateOnly && entryDateOnly <= endDateOnly;
         console.log(
-          `Entry ${entry.id}: date='${entryDateOnly}' in range [${startDateOnly} - ${endDateOnly}] → match=${isInRange}`
+          `Entry ${entry.id} (${entry.source}): date='${entryDateOnly}' in range [${startDateOnly} - ${endDateOnly}] → match=${isInRange}`
         );
         return isInRange;
       });
@@ -133,7 +268,7 @@ export default function SuperAdminDashboard() {
       });
 
       // Filter entries by division and date range
-      let filteredEntries = entries.filter((entry) => {
+      let filteredEntries = allDataSources.filter((entry) => {
         const entryDate = entry.tanggal || entry.date;
         let entryDateOnly = null;
 
@@ -180,7 +315,7 @@ export default function SuperAdminDashboard() {
             (id) => id.toString() === entryAccountId
           );
           console.log(
-            `Entry ${entry.id} accountId ${entryAccountId} belongs to division:`,
+            `Entry ${entry.id} (${entry.source}) accountId ${entryAccountId} belongs to division:`,
             belongs
           );
           return belongs;
@@ -196,7 +331,9 @@ export default function SuperAdminDashboard() {
       // ✅ ENHANCED: Comprehensive data mapping for all division types
       const enrichedEntries = filteredEntries.map((entry, index) => {
         console.log(
-          `🔄 Processing entry ${index + 1}/${filteredEntries.length}:`,
+          `🔄 Processing entry ${index + 1}/${filteredEntries.length} (${
+            entry.source
+          }):`,
           entry
         );
 
@@ -308,7 +445,10 @@ export default function SuperAdminDashboard() {
           });
         }
 
-        console.log(`✅ Successfully enriched entry ${entry.id}:`, enriched);
+        console.log(
+          `✅ Successfully enriched entry ${entry.id} (${entry.source}):`,
+          enriched
+        );
         return enriched;
       });
 
@@ -336,9 +476,16 @@ export default function SuperAdminDashboard() {
           return acc;
         }, {} as Record<string, number>);
 
+        const sourceBreakdown = enrichedEntries.reduce((acc, entry) => {
+          const source = entry.source || "Unknown";
+          acc[source] = (acc[source] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
         console.log("🔍 Verification - recentEntries state should now be:", {
           total: enrichedEntries.slice(0, 20).length,
           divisionBreakdown,
+          sourceBreakdown,
           sampleEntries: enrichedEntries.slice(0, 3),
         });
       }, 100);
@@ -424,7 +571,8 @@ export default function SuperAdminDashboard() {
     {
       title: getPeriodTitle(),
       value: stats.todayTransactions.toString(),
-      description: "Transaksi tercatat",
+      description:
+        "Transaksi dari semua sumber (entri, piutang, utang, laporan)",
       icon: TrendingUp,
       color: "text-purple-600",
     },
@@ -859,23 +1007,7 @@ export default function SuperAdminDashboard() {
               </span>
             )}
           </CardDescription>
-          {/* ✅ ADD: Division data summary */}
-          {recentEntries.length > 0 && (
-            <div className="mt-2 text-xs text-gray-600">
-              📊 Data tersedia:{" "}
-              {(() => {
-                const divisionCounts = recentEntries.reduce((acc, entry) => {
-                  const division = entry.division_name || "Unknown";
-                  acc[division] = (acc[division] || 0) + 1;
-                  return acc;
-                }, {} as Record<string, number>);
-
-                return Object.entries(divisionCounts)
-                  .map(([division, count]) => `${division}: ${count}`)
-                  .join(", ");
-              })()}
-            </div>
-          )}
+        
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
