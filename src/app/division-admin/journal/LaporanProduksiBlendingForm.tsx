@@ -357,33 +357,7 @@ export default function LaporanProduksiBlendingForm({
       if (!entry.accountId || entry.accountId <= 0) {
         newErrors[`${entry.id}_accountId`] = "Akun harus dipilih";
       }
-
-      if (activeTab === "produksi") {
-        // Konversi string ke number untuk validasi
-        const hasilProduksi = parseFloat(entry.hasilProduksi) || 0;
-        const barangGagal = parseFloat(entry.barangGagal) || 0;
-        const stockBarangJadi = parseFloat(entry.stockBarangJadi) || 0;
-        const hpBarangJadi = parseFloat(entry.hpBarangJadi) || 0;
-        const hasProductionData =
-          hasilProduksi !== 0 ||
-          barangGagal !== 0 ||
-          stockBarangJadi !== 0 ||
-          hpBarangJadi !== 0;
-        if (!hasProductionData) {
-          newErrors[`${entry.id}_production`] =
-            "Minimal satu field produksi harus diisi";
-        }
-      } else if (activeTab === "blending") {
-        const barangMasuk = parseFloat(entry.barangMasuk) || 0;
-        const pemakaian = parseFloat(entry.pemakaian) || 0;
-        const stokAkhir = parseFloat(entry.stokAkhir) || 0;
-        const hasBlendingData =
-          barangMasuk !== 0 || pemakaian !== 0 || stokAkhir !== 0;
-        if (!hasBlendingData) {
-          newErrors[`${entry.id}_blending`] =
-            "Minimal satu field blending harus diisi";
-        }
-      }
+      // Dihilangkan: validasi minimal satu field produksi/blending harus diisi
     });
 
     setErrors(newErrors);
@@ -1041,16 +1015,6 @@ export default function LaporanProduksiBlendingForm({
                 </div>
 
                 {/* Entry-level validation error */}
-                {(errors[`${entry.id}_production`] ||
-                  errors[`${entry.id}_blending`]) && (
-                  <Alert className="mt-4">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      {errors[`${entry.id}_production`] ||
-                        errors[`${entry.id}_blending`]}
-                    </AlertDescription>
-                  </Alert>
-                )}
               </Card>
             ))
           )}

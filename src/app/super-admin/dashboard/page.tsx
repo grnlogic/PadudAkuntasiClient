@@ -49,6 +49,169 @@ import { notificationAPI } from "@/lib/api";
 import ModernNotificationBell from "@/components/modern-notification-bell";
 import { Input } from "@/components/ui/input";
 import { toastSuccess, toastError } from "@/lib/toast-utils";
+import { useRef } from "react";
+
+// Tambahan: Komponen SystemStatusBar
+function SystemStatusBar() {
+  const [status, setStatus] = useState({ api: "checking", db: "checking" });
+  const [lastChecked, setLastChecked] = useState<string | null>(null);
+
+  const checkHealth = async () => {
+    try {
+      const res = await fetch("/api/health");
+      const data = await res.json();
+      setStatus({
+        api: data.apiStatus || "unknown",
+        db: data.dbStatus || "unknown",
+      });
+      setLastChecked(new Date().toLocaleTimeString("id-ID"));
+    } catch (e) {
+      setStatus({ api: "error", db: "error" });
+      setLastChecked(new Date().toLocaleTimeString("id-ID"));
+    }
+  };
+
+  useEffect(() => {
+    checkHealth();
+  }, []);
+
+  return (
+    <div className="flex items-center gap-4 mb-2">
+      <div className="flex items-center gap-2 text-sm">
+        <span className="font-semibold">Status API:</span>
+        <span
+          className={
+            status.api === "ok"
+              ? "text-green-600"
+              : status.api === "checking"
+              ? "text-gray-500"
+              : "text-red-600"
+          }
+        >
+          {status.api === "ok"
+            ? "Online"
+            : status.api === "checking"
+            ? "Mengecek..."
+            : "Offline"}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 text-sm">
+        <span className="font-semibold">Status DB:</span>
+        <span
+          className={
+            status.db === "ok"
+              ? "text-green-600"
+              : status.db === "checking"
+              ? "text-gray-500"
+              : "text-red-600"
+          }
+        >
+          {status.db === "ok"
+            ? "Online"
+            : status.db === "checking"
+            ? "Mengecek..."
+            : "Offline"}
+        </span>
+      </div>
+      <div className="text-xs text-gray-400 ml-2">
+        {lastChecked && `Cek terakhir: ${lastChecked}`}
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        className="ml-4"
+        onClick={checkHealth}
+      >
+        Cek Ulang Status
+      </Button>
+    </div>
+  );
+}
+
+// Tambahan: Komponen ErrorLogList (dummy fetch)
+function ErrorLogList() {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchLogs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/error-log");
+      const data = await res.json();
+      setLogs(data.logs || []);
+    } catch (e) {
+      setLogs([
+        {
+          time: new Date().toLocaleString("id-ID"),
+          message: "Gagal mengambil log error.",
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+  }, []);
+
+  return (
+    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+      <div className="font-semibold text-red-700 mb-1 flex items-center gap-2">
+        <X className="w-4 h-4" /> Error Log Terbaru
+        <Button
+          size="xs"
+          variant="outline"
+          onClick={fetchLogs}
+          className="ml-2"
+        >
+          Refresh
+        </Button>
+      </div>
+      {loading ? (
+        <div className="text-xs text-gray-500">Memuat log...</div>
+      ) : logs.length === 0 ? (
+        <div className="text-xs text-gray-400">Tidak ada error terbaru.</div>
+      ) : (
+        <ul className="text-xs text-red-700 space-y-1 max-h-24 overflow-y-auto">
+          {logs.slice(0, 5).map((log, i) => (
+            <li key={i}>
+              <span className="font-mono text-gray-500">[{log.time}]</span>{" "}
+              {log.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// Tambahan: Export & Refresh & Auto Refresh
+function DashboardActions({
+  onExport,
+  onRefresh,
+  autoRefresh,
+  setAutoRefresh,
+}: any) {
+  return (
+    <div className="flex gap-2 items-center mb-2">
+      <Button size="sm" variant="outline" onClick={onExport}>
+        Export Data
+      </Button>
+      <Button size="sm" variant="outline" onClick={onRefresh}>
+        Refresh
+      </Button>
+      <label className="flex items-center gap-1 text-xs ml-2">
+        <input
+          type="checkbox"
+          checked={autoRefresh}
+          onChange={(e) => setAutoRefresh(e.target.checked)}
+        />
+        Auto Refresh
+      </label>
+    </div>
+  );
+}
 
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState({
@@ -70,9 +233,45 @@ export default function SuperAdminDashboard() {
   const [appliedEndDate, setAppliedEndDate] = useState(todayStr);
   const [appliedDivision, setAppliedDivision] = useState("all");
 
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const autoRefreshRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     loadMonitoringData();
   }, [appliedStartDate, appliedEndDate, appliedDivision]);
+
+  // Tambah efek auto refresh
+  useEffect(() => {
+    if (autoRefresh) {
+      autoRefreshRef.current = setInterval(() => {
+        loadMonitoringData();
+      }, 10000); // 10 detik
+    } else if (autoRefreshRef.current) {
+      clearInterval(autoRefreshRef.current);
+    }
+    return () => {
+      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
+    };
+  }, [autoRefresh, appliedStartDate, appliedEndDate, appliedDivision]);
+
+  // Fungsi export data (CSV)
+  const handleExport = () => {
+    if (!recentEntries || recentEntries.length === 0) return;
+    const header = Object.keys(recentEntries[0]);
+    const csv = [
+      header.join(","),
+      ...recentEntries.map((row) =>
+        header.map((field) => JSON.stringify(row[field] ?? "")).join(",")
+      ),
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dashboard_export_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const loadMonitoringData = async () => {
     try {
@@ -847,6 +1046,16 @@ export default function SuperAdminDashboard() {
         <ModernNotificationBell />
       </div>
 
+      {/* Tambahan: System Status & Error Log */}
+      <SystemStatusBar />
+      <ErrorLogList />
+      <DashboardActions
+        onExport={handleExport}
+        onRefresh={loadMonitoringData}
+        autoRefresh={autoRefresh}
+        setAutoRefresh={setAutoRefresh}
+      />
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statsData.map((stat, index) => {
@@ -1007,7 +1216,6 @@ export default function SuperAdminDashboard() {
               </span>
             )}
           </CardDescription>
-        
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
