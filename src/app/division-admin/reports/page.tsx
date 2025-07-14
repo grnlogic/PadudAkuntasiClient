@@ -146,9 +146,9 @@ export default function ReportsPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-2 justify-center text-sm">
               <span className="text-gray-700">
-                📧 Email: support@sistemakuntansi.com
+                📧 Email: geranug@gmail.com
               </span>
-              <span className="text-gray-700">📞 Telp: (021) 1234-5678</span>
+              <span className="text-gray-700">📞 Telp: 6281395195039</span>
             </div>
           </div>
         </CardContent>
