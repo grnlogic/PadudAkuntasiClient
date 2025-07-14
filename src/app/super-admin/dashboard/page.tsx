@@ -52,12 +52,13 @@ export default function SuperAdminDashboard() {
   const [recentEntries, setRecentEntries] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [selectedDivision, setSelectedDivision] = useState("all");
+  const todayStr = new Date().toISOString().slice(0, 10);
   const [startDate, setStartDate] = useState("2025-06-19"); // Tanggal awal
-  const [endDate, setEndDate] = useState("2025-06-20"); // Tanggal akhir
+  const [endDate, setEndDate] = useState(todayStr); // Tanggal akhir default: hari ini
 
   // Separate state for applied filters
   const [appliedStartDate, setAppliedStartDate] = useState("2025-06-19");
-  const [appliedEndDate, setAppliedEndDate] = useState("2025-06-20");
+  const [appliedEndDate, setAppliedEndDate] = useState(todayStr);
   const [appliedDivision, setAppliedDivision] = useState("all");
 
   useEffect(() => {
@@ -88,7 +89,7 @@ export default function SuperAdminDashboard() {
         ...new Set(users.map((u) => u.division?.id).filter(Boolean)),
       ];
 
-      // ✅ IMPROVED: Filter by date range instead of single date
+      // ✅ FIXED: Use applied filter variables instead of startDate/endDate
       const rangeEntries = entries.filter((entry) => {
         const entryDate = entry.tanggal || entry.date;
         let entryDateOnly = null;
@@ -101,12 +102,12 @@ export default function SuperAdminDashboard() {
 
         if (!entryDateOnly) return false;
 
-        const startDateOnly = startDate.includes("T")
-          ? startDate.split("T")[0]
-          : startDate;
-        const endDateOnly = endDate.includes("T")
-          ? endDate.split("T")[0]
-          : endDate;
+        const startDateOnly = appliedStartDate.includes("T")
+          ? appliedStartDate.split("T")[0]
+          : appliedStartDate;
+        const endDateOnly = appliedEndDate.includes("T")
+          ? appliedEndDate.split("T")[0]
+          : appliedEndDate;
 
         const isInRange =
           entryDateOnly >= startDateOnly && entryDateOnly <= endDateOnly;
@@ -118,7 +119,7 @@ export default function SuperAdminDashboard() {
 
       console.log(
         "✅ Matched entries for range",
-        `${startDate} - ${endDate}`,
+        `${appliedStartDate} - ${appliedEndDate}`,
         ":",
         rangeEntries.length,
         rangeEntries
@@ -144,12 +145,12 @@ export default function SuperAdminDashboard() {
 
         if (!entryDateOnly) return false;
 
-        const startDateOnly = startDate.includes("T")
-          ? startDate.split("T")[0]
-          : startDate;
-        const endDateOnly = endDate.includes("T")
-          ? endDate.split("T")[0]
-          : endDate;
+        const startDateOnly = appliedStartDate.includes("T")
+          ? appliedStartDate.split("T")[0]
+          : appliedStartDate;
+        const endDateOnly = appliedEndDate.includes("T")
+          ? appliedEndDate.split("T")[0]
+          : appliedEndDate;
 
         return entryDateOnly >= startDateOnly && entryDateOnly <= endDateOnly;
       });
@@ -192,7 +193,7 @@ export default function SuperAdminDashboard() {
         );
       }
 
-      // Enhanced entries with better error handling
+      // ✅ ENHANCED: Comprehensive data mapping for all division types
       const enrichedEntries = filteredEntries.map((entry, index) => {
         console.log(
           `🔄 Processing entry ${index + 1}/${filteredEntries.length}:`,
@@ -224,6 +225,7 @@ export default function SuperAdminDashboard() {
           };
         }
 
+        // ✅ ENHANCED: Map all specialized fields with comprehensive fallbacks
         const enriched = {
           ...entry,
           account_code: account.accountCode || "N/A",
@@ -231,7 +233,80 @@ export default function SuperAdminDashboard() {
           division_name: account.division?.name || "N/A",
           value_type: account.valueType || "NOMINAL",
           created_by: entry.createdBy || "system",
+
+          // ✅ COMPREHENSIVE: Map all division-specific fields
+          // Keuangan fields
+          transactionType: entry.transactionType || "NOMINAL",
+          targetAmount: entry.targetAmount,
+          realisasiAmount: entry.realisasiAmount,
+          saldoAkhir: entry.saldoAkhir,
+
+          // HRD fields
+          attendanceStatus: (entry as any).attendanceStatus,
+          absentCount: (entry as any).absentCount,
+          shift: (entry as any).shift,
+          keteranganKendala: (entry as any).keteranganKendala,
+
+          // Pemasaran fields
+          salesUserId: (entry as any).salesUserId,
+          returPenjualan: (entry as any).returPenjualan,
+
+          // Produksi fields
+          hasilProduksi: (entry as any).hasilProduksi,
+          barangGagal: (entry as any).barangGagal,
+          stockBarangJadi: (entry as any).stockBarangJadi,
+          hpBarangJadi: (entry as any).hpBarangJadi,
+
+          // Gudang/Persediaan fields
+          stokAwal: (entry as any).stokAwal,
+          pemakaian: (entry as any).pemakaian,
+          kondisiGudang: (entry as any).kondisiGudang,
+
+          // Additional specialized fields
+          hppAmount: (entry as any).hppAmount,
+          pemakaianAmount: (entry as any).pemakaianAmount,
+          stokAkhir: (entry as any).stokAkhir,
         };
+
+        // ✅ ADD: Enhanced logging for division-specific data
+        const divisionName = account.division?.name?.toLowerCase() || "";
+        if (divisionName.includes("hrd")) {
+          console.log(`👥 HRD Entry ${entry.id}:`, {
+            attendanceStatus: enriched.attendanceStatus,
+            absentCount: enriched.absentCount,
+            shift: enriched.shift,
+            keteranganKendala: enriched.keteranganKendala,
+          });
+        } else if (divisionName.includes("pemasaran")) {
+          console.log(`📈 PEMASARAN Entry ${entry.id}:`, {
+            targetAmount: enriched.targetAmount,
+            realisasiAmount: enriched.realisasiAmount,
+            salesUserId: enriched.salesUserId,
+            returPenjualan: enriched.returPenjualan,
+          });
+        } else if (divisionName.includes("produksi")) {
+          console.log(`🏭 PRODUKSI Entry ${entry.id}:`, {
+            hasilProduksi: enriched.hasilProduksi,
+            barangGagal: enriched.barangGagal,
+            stockBarangJadi: enriched.stockBarangJadi,
+            hpBarangJadi: enriched.hpBarangJadi,
+          });
+        } else if (
+          divisionName.includes("gudang") ||
+          divisionName.includes("persediaan")
+        ) {
+          console.log(`📦 GUDANG Entry ${entry.id}:`, {
+            stokAwal: enriched.stokAwal,
+            pemakaian: enriched.pemakaian,
+            kondisiGudang: enriched.kondisiGudang,
+            stokAkhir: enriched.stokAkhir,
+          });
+        } else if (divisionName.includes("keuangan")) {
+          console.log(`💰 KEUANGAN Entry ${entry.id}:`, {
+            transactionType: enriched.transactionType,
+            saldoAkhir: enriched.saldoAkhir,
+          });
+        }
 
         console.log(`✅ Successfully enriched entry ${entry.id}:`, enriched);
         return enriched;
@@ -253,12 +328,19 @@ export default function SuperAdminDashboard() {
 
       setRecentEntries(enrichedEntries.slice(0, 20));
 
-      // Verify what was actually set
+      // ✅ ADD: Enhanced verification with division breakdown
       setTimeout(() => {
-        console.log(
-          "🔍 Verification - recentEntries state should now be:",
-          enrichedEntries.slice(0, 20)
-        );
+        const divisionBreakdown = enrichedEntries.reduce((acc, entry) => {
+          const division = entry.division_name || "Unknown";
+          acc[division] = (acc[division] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+
+        console.log("🔍 Verification - recentEntries state should now be:", {
+          total: enrichedEntries.slice(0, 20).length,
+          divisionBreakdown,
+          sampleEntries: enrichedEntries.slice(0, 3),
+        });
       }, 100);
     } catch (error) {
       console.error("❌ Error loading monitoring data:", error);
@@ -365,11 +447,12 @@ export default function SuperAdminDashboard() {
 
   // ✅ Function to reset all filters
   const resetFilters = () => {
+    const today = new Date().toISOString().slice(0, 10);
     setStartDate("2025-06-19");
-    setEndDate("2025-06-20");
+    setEndDate(today);
     setSelectedDivision("all");
     setAppliedStartDate("2025-06-19");
-    setAppliedEndDate("2025-06-20");
+    setAppliedEndDate(today);
     setAppliedDivision("all");
   };
 
@@ -713,7 +796,7 @@ export default function SuperAdminDashboard() {
                   selectedDivision,
                 });
                 setStartDate("2025-06-19");
-                setEndDate("2025-06-20");
+                setEndDate(todayStr);
                 setSelectedDivision("all");
                 console.log("All Data button clicked - after setting states");
               }}
@@ -721,9 +804,17 @@ export default function SuperAdminDashboard() {
             >
               All Data
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={resetFilters}
+              className="hover:bg-gray-50"
+            >
+              Reset Filters
+            </Button>
             {/* Show filter status ONLY when user changes from defaults */}
             {(startDate !== "2025-06-19" ||
-              endDate !== "2025-06-20" ||
+              endDate !== todayStr ||
               selectedDivision !== "all") && (
               <span className="text-sm text-blue-600 ml-2">
                 📊 Filter:
@@ -768,6 +859,23 @@ export default function SuperAdminDashboard() {
               </span>
             )}
           </CardDescription>
+          {/* ✅ ADD: Division data summary */}
+          {recentEntries.length > 0 && (
+            <div className="mt-2 text-xs text-gray-600">
+              📊 Data tersedia:{" "}
+              {(() => {
+                const divisionCounts = recentEntries.reduce((acc, entry) => {
+                  const division = entry.division_name || "Unknown";
+                  acc[division] = (acc[division] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                return Object.entries(divisionCounts)
+                  .map(([division, count]) => `${division}: ${count}`)
+                  .join(", ");
+              })()}
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -780,6 +888,7 @@ export default function SuperAdminDashboard() {
                   <TableHead>Keterangan</TableHead>
                   <TableHead>Tipe</TableHead>
                   <TableHead>Nominal</TableHead>
+                  <TableHead>Info Tambahan</TableHead>
                   <TableHead>Operator</TableHead>
                 </TableRow>
               </TableHeader>
@@ -842,11 +951,285 @@ export default function SuperAdminDashboard() {
                           </Badge>
                         </TableCell>
                         <TableCell className="font-medium">
-                          {entry.value_type === "NOMINAL"
-                            ? formatCurrency(entry.nilai || 0)
-                            : `${(entry.nilai || 0).toLocaleString(
-                                "id-ID"
-                              )} unit`}
+                          {/* ✅ ENHANCED: Show division-specific values */}
+                          {(() => {
+                            const divisionName =
+                              entry.division_name?.toLowerCase() || "";
+
+                            // HRD: Show attendance info
+                            if (divisionName.includes("hrd")) {
+                              const attendanceStatus = (entry as any)
+                                .attendanceStatus;
+                              const absentCount = (entry as any).absentCount;
+                              const shift = (entry as any).shift;
+
+                              if (attendanceStatus && absentCount) {
+                                return (
+                                  <div className="text-sm">
+                                    <div className="font-medium">
+                                      {absentCount} orang - {attendanceStatus}
+                                    </div>
+                                    {shift && (
+                                      <div className="text-xs text-gray-500">
+                                        Shift: {shift}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+                            }
+
+                            // Pemasaran: Show target vs realisasi
+                            if (divisionName.includes("pemasaran")) {
+                              const targetAmount = (entry as any).targetAmount;
+                              const realisasiAmount = (entry as any)
+                                .realisasiAmount;
+
+                              if (targetAmount || realisasiAmount) {
+                                return (
+                                  <div className="text-sm">
+                                    {targetAmount && (
+                                      <div className="text-blue-600">
+                                        Target: {formatCurrency(targetAmount)}
+                                      </div>
+                                    )}
+                                    {realisasiAmount && (
+                                      <div className="text-green-600">
+                                        Realisasi:{" "}
+                                        {formatCurrency(realisasiAmount)}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+                            }
+
+                            // Produksi: Show production data
+                            if (divisionName.includes("produksi")) {
+                              const hasilProduksi = (entry as any)
+                                .hasilProduksi;
+                              const barangGagal = (entry as any).barangGagal;
+                              const stockBarangJadi = (entry as any)
+                                .stockBarangJadi;
+
+                              if (
+                                hasilProduksi ||
+                                barangGagal ||
+                                stockBarangJadi
+                              ) {
+                                return (
+                                  <div className="text-sm">
+                                    {hasilProduksi && (
+                                      <div className="text-green-600">
+                                        Hasil: {hasilProduksi} unit
+                                      </div>
+                                    )}
+                                    {barangGagal && (
+                                      <div className="text-red-600">
+                                        Gagal: {barangGagal} unit
+                                      </div>
+                                    )}
+                                    {stockBarangJadi && (
+                                      <div className="text-blue-600">
+                                        Stock: {stockBarangJadi} unit
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+                            }
+
+                            // Gudang/Persediaan: Show stock data
+                            if (
+                              divisionName.includes("gudang") ||
+                              divisionName.includes("persediaan")
+                            ) {
+                              const stokAwal = (entry as any).stokAwal;
+                              const pemakaian = (entry as any).pemakaian;
+                              const stokAkhir = (entry as any).stokAkhir;
+
+                              if (stokAwal || pemakaian || stokAkhir) {
+                                return (
+                                  <div className="text-sm">
+                                    {stokAwal && (
+                                      <div className="text-blue-600">
+                                        Awal: {stokAwal} unit
+                                      </div>
+                                    )}
+                                    {pemakaian && (
+                                      <div className="text-orange-600">
+                                        Pakai: {pemakaian} unit
+                                      </div>
+                                    )}
+                                    {stokAkhir && (
+                                      <div className="text-green-600">
+                                        Akhir: {stokAkhir} unit
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+                            }
+
+                            // Keuangan: Show transaction type and amount
+                            if (divisionName.includes("keuangan")) {
+                              const transactionType = (entry as any)
+                                .transactionType;
+                              const saldoAkhir = (entry as any).saldoAkhir;
+
+                              if (
+                                transactionType === "SALDO_AKHIR" &&
+                                saldoAkhir
+                              ) {
+                                return (
+                                  <div className="text-sm">
+                                    <div className="font-medium text-purple-600">
+                                      Saldo: {formatCurrency(saldoAkhir)}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            }
+
+                            // Default: Show standard nilai
+                            return entry.value_type === "NOMINAL"
+                              ? formatCurrency(entry.nilai || 0)
+                              : `${(entry.nilai || 0).toLocaleString(
+                                  "id-ID"
+                                )} unit`;
+                          })()}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {/* ✅ ENHANCED: Show additional division-specific information */}
+                          {(() => {
+                            const divisionName =
+                              entry.division_name?.toLowerCase() || "";
+
+                            // HRD: Show shift and keterangan kendala
+                            if (divisionName.includes("hrd")) {
+                              const shift = (entry as any).shift;
+                              const keteranganKendala = (entry as any)
+                                .keteranganKendala;
+
+                              return (
+                                <div className="text-xs">
+                                  {shift && (
+                                    <div className="text-blue-600 mb-1">
+                                      Shift: {shift}
+                                    </div>
+                                  )}
+                                  {keteranganKendala && (
+                                    <div
+                                      className="text-gray-600 truncate max-w-[150px]"
+                                      title={keteranganKendala}
+                                    >
+                                      {keteranganKendala}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            // Pemasaran: Show retur and kendala
+                            if (divisionName.includes("pemasaran")) {
+                              const returPenjualan = (entry as any)
+                                .returPenjualan;
+                              const keteranganKendala = (entry as any)
+                                .keteranganKendala;
+
+                              return (
+                                <div className="text-xs">
+                                  {returPenjualan && (
+                                    <div className="text-red-600 mb-1">
+                                      Retur: {formatCurrency(returPenjualan)}
+                                    </div>
+                                  )}
+                                  {keteranganKendala && (
+                                    <div
+                                      className="text-gray-600 truncate max-w-[150px]"
+                                      title={keteranganKendala}
+                                    >
+                                      {keteranganKendala}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            // Produksi: Show HPP and kendala
+                            if (divisionName.includes("produksi")) {
+                              const hpBarangJadi = (entry as any).hpBarangJadi;
+                              const keteranganKendala = (entry as any)
+                                .keteranganKendala;
+
+                              return (
+                                <div className="text-xs">
+                                  {hpBarangJadi && (
+                                    <div className="text-purple-600 mb-1">
+                                      HPP: {formatCurrency(hpBarangJadi)}
+                                    </div>
+                                  )}
+                                  {keteranganKendala && (
+                                    <div
+                                      className="text-gray-600 truncate max-w-[150px]"
+                                      title={keteranganKendala}
+                                    >
+                                      {keteranganKendala}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+
+                            // Gudang/Persediaan: Show kondisi gudang
+                            if (
+                              divisionName.includes("gudang") ||
+                              divisionName.includes("persediaan")
+                            ) {
+                              const kondisiGudang = (entry as any)
+                                .kondisiGudang;
+
+                              if (kondisiGudang) {
+                                return (
+                                  <div
+                                    className="text-xs text-gray-600 truncate max-w-[150px]"
+                                    title={kondisiGudang}
+                                  >
+                                    {kondisiGudang}
+                                  </div>
+                                );
+                              }
+                            }
+
+                            // Keuangan: Show transaction details
+                            if (divisionName.includes("keuangan")) {
+                              const transactionType = (entry as any)
+                                .transactionType;
+
+                              if (
+                                transactionType &&
+                                transactionType !== "NOMINAL"
+                              ) {
+                                return (
+                                  <div className="text-xs">
+                                    <Badge
+                                      className={
+                                        transactionType === "PENERIMAAN"
+                                          ? "bg-green-100 text-green-800"
+                                          : transactionType === "PENGELUARAN"
+                                          ? "bg-red-100 text-red-800"
+                                          : "bg-purple-100 text-purple-800"
+                                      }
+                                    >
+                                      {transactionType}
+                                    </Badge>
+                                  </div>
+                                );
+                              }
+                            }
+
+                            return "-";
+                          })()}
                         </TableCell>
                         <TableCell className="text-sm text-gray-500">
                           {entry.created_by || "system"}
@@ -857,7 +1240,7 @@ export default function SuperAdminDashboard() {
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={8}
                       className="text-center py-8 text-gray-500"
                     >
                       <div className="space-y-2">
@@ -871,6 +1254,13 @@ export default function SuperAdminDashboard() {
                         <div className="text-xs text-gray-400">
                           Debug: Array.isArray ={" "}
                           {Array.isArray(recentEntries) ? "true" : "false"}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Debug: Applied filters = {appliedStartDate} -{" "}
+                          {appliedEndDate} (Division: {appliedDivision})
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          Debug: Total accounts = {accounts?.length || 0}
                         </div>
                         {/* ✅ ADD: Helpful suggestion */}
                         <div className="text-sm text-blue-600 mt-4">

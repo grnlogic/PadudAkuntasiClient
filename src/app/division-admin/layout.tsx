@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { AuthGuard } from "@/components/auth-guard";
 import { getCurrentUser, setCurrentUser } from "@/lib/auth";
-import NotificationBell from "@/components/notification-bell";
+import ModernNotificationBell from "@/components/modern-notification-bell";
 
 const navigation = [
   { name: "Laporan Harian", href: "/division-admin/journal", icon: BookOpen },
@@ -156,7 +156,7 @@ export default function DivisionAdminLayout({
                 <p className="text-sm font-medium">{user?.username}</p>
                 <p className="text-xs text-gray-500"> {user?.division?.name}</p>
               </div>
-              <NotificationBell />
+              <ModernNotificationBell />
             </div>
           </header>
 
