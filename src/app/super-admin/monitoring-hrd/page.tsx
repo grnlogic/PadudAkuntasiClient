@@ -15,21 +15,24 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { getEntriHarianByDate } from "@/lib/data";
 import { getDivisions } from "@/lib/divisions";
+import { getAccounts } from "@/lib/data";
 
 export default function MonitoringHRDPage() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [attendance, setAttendance] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [divisions, setDivisions] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([getEntriHarianByDate(date), getDivisions()])
-      .then(([entries, divs]) => {
+    Promise.all([getEntriHarianByDate(date), getDivisions(), getAccounts()])
+      .then(([entries, divs, accs]) => {
         // Filter hanya entri HRD (yang punya attendanceStatus)
         const hrdEntries = entries.filter((e) => e.attendanceStatus);
         setAttendance(hrdEntries);
         setDivisions(divs);
+        setAccounts(accs);
       })
       .finally(() => setLoading(false));
   }, [date]);
@@ -147,7 +150,7 @@ export default function MonitoringHRDPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Divisi</TableHead>
+                <TableHead>Akun</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Jumlah</TableHead>
                 <TableHead>Shift</TableHead>
@@ -155,21 +158,24 @@ export default function MonitoringHRDPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {attendance.map((entry, idx) => (
-                <TableRow key={idx}>
-                  <TableCell>
-                    {entry.divisionName || entry.division?.name || "-"}
-                  </TableCell>
-                  <TableCell>
-                    <Badge>{entry.attendanceStatus}</Badge>
-                  </TableCell>
-                  <TableCell>{entry.absentCount}</TableCell>
-                  <TableCell>{entry.shift}</TableCell>
-                  <TableCell>
-                    {entry.keteranganKendala || entry.keterangan || "-"}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {attendance.map((entry, idx) => {
+                const account = accounts.find(
+                  (acc) => acc.id === entry.accountId
+                );
+                return (
+                  <TableRow key={idx}>
+                    <TableCell>{account?.accountName || "-"}</TableCell>
+                    <TableCell>
+                      <Badge>{entry.attendanceStatus}</Badge>
+                    </TableCell>
+                    <TableCell>{entry.absentCount}</TableCell>
+                    <TableCell>{entry.shift}</TableCell>
+                    <TableCell>
+                      {entry.keteranganKendala || entry.keterangan || "-"}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
