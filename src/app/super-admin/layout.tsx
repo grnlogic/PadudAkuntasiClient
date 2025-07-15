@@ -38,6 +38,13 @@ const navigation = [
     badge: null,
   },
   {
+    name: "Monitoring Produksi",
+    href: "/super-admin/monitoring-produksi",
+    icon: FileText,
+    description: "Pantau hasil produksi harian seluruh operator",
+    badge: null,
+  },
+  {
     name: "Konsolidasi Keuangan",
     href: "/super-admin/konsolidasi-keuangan",
     icon: Database,
