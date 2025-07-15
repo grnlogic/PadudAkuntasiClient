@@ -196,7 +196,9 @@ export default function TransactionPage() {
             tanggal: laporan.tanggalLaporan || laporan.createdAt || "",
             date: laporan.tanggalLaporan || laporan.createdAt || "",
             nilai: Number(laporan.realisasiKuantitas || 0),
-            description: `Produk: ${laporan.namaAccount || "Unknown"} (${laporan.namaSalesperson})`,
+            description: `Produk: ${laporan.namaAccount || "Unknown"} (${
+              laporan.namaSalesperson
+            })`,
             keterangan: laporan.keteranganKendala || "",
             createdBy: laporan.createdByUsername || "system",
             createdAt: laporan.createdAt || new Date().toISOString(),
@@ -611,6 +613,15 @@ export default function TransactionPage() {
             : sum;
         }, 0);
 
+        // Ganti: Hitung total saldo akhir dari entri dengan transactionType === 'SALDO_AKHIR'
+        const totalSaldoAkhir = filteredEntries
+          .filter((entry) => (entry as any).transactionType === "SALDO_AKHIR")
+          .reduce(
+            (sum, entry) =>
+              sum + Number((entry as any).saldoAkhir ?? entry.nilai),
+            0
+          );
+
         // ✅ NEW: Calculate utang metrics
         const totalUtangBaru = filteredEntries.reduce((sum, entry) => {
           const transactionType = (entry as any).transactionType;
@@ -664,13 +675,10 @@ export default function TransactionPage() {
             color: "text-red-600",
           },
           metric3: {
-            label: "Saldo Bersih",
-            value: totalPenerimaan - totalPengeluaran,
+            label: "Saldo Akhir",
+            value: totalSaldoAkhir,
             type: "currency",
-            color:
-              totalPenerimaan >= totalPengeluaran
-                ? "text-green-600"
-                : "text-red-600",
+            color: "text-blue-600",
           },
           metric4: {
             label: "Total Transaksi",
@@ -992,6 +1000,12 @@ export default function TransactionPage() {
             <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
               ✅ Utang Dibayar
             </span>
+          );
+        } else if (transactionType === "SALDO_AKHIR") {
+          return (
+            <Badge className="bg-blue-100 text-blue-800 border border-blue-300">
+              Saldo Akhir
+            </Badge>
           );
         } else {
           return (
@@ -1638,7 +1652,8 @@ export default function TransactionPage() {
                         entries
                           .filter(
                             (entry) =>
-                              (entry as any).transactionType === "SALDO_AKHIR_PIUTANG"
+                              (entry as any).transactionType ===
+                              "SALDO_AKHIR_PIUTANG"
                           )
                           .reduce((sum, entry) => sum + Number(entry.nilai), 0)
                       )}
@@ -1749,7 +1764,8 @@ export default function TransactionPage() {
                         entries
                           .filter(
                             (entry) =>
-                              (entry as any).transactionType === "SALDO_AKHIR_UTANG"
+                              (entry as any).transactionType ===
+                              "SALDO_AKHIR_UTANG"
                           )
                           .reduce((sum, entry) => sum + Number(entry.nilai), 0)
                       )}
@@ -1830,12 +1846,24 @@ export default function TransactionPage() {
                         <TableCell>
                           {entry.description || "No description"}
                         </TableCell>
-                        <TableCell>{getTransactionBadge(entry)}</TableCell>
-                        <TableCell className="font-medium">
-                          {account?.valueType === "NOMINAL" ||
-                          account?.id === "SALES"
+                        <TableCell>
+                          {(entry as any).transactionType === "SALDO_AKHIR"
+                            ? formatCurrency(
+                                (entry as any).saldoAkhir ?? entry.nilai
+                              )
+                            : account?.valueType === "NOMINAL" ||
+                              account?.id === "SALES"
                             ? formatCurrency(entry.nilai)
                             : `${entry.nilai.toLocaleString("id-ID")} unit`}
+                        </TableCell>
+                        <TableCell>
+                          {(entry as any).transactionType === "SALDO_AKHIR" ? (
+                            <Badge className="bg-blue-100 text-blue-800 border border-blue-300">
+                              Saldo Akhir
+                            </Badge>
+                          ) : (
+                            getTransactionBadge(entry)
+                          )}
                         </TableCell>
 
                         {/* ✅ CONDITIONAL: Additional data columns */}

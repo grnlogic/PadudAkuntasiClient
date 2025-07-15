@@ -160,7 +160,7 @@ function ErrorLogList() {
       <div className="font-semibold text-red-700 mb-1 flex items-center gap-2">
         <X className="w-4 h-4" /> Error Log Terbaru
         <Button
-          size="xs"
+          size="sm"
           variant="outline"
           onClick={fetchLogs}
           className="ml-2"
@@ -236,9 +236,19 @@ export default function SuperAdminDashboard() {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const autoRefreshRef = useRef<NodeJS.Timeout | null>(null);
 
+  // ✅ ADD: Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [allEntries, setAllEntries] = useState<any[]>([]); // Store all entries for pagination
+
   useEffect(() => {
     loadMonitoringData();
   }, [appliedStartDate, appliedEndDate, appliedDivision]);
+
+  // ✅ ADD: Reset pagination when data changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [allEntries.length]);
 
   // Tambah efek auto refresh
   useEffect(() => {
@@ -256,11 +266,11 @@ export default function SuperAdminDashboard() {
 
   // Fungsi export data (CSV)
   const handleExport = () => {
-    if (!recentEntries || recentEntries.length === 0) return;
-    const header = Object.keys(recentEntries[0]);
+    if (!allEntries || allEntries.length === 0) return;
+    const header = Object.keys(allEntries[0]);
     const csv = [
       header.join(","),
-      ...recentEntries.map((row) =>
+      ...allEntries.map((row) =>
         header.map((field) => JSON.stringify(row[field] ?? "")).join(",")
       ),
     ].join("\n");
@@ -462,7 +472,7 @@ export default function SuperAdminDashboard() {
       setStats({
         totalAccounts: accounts.length,
         activeUsers: users.filter((u) => u.status === "active").length,
-        todayTransactions: rangeEntries.length,
+        todayTransactions: allDataSources.length,
         totalDivisions: divisions.length,
       });
 
@@ -573,9 +583,14 @@ export default function SuperAdminDashboard() {
           // ✅ COMPREHENSIVE: Map all division-specific fields
           // Keuangan fields
           transactionType: entry.transactionType || "NOMINAL",
-          targetAmount: entry.targetAmount,
-          realisasiAmount: entry.realisasiAmount,
-          saldoAkhir: entry.saldoAkhir,
+          targetAmount:
+            "targetAmount" in entry ? (entry as any).targetAmount : undefined,
+          realisasiAmount:
+            "realisasiAmount" in entry
+              ? (entry as any).realisasiAmount
+              : undefined,
+          saldoAkhir:
+            "saldoAkhir" in entry ? (entry as any).saldoAkhir : undefined,
 
           // HRD fields
           attendanceStatus: (entry as any).attendanceStatus,
@@ -666,6 +681,7 @@ export default function SuperAdminDashboard() {
       console.log("🔄 Setting recent entries state...");
 
       setRecentEntries(enrichedEntries.slice(0, 20));
+      setAllEntries(enrichedEntries); // Store all entries for pagination
 
       // ✅ ADD: Enhanced verification with division breakdown
       setTimeout(() => {
@@ -790,6 +806,8 @@ export default function SuperAdminDashboard() {
     setAppliedStartDate(startDate);
     setAppliedEndDate(endDate);
     setAppliedDivision(selectedDivision);
+    // ✅ ADD: Reset pagination when filters change
+    setCurrentPage(1);
   };
 
   // ✅ Function to reset all filters
@@ -801,6 +819,8 @@ export default function SuperAdminDashboard() {
     setAppliedStartDate("2025-06-19");
     setAppliedEndDate(today);
     setAppliedDivision("all");
+    // ✅ ADD: Reset pagination when filters reset
+    setCurrentPage(1);
   };
 
   function SendNotificationForm() {
@@ -1032,6 +1052,120 @@ export default function SuperAdminDashboard() {
     );
   }
 
+  // ✅ ADD: Pagination component
+  function PaginationControls() {
+    const totalPages = Math.ceil(allEntries.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const currentEntries = allEntries.slice(startIndex, endIndex);
+
+    const goToPage = (page: number) => {
+      setCurrentPage(page);
+    };
+
+    const goToPreviousPage = () => {
+      if (currentPage > 1) {
+        setCurrentPage(currentPage - 1);
+      }
+    };
+
+    const goToNextPage = () => {
+      if (currentPage < totalPages) {
+        setCurrentPage(currentPage + 1);
+      }
+    };
+
+    const handleItemsPerPageChange = (newItemsPerPage: number) => {
+      setItemsPerPage(newItemsPerPage);
+      setCurrentPage(1); // Reset to first page when changing items per page
+    };
+
+    if (allEntries.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 p-4 bg-gray-50 rounded-lg">
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <span>
+            Menampilkan {startIndex + 1}-{Math.min(endIndex, allEntries.length)}{" "}
+            dari {allEntries.length} entri
+          </span>
+          <span className="text-gray-400">|</span>
+          <span>
+            Halaman {currentPage} dari {totalPages}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">Tampilkan:</label>
+          <Select
+            value={itemsPerPage.toString()}
+            onValueChange={(value) => handleItemsPerPageChange(Number(value))}
+          >
+            <SelectTrigger className="w-20 h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10</SelectItem>
+              <SelectItem value="20">20</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+              <SelectItem value="100">100</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToPreviousPage}
+            disabled={currentPage === 1}
+            className="h-8 w-8 p-0"
+          >
+            ‹
+          </Button>
+
+          {/* Page numbers */}
+          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+            let pageNumber;
+            if (totalPages <= 5) {
+              pageNumber = i + 1;
+            } else if (currentPage <= 3) {
+              pageNumber = i + 1;
+            } else if (currentPage >= totalPages - 2) {
+              pageNumber = totalPages - 4 + i;
+            } else {
+              pageNumber = currentPage - 2 + i;
+            }
+
+            return (
+              <Button
+                key={pageNumber}
+                variant={currentPage === pageNumber ? "default" : "outline"}
+                size="sm"
+                onClick={() => goToPage(pageNumber)}
+                className="h-8 w-8 p-0"
+              >
+                {pageNumber}
+              </Button>
+            );
+          })}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={goToNextPage}
+            disabled={currentPage === totalPages}
+            className="h-8 w-8 p-0"
+          >
+            ›
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -1204,12 +1338,20 @@ export default function SuperAdminDashboard() {
                 )} s/d ${new Date(endDate).toLocaleDateString("id-ID")}`}
           </CardTitle>
           <CardDescription>
-            Menampilkan {recentEntries.length} entri
+            Menampilkan{" "}
+            {(() => {
+              const totalPages = Math.ceil(allEntries.length / itemsPerPage);
+              const startIndex = (currentPage - 1) * itemsPerPage;
+              const endIndex = startIndex + itemsPerPage;
+              const currentEntries = allEntries.slice(startIndex, endIndex);
+              return currentEntries.length;
+            })()}{" "}
+            dari {allEntries.length} entri
             {selectedDivision !== "all"
               ? ` dari divisi yang dipilih`
               : " dari semua divisi"}
             {/* ✅ ADD: Helpful hint if no data */}
-            {recentEntries.length === 0 && (
+            {allEntries.length === 0 && (
               <span className="text-yellow-600 ml-2">
                 • Coba ubah tanggal ke 19 Juni 2025 untuk melihat data yang
                 tersedia
@@ -1233,387 +1375,403 @@ export default function SuperAdminDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentEntries &&
-                Array.isArray(recentEntries) &&
-                recentEntries.length > 0 ? (
-                  recentEntries.map((entry, index) => {
-                    console.log(
-                      `Rendering table row ${index + 1} for entry:`,
-                      entry
-                    );
+                {(() => {
+                  const totalPages = Math.ceil(
+                    allEntries.length / itemsPerPage
+                  );
+                  const startIndex = (currentPage - 1) * itemsPerPage;
+                  const endIndex = startIndex + itemsPerPage;
+                  const currentEntries = allEntries.slice(startIndex, endIndex);
 
-                    return (
-                      <TableRow key={entry.id || `entry-${index}`}>
-                        <TableCell className="text-sm">
-                          {entry.createdAt
-                            ? new Date(entry.createdAt).toLocaleTimeString(
-                                "id-ID",
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }
-                              )
-                            : "N/A"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            className={getDivisionColor(
-                              entry.division_name || "N/A"
-                            )}
-                          >
-                            {entry.division_name || "N/A"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          <div>
-                            <div className="font-medium">
-                              {entry.account_code || "N/A"}
+                  return currentEntries &&
+                    Array.isArray(currentEntries) &&
+                    currentEntries.length > 0 ? (
+                    currentEntries.map((entry: any, index) => {
+                      console.log(
+                        `Rendering table row ${index + 1} for entry:`,
+                        entry
+                      );
+
+                      return (
+                        <TableRow key={entry.id || `entry-${index}`}>
+                          <TableCell className="text-sm">
+                            {entry.createdAt
+                              ? new Date(entry.createdAt).toLocaleTimeString(
+                                  "id-ID",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  }
+                                )
+                              : "N/A"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={getDivisionColor(
+                                entry.division_name || "N/A"
+                              )}
+                            >
+                              {entry.division_name || "N/A"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            <div>
+                              <div className="font-medium">
+                                {entry.account_code || "N/A"}
+                              </div>
+                              <div className="text-gray-500 text-xs">
+                                {entry.account_name || "N/A"}
+                              </div>
                             </div>
-                            <div className="text-gray-500 text-xs">
-                              {entry.account_name || "N/A"}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {entry.description || "-"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            className={
-                              entry.value_type === "NOMINAL"
-                                ? "bg-blue-100 text-blue-800"
-                                : "bg-green-100 text-green-800"
-                            }
-                          >
-                            {entry.value_type === "NOMINAL"
-                              ? "💰 Nominal"
-                              : "📦 Kuantitas"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {/* ✅ ENHANCED: Show division-specific values */}
-                          {(() => {
-                            const divisionName =
-                              entry.division_name?.toLowerCase() || "";
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {entry.description || "-"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              className={
+                                entry.value_type === "NOMINAL"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-green-100 text-green-800"
+                              }
+                            >
+                              {entry.value_type === "NOMINAL"
+                                ? "💰 Nominal"
+                                : "📦 Kuantitas"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {/* ✅ ENHANCED: Show division-specific values */}
+                            {(() => {
+                              const divisionName =
+                                entry.division_name?.toLowerCase() || "";
 
-                            // HRD: Show attendance info
-                            if (divisionName.includes("hrd")) {
-                              const attendanceStatus = (entry as any)
-                                .attendanceStatus;
-                              const absentCount = (entry as any).absentCount;
-                              const shift = (entry as any).shift;
+                              // HRD: Show attendance info
+                              if (divisionName.includes("hrd")) {
+                                const attendanceStatus = (entry as any)
+                                  .attendanceStatus;
+                                const absentCount = (entry as any).absentCount;
+                                const shift = (entry as any).shift;
 
-                              if (attendanceStatus && absentCount) {
-                                return (
-                                  <div className="text-sm">
-                                    <div className="font-medium">
-                                      {absentCount} orang - {attendanceStatus}
+                                if (attendanceStatus && absentCount) {
+                                  return (
+                                    <div className="text-sm">
+                                      <div className="font-medium">
+                                        {absentCount} orang - {attendanceStatus}
+                                      </div>
+                                      {shift && (
+                                        <div className="text-xs text-gray-500">
+                                          Shift: {shift}
+                                        </div>
+                                      )}
                                     </div>
+                                  );
+                                }
+                              }
+
+                              // Pemasaran: Show target vs realisasi
+                              if (divisionName.includes("pemasaran")) {
+                                const targetAmount = (entry as any)
+                                  .targetAmount;
+                                const realisasiAmount = (entry as any)
+                                  .realisasiAmount;
+
+                                if (targetAmount || realisasiAmount) {
+                                  return (
+                                    <div className="text-sm">
+                                      {targetAmount && (
+                                        <div className="text-blue-600">
+                                          Target: {formatCurrency(targetAmount)}
+                                        </div>
+                                      )}
+                                      {realisasiAmount && (
+                                        <div className="text-green-600">
+                                          Realisasi:{" "}
+                                          {formatCurrency(realisasiAmount)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                              }
+
+                              // Produksi: Show production data
+                              if (divisionName.includes("produksi")) {
+                                const hasilProduksi = (entry as any)
+                                  .hasilProduksi;
+                                const barangGagal = (entry as any).barangGagal;
+                                const stockBarangJadi = (entry as any)
+                                  .stockBarangJadi;
+
+                                if (
+                                  hasilProduksi ||
+                                  barangGagal ||
+                                  stockBarangJadi
+                                ) {
+                                  return (
+                                    <div className="text-sm">
+                                      {hasilProduksi && (
+                                        <div className="text-green-600">
+                                          Hasil: {hasilProduksi} unit
+                                        </div>
+                                      )}
+                                      {barangGagal && (
+                                        <div className="text-red-600">
+                                          Gagal: {barangGagal} unit
+                                        </div>
+                                      )}
+                                      {stockBarangJadi && (
+                                        <div className="text-blue-600">
+                                          Stock: {stockBarangJadi} unit
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                              }
+
+                              // Gudang/Persediaan: Show stock data
+                              if (
+                                divisionName.includes("gudang") ||
+                                divisionName.includes("persediaan")
+                              ) {
+                                const stokAwal = (entry as any).stokAwal;
+                                const pemakaian = (entry as any).pemakaian;
+                                const stokAkhir = (entry as any).stokAkhir;
+
+                                if (stokAwal || pemakaian || stokAkhir) {
+                                  return (
+                                    <div className="text-sm">
+                                      {stokAwal && (
+                                        <div className="text-blue-600">
+                                          Awal: {stokAwal} unit
+                                        </div>
+                                      )}
+                                      {pemakaian && (
+                                        <div className="text-orange-600">
+                                          Pakai: {pemakaian} unit
+                                        </div>
+                                      )}
+                                      {stokAkhir && (
+                                        <div className="text-green-600">
+                                          Akhir: {stokAkhir} unit
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                              }
+
+                              // Keuangan: Show transaction type and amount
+                              if (divisionName.includes("keuangan")) {
+                                const transactionType = (entry as any)
+                                  .transactionType;
+                                const saldoAkhir = (entry as any).saldoAkhir;
+
+                                if (
+                                  transactionType === "SALDO_AKHIR" &&
+                                  saldoAkhir
+                                ) {
+                                  return (
+                                    <div className="text-sm">
+                                      <div className="font-medium text-purple-600">
+                                        Saldo: {formatCurrency(saldoAkhir)}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              }
+
+                              // Default: Show standard nilai
+                              return entry.value_type === "NOMINAL"
+                                ? formatCurrency(entry.nilai || 0)
+                                : `${(entry.nilai || 0).toLocaleString(
+                                    "id-ID"
+                                  )} unit`;
+                            })()}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {/* ✅ ENHANCED: Show additional division-specific information */}
+                            {(() => {
+                              const divisionName =
+                                entry.division_name?.toLowerCase() || "";
+
+                              // HRD: Show shift and keterangan kendala
+                              if (divisionName.includes("hrd")) {
+                                const shift = (entry as any).shift;
+                                const keteranganKendala = (entry as any)
+                                  .keteranganKendala;
+
+                                return (
+                                  <div className="text-xs">
                                     {shift && (
-                                      <div className="text-xs text-gray-500">
+                                      <div className="text-blue-600 mb-1">
                                         Shift: {shift}
                                       </div>
                                     )}
-                                  </div>
-                                );
-                              }
-                            }
-
-                            // Pemasaran: Show target vs realisasi
-                            if (divisionName.includes("pemasaran")) {
-                              const targetAmount = (entry as any).targetAmount;
-                              const realisasiAmount = (entry as any)
-                                .realisasiAmount;
-
-                              if (targetAmount || realisasiAmount) {
-                                return (
-                                  <div className="text-sm">
-                                    {targetAmount && (
-                                      <div className="text-blue-600">
-                                        Target: {formatCurrency(targetAmount)}
-                                      </div>
-                                    )}
-                                    {realisasiAmount && (
-                                      <div className="text-green-600">
-                                        Realisasi:{" "}
-                                        {formatCurrency(realisasiAmount)}
+                                    {keteranganKendala && (
+                                      <div
+                                        className="text-gray-600 truncate max-w-[150px]"
+                                        title={keteranganKendala}
+                                      >
+                                        {keteranganKendala}
                                       </div>
                                     )}
                                   </div>
                                 );
                               }
-                            }
 
-                            // Produksi: Show production data
-                            if (divisionName.includes("produksi")) {
-                              const hasilProduksi = (entry as any)
-                                .hasilProduksi;
-                              const barangGagal = (entry as any).barangGagal;
-                              const stockBarangJadi = (entry as any)
-                                .stockBarangJadi;
+                              // Pemasaran: Show retur and kendala
+                              if (divisionName.includes("pemasaran")) {
+                                const returPenjualan = (entry as any)
+                                  .returPenjualan;
+                                const keteranganKendala = (entry as any)
+                                  .keteranganKendala;
 
-                              if (
-                                hasilProduksi ||
-                                barangGagal ||
-                                stockBarangJadi
-                              ) {
-                                return (
-                                  <div className="text-sm">
-                                    {hasilProduksi && (
-                                      <div className="text-green-600">
-                                        Hasil: {hasilProduksi} unit
-                                      </div>
-                                    )}
-                                    {barangGagal && (
-                                      <div className="text-red-600">
-                                        Gagal: {barangGagal} unit
-                                      </div>
-                                    )}
-                                    {stockBarangJadi && (
-                                      <div className="text-blue-600">
-                                        Stock: {stockBarangJadi} unit
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              }
-                            }
-
-                            // Gudang/Persediaan: Show stock data
-                            if (
-                              divisionName.includes("gudang") ||
-                              divisionName.includes("persediaan")
-                            ) {
-                              const stokAwal = (entry as any).stokAwal;
-                              const pemakaian = (entry as any).pemakaian;
-                              const stokAkhir = (entry as any).stokAkhir;
-
-                              if (stokAwal || pemakaian || stokAkhir) {
-                                return (
-                                  <div className="text-sm">
-                                    {stokAwal && (
-                                      <div className="text-blue-600">
-                                        Awal: {stokAwal} unit
-                                      </div>
-                                    )}
-                                    {pemakaian && (
-                                      <div className="text-orange-600">
-                                        Pakai: {pemakaian} unit
-                                      </div>
-                                    )}
-                                    {stokAkhir && (
-                                      <div className="text-green-600">
-                                        Akhir: {stokAkhir} unit
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              }
-                            }
-
-                            // Keuangan: Show transaction type and amount
-                            if (divisionName.includes("keuangan")) {
-                              const transactionType = (entry as any)
-                                .transactionType;
-                              const saldoAkhir = (entry as any).saldoAkhir;
-
-                              if (
-                                transactionType === "SALDO_AKHIR" &&
-                                saldoAkhir
-                              ) {
-                                return (
-                                  <div className="text-sm">
-                                    <div className="font-medium text-purple-600">
-                                      Saldo: {formatCurrency(saldoAkhir)}
-                                    </div>
-                                  </div>
-                                );
-                              }
-                            }
-
-                            // Default: Show standard nilai
-                            return entry.value_type === "NOMINAL"
-                              ? formatCurrency(entry.nilai || 0)
-                              : `${(entry.nilai || 0).toLocaleString(
-                                  "id-ID"
-                                )} unit`;
-                          })()}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {/* ✅ ENHANCED: Show additional division-specific information */}
-                          {(() => {
-                            const divisionName =
-                              entry.division_name?.toLowerCase() || "";
-
-                            // HRD: Show shift and keterangan kendala
-                            if (divisionName.includes("hrd")) {
-                              const shift = (entry as any).shift;
-                              const keteranganKendala = (entry as any)
-                                .keteranganKendala;
-
-                              return (
-                                <div className="text-xs">
-                                  {shift && (
-                                    <div className="text-blue-600 mb-1">
-                                      Shift: {shift}
-                                    </div>
-                                  )}
-                                  {keteranganKendala && (
-                                    <div
-                                      className="text-gray-600 truncate max-w-[150px]"
-                                      title={keteranganKendala}
-                                    >
-                                      {keteranganKendala}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            }
-
-                            // Pemasaran: Show retur and kendala
-                            if (divisionName.includes("pemasaran")) {
-                              const returPenjualan = (entry as any)
-                                .returPenjualan;
-                              const keteranganKendala = (entry as any)
-                                .keteranganKendala;
-
-                              return (
-                                <div className="text-xs">
-                                  {returPenjualan && (
-                                    <div className="text-red-600 mb-1">
-                                      Retur: {formatCurrency(returPenjualan)}
-                                    </div>
-                                  )}
-                                  {keteranganKendala && (
-                                    <div
-                                      className="text-gray-600 truncate max-w-[150px]"
-                                      title={keteranganKendala}
-                                    >
-                                      {keteranganKendala}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            }
-
-                            // Produksi: Show HPP and kendala
-                            if (divisionName.includes("produksi")) {
-                              const hpBarangJadi = (entry as any).hpBarangJadi;
-                              const keteranganKendala = (entry as any)
-                                .keteranganKendala;
-
-                              return (
-                                <div className="text-xs">
-                                  {hpBarangJadi && (
-                                    <div className="text-purple-600 mb-1">
-                                      HPP: {formatCurrency(hpBarangJadi)}
-                                    </div>
-                                  )}
-                                  {keteranganKendala && (
-                                    <div
-                                      className="text-gray-600 truncate max-w-[150px]"
-                                      title={keteranganKendala}
-                                    >
-                                      {keteranganKendala}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            }
-
-                            // Gudang/Persediaan: Show kondisi gudang
-                            if (
-                              divisionName.includes("gudang") ||
-                              divisionName.includes("persediaan")
-                            ) {
-                              const kondisiGudang = (entry as any)
-                                .kondisiGudang;
-
-                              if (kondisiGudang) {
-                                return (
-                                  <div
-                                    className="text-xs text-gray-600 truncate max-w-[150px]"
-                                    title={kondisiGudang}
-                                  >
-                                    {kondisiGudang}
-                                  </div>
-                                );
-                              }
-                            }
-
-                            // Keuangan: Show transaction details
-                            if (divisionName.includes("keuangan")) {
-                              const transactionType = (entry as any)
-                                .transactionType;
-
-                              if (
-                                transactionType &&
-                                transactionType !== "NOMINAL"
-                              ) {
                                 return (
                                   <div className="text-xs">
-                                    <Badge
-                                      className={
-                                        transactionType === "PENERIMAAN"
-                                          ? "bg-green-100 text-green-800"
-                                          : transactionType === "PENGELUARAN"
-                                          ? "bg-red-100 text-red-800"
-                                          : "bg-purple-100 text-purple-800"
-                                      }
-                                    >
-                                      {transactionType}
-                                    </Badge>
+                                    {returPenjualan && (
+                                      <div className="text-red-600 mb-1">
+                                        Retur: {formatCurrency(returPenjualan)}
+                                      </div>
+                                    )}
+                                    {keteranganKendala && (
+                                      <div
+                                        className="text-gray-600 truncate max-w-[150px]"
+                                        title={keteranganKendala}
+                                      >
+                                        {keteranganKendala}
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               }
-                            }
 
-                            return "-";
-                          })()}
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-500">
-                          {entry.created_by || "system"}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={8}
-                      className="text-center py-8 text-gray-500"
-                    >
-                      <div className="space-y-2">
-                        <div>
-                          Tidak ada entri untuk tanggal dan divisi yang dipilih
+                              // Produksi: Show HPP and kendala
+                              if (divisionName.includes("produksi")) {
+                                const hpBarangJadi = (entry as any)
+                                  .hpBarangJadi;
+                                const keteranganKendala = (entry as any)
+                                  .keteranganKendala;
+
+                                return (
+                                  <div className="text-xs">
+                                    {hpBarangJadi && (
+                                      <div className="text-purple-600 mb-1">
+                                        HPP: {formatCurrency(hpBarangJadi)}
+                                      </div>
+                                    )}
+                                    {keteranganKendala && (
+                                      <div
+                                        className="text-gray-600 truncate max-w-[150px]"
+                                        title={keteranganKendala}
+                                      >
+                                        {keteranganKendala}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+
+                              // Gudang/Persediaan: Show kondisi gudang
+                              if (
+                                divisionName.includes("gudang") ||
+                                divisionName.includes("persediaan")
+                              ) {
+                                const kondisiGudang = (entry as any)
+                                  .kondisiGudang;
+
+                                if (kondisiGudang) {
+                                  return (
+                                    <div
+                                      className="text-xs text-gray-600 truncate max-w-[150px]"
+                                      title={kondisiGudang}
+                                    >
+                                      {kondisiGudang}
+                                    </div>
+                                  );
+                                }
+                              }
+
+                              // Keuangan: Show transaction details
+                              if (divisionName.includes("keuangan")) {
+                                const transactionType = (entry as any)
+                                  .transactionType;
+
+                                if (
+                                  transactionType &&
+                                  transactionType !== "NOMINAL"
+                                ) {
+                                  return (
+                                    <div className="text-xs">
+                                      <Badge
+                                        className={
+                                          transactionType === "PENERIMAAN"
+                                            ? "bg-green-100 text-green-800"
+                                            : transactionType === "PENGELUARAN"
+                                            ? "bg-red-100 text-red-800"
+                                            : "bg-purple-100 text-purple-800"
+                                        }
+                                      >
+                                        {transactionType}
+                                      </Badge>
+                                    </div>
+                                  );
+                                }
+                              }
+
+                              return "-";
+                            })()}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-500">
+                            {entry.created_by || "system"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={8}
+                        className="text-center py-8 text-gray-500"
+                      >
+                        <div className="space-y-2">
+                          <div>
+                            Tidak ada entri untuk tanggal dan divisi yang
+                            dipilih
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Debug: allEntries.length = {allEntries?.length || 0}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Debug: Array.isArray ={" "}
+                            {Array.isArray(allEntries) ? "true" : "false"}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Debug: Applied filters = {appliedStartDate} -{" "}
+                            {appliedEndDate} (Division: {appliedDivision})
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Debug: Total accounts = {accounts?.length || 0}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Debug: Current page = {currentPage}, Items per page
+                            = {itemsPerPage}
+                          </div>
+                          {/* ✅ ADD: Helpful suggestion */}
+                          <div className="text-sm text-blue-600 mt-4">
+                            💡 Tip: Klik tombol "19 Jun (Ada Data)" di atas
+                            untuk melihat transaksi yang tersedia
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-400">
-                          Debug: recentEntries.length ={" "}
-                          {recentEntries?.length || 0}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          Debug: Array.isArray ={" "}
-                          {Array.isArray(recentEntries) ? "true" : "false"}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          Debug: Applied filters = {appliedStartDate} -{" "}
-                          {appliedEndDate} (Division: {appliedDivision})
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          Debug: Total accounts = {accounts?.length || 0}
-                        </div>
-                        {/* ✅ ADD: Helpful suggestion */}
-                        <div className="text-sm text-blue-600 mt-4">
-                          💡 Tip: Klik tombol "19 Jun (Ada Data)" di atas untuk
-                          melihat transaksi yang tersedia
-                        </div>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })()}
               </TableBody>
             </Table>
           </div>
+          <PaginationControls />
         </CardContent>
       </Card>
 

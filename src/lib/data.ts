@@ -13,6 +13,7 @@ import {
   perusahaanAPI,
   salespersonAPI,
   laporanPenjualanProdukAPI,
+  konsolidasiKeuanganAPI,
   getSalespeople as apiGetSalespeople,
   deleteSalesperson as apiDeleteSalesperson,
 } from "./api";
@@ -991,16 +992,19 @@ export const deleteLaporanPenjualanProduk = async (
 };
 
 export const getSalespeopleByDivision = async (divisionId: number) => {
-  console.log("🔍 GET SALESPEOPLE BY DIVISION - Requesting for divisionId:", divisionId);
-  
+  console.log(
+    "🔍 GET SALESPEOPLE BY DIVISION - Requesting for divisionId:",
+    divisionId
+  );
+
   const response = await salespersonAPI.getByDivision(divisionId);
-  
+
   console.log("📥 GET SALESPEOPLE BY DIVISION - Response:", {
     success: response.success,
     dataLength: response.data?.length || 0,
     data: response.data,
   });
-  
+
   if (response.success && response.data) return response.data;
   return [];
 };
@@ -1027,5 +1031,74 @@ export const deleteSalesperson = async (id: number): Promise<boolean> => {
   } catch (error) {
     console.error("❌ Error deleting salesperson:", error);
     throw error;
+  }
+};
+
+// ================== KONSOLIDASI KEUANGAN ==================
+export interface KonsolidasiKeuanganData {
+  tanggal: string;
+  perusahaan: string;
+  penerimaan: number;
+  pengeluaran: number;
+  saldoAkhir: number;
+  totalTransaksi: number;
+}
+
+export const getKonsolidasiKeuanganByDate = async (
+  date: string
+): Promise<KonsolidasiKeuanganData[]> => {
+  try {
+    const response = await konsolidasiKeuanganAPI.getByDate(date);
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return [];
+  } catch (error) {
+    console.error("❌ Error fetching konsolidasi keuangan:", error);
+    return [];
+  }
+};
+
+export const getKonsolidasiKeuanganByDateRange = async (
+  startDate: string,
+  endDate: string
+): Promise<KonsolidasiKeuanganData[]> => {
+  try {
+    const response = await konsolidasiKeuanganAPI.getByDateRange(
+      startDate,
+      endDate
+    );
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return [];
+  } catch (error) {
+    console.error(
+      "❌ Error fetching konsolidasi keuangan by date range:",
+      error
+    );
+    return [];
+  }
+};
+
+export const getKonsolidasiKeuanganByPerusahaan = async (
+  perusahaan: string,
+  date: string
+): Promise<KonsolidasiKeuanganData[]> => {
+  try {
+    const response = await konsolidasiKeuanganAPI.getByPerusahaan(
+      perusahaan,
+      date
+    );
+    if (response.success && response.data) {
+      return response.data;
+    }
+    return [];
+  } catch (error) {
+    console.error(
+      "❌ Error fetching konsolidasi keuangan by perusahaan:",
+      error
+    );
+    return [];
   }
 };

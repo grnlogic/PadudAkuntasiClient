@@ -921,3 +921,33 @@ export const laporanPenjualanProdukAPI = {
       method: "DELETE",
     }),
 };
+
+// ✅ NEW: Konsolidasi Keuangan API
+export interface KonsolidasiKeuanganData {
+  tanggal: string;
+  perusahaan: string;
+  penerimaan: number;
+  pengeluaran: number;
+  saldoAkhir: number;
+  totalTransaksi: number;
+}
+
+export const konsolidasiKeuanganAPI = {
+  getByDate: async (date: string) => {
+    return apiRequest<KonsolidasiKeuanganData[]>(
+      `/api/v1/konsolidasi-keuangan/by-date/${date}`
+    );
+  },
+
+  getByDateRange: async (startDate: string, endDate: string) => {
+    return apiRequest<KonsolidasiKeuanganData[]>(
+      `/api/v1/konsolidasi-keuangan/by-date-range?startDate=${startDate}&endDate=${endDate}`
+    );
+  },
+
+  getByPerusahaan: async (perusahaan: string, date: string) => {
+    return apiRequest<KonsolidasiKeuanganData[]>(
+      `/api/v1/konsolidasi-keuangan/by-perusahaan/${perusahaan}?date=${date}`
+    );
+  },
+};

@@ -1061,7 +1061,9 @@ function generateSummarySection(data: PDFReportData): string {
             <tbody>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Target</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalTarget.toLocaleString()} unit</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Realisasi</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${totalRealisasi.toLocaleString()} unit</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Achievement Rate</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right; ${achievement > 100 ? 'color: green; font-weight: bold;' : ''}">${achievement.toFixed(1)}%</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Achievement Rate</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right; ${
+                achievement > 100 ? "color: green; font-weight: bold;" : ""
+              }">${achievement.toFixed(1)}%</td></tr>
               <tr><td style="border: 1px solid #ddd; padding: 8px;">Status</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right; color: ${
                 achievement >= 100
                   ? "green"

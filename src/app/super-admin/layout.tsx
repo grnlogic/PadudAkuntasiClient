@@ -38,6 +38,13 @@ const navigation = [
     badge: null,
   },
   {
+    name: "Konsolidasi Keuangan",
+    href: "/super-admin/konsolidasi-keuangan",
+    icon: Database,
+    description: "Total kas per perusahaan",
+    badge: null,
+  },
+  {
     name: "Mengelola Admin",
     href: "/super-admin/users",
     icon: Users,
