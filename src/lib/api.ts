@@ -951,3 +951,13 @@ export const konsolidasiKeuanganAPI = {
     );
   },
 };
+
+// Health API
+export const healthAPI = {
+  getStatus: async () => {
+    const url = `${BASE_URL}/api/health`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Failed to fetch health status");
+    return res.json();
+  },
+};

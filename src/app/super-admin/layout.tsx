@@ -22,12 +22,14 @@ import {
   UserCheck,
   Bell,
   Search,
+  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logout, getCurrentUser } from "@/lib/auth";
 import AuthGuard from "@/components/AuthGuard";
 import NotificationBell from "@/components/notification-bell";
+import SystemStatusCard from "@/components/SystemStatusCard";
 
 const navigation = [
   {
@@ -42,6 +44,21 @@ const navigation = [
     href: "/super-admin/monitoring-produksi",
     icon: FileText,
     description: "Pantau hasil produksi harian seluruh operator",
+    badge: null,
+  },
+  // Tambahkan menu Monitoring HRD di sini
+  {
+    name: "Monitoring HRD",
+    href: "/super-admin/monitoring-hrd",
+    icon: Users,
+    description: "Pantau absensi HRD seluruh divisi",
+    badge: null,
+  },
+  {
+    name: "Monitoring Pemasaran",
+    href: "/super-admin/monitoring-pemasaran",
+    icon: TrendingUp,
+    description: "Pantau penjualan produk per sales",
     badge: null,
   },
   {
@@ -245,51 +262,7 @@ export default function SuperAdminLayout({
 
           {/* System Status & Logout - Fixed di bottom */}
           <div className="mt-auto p-4 border-t bg-gray-50">
-            <Card className="mb-3">
-              <CardContent className="p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-700">
-                    Status Sistem
-                  </span>
-                  <Badge className="bg-green-100 text-green-800">
-                    <Activity className="w-3 h-3 mr-1" />
-                    Normal
-                  </Badge>
-                </div>
-                <div className="text-xs text-gray-500 mb-2">
-                  Semua layanan berjalan dengan baik
-                </div>
-                <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
-                  <span>CPU: 45%</span>
-                  <span>Memory: 62%</span>
-                  <span>Disk: 78%</span>
-                </div>
-
-                <div className="space-y-2 border-t pt-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-600">Backend API:</span>
-                    <Badge className="bg-green-100 text-green-800 text-xs">
-                      Online
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-600">Database:</span>
-                    <Badge className="bg-green-100 text-green-800 text-xs">
-                      Connected
-                    </Badge>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-600">Server:</span>
-                    <Badge className="bg-green-100 text-green-800 text-xs">
-                      Active
-                    </Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
+            <SystemStatusCard />
             <Button
               onClick={handleLogout}
               variant="outline"
