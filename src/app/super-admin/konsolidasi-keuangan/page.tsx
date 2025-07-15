@@ -93,107 +93,68 @@ export default function KonsolidasiKeuangan() {
   const loadKonsolidasiData = async () => {
     setLoading(true);
     try {
-      console.log("🔄 Loading konsolidasi data for date:", selectedDate);
-
+      // 1. Ambil data entri harian & akun
       const entries = await getEntriHarian();
-      console.log("RAW ENTRIES:", entries.length, entries);
       const accounts = await getAccounts();
-      setAccounts(accounts); // simpan ke state
+      setAccounts(accounts);
 
-      console.log("📊 Raw entries:", entries.length, entries);
-      console.log("📊 Raw accounts:", accounts.length, accounts);
-
-      // Filter entries by date
+      // 2. Filter entri sesuai tanggal (format YYYY-MM-DD)
       const filteredEntries = entries.filter((entry) => {
-        const entryDate = entry.tanggal || entry.date;
-        if (!entryDate) return false;
-
-        const entryDateOnly = entryDate.includes("T")
-          ? entryDate.split("T")[0]
-          : entryDate;
-
-        return entryDateOnly === selectedDate;
+        const entryDate = (entry.tanggal || entry.date || "").slice(0, 10);
+        return entryDate === selectedDate;
       });
-      console.log("FILTERED BY DATE:", filteredEntries.length, filteredEntries);
 
-      // Group entries by company and calculate totals
+      // 3. Agregasi per perusahaan
       const konsolidasiMap = new Map<string, KonsolidasiData>();
-
       filteredEntries.forEach((entry) => {
-        // Find account to determine company
+        // Cari akun terkait
         const account = accounts.find(
-          (acc) => acc.id.toString() === entry.accountId.toString()
+          (acc) => acc.id?.toString() === entry.accountId?.toString()
         );
-        if (!account) {
-          console.warn("❌ Account not found for entry:", entry);
-          return;
-        }
-
-        // Determine company based on account code or division
-        let perusahaan = "Unknown";
-        const accountCode = account.accountCode?.toLowerCase() || "";
-        const divisionName = account.division?.name?.toLowerCase() || "";
-
-        // Map account codes to companies - improved logic
-        if (
-          accountCode.includes("pjp") ||
-          divisionName.includes("pjp") ||
-          accountCode.startsWith("1-")
-        ) {
-          perusahaan = "PT. Padudjaya Putera";
-        } else if (
-          accountCode.includes("prima") ||
-          divisionName.includes("prima") ||
-          accountCode.startsWith("2-")
-        ) {
-          perusahaan = "PT. Prima";
-        } else if (
-          accountCode.includes("sp") ||
-          divisionName.includes("sp") ||
-          accountCode.startsWith("3-")
-        ) {
-          perusahaan = "PT. SP";
-        } else if (
-          accountCode.includes("blending") ||
-          divisionName.includes("blending") ||
-          accountCode.startsWith("4-")
-        ) {
-          perusahaan = "PT. Blending";
-        } else if (
-          accountCode.includes("holding") ||
-          divisionName.includes("holding") ||
-          accountCode.startsWith("5-")
-        ) {
-          perusahaan = "PT. Holding";
-        } else {
-          // Default mapping based on account code patterns
-          if (accountCode.startsWith("1")) {
-            perusahaan = "PT. Padudjaya Putera"; // Default to PJP for cash accounts
-          } else if (accountCode.startsWith("2")) {
-            perusahaan = "PT. Prima";
-          } else if (accountCode.startsWith("3")) {
-            perusahaan = "PT. SP";
-          } else if (accountCode.startsWith("4")) {
-            perusahaan = "PT. Blending";
-          } else if (accountCode.startsWith("5")) {
-            perusahaan = "PT. Holding";
-          } else {
-            // If no clear mapping, assign to PJP as default
+        // Mapping perusahaan
+        let perusahaan = "PT. Padudjaya Putera"; // Default fallback
+        if (account) {
+          const accountCode = (account.accountCode || "").toLowerCase();
+          const divisionName = (account.division?.name || "").toLowerCase();
+          if (
+            accountCode.includes("pjp") ||
+            divisionName.includes("pjp") ||
+            accountCode.startsWith("1-")
+          )
             perusahaan = "PT. Padudjaya Putera";
-          }
+          else if (
+            accountCode.includes("prima") ||
+            divisionName.includes("prima") ||
+            accountCode.startsWith("2-")
+          )
+            perusahaan = "PT. Prima";
+          else if (
+            accountCode.includes("sp") ||
+            divisionName.includes("sp") ||
+            accountCode.startsWith("3-")
+          )
+            perusahaan = "PT. SP";
+          else if (
+            accountCode.includes("blending") ||
+            divisionName.includes("blending") ||
+            accountCode.startsWith("4-")
+          )
+            perusahaan = "PT. Blending";
+          else if (
+            accountCode.includes("holding") ||
+            divisionName.includes("holding") ||
+            accountCode.startsWith("5-")
+          )
+            perusahaan = "PT. Holding";
         }
-
-        // Filter by selected company if specified
+        // Filter by selected company
         if (selectedPerusahaan !== "all") {
           const selectedCompany = daftarPerusahaan.find(
             (p) => p.id === selectedPerusahaan
           );
-          if (selectedCompany && perusahaan !== selectedCompany.nama) {
-            return;
-          }
+          if (selectedCompany && perusahaan !== selectedCompany.nama) return;
         }
-
-        // Get or create company data
+        // Siapkan data perusahaan jika belum ada
         if (!konsolidasiMap.has(perusahaan)) {
           konsolidasiMap.set(perusahaan, {
             tanggal: selectedDate,
@@ -204,88 +165,66 @@ export default function KonsolidasiKeuangan() {
             totalTransaksi: 0,
           });
         }
-
         const companyData = konsolidasiMap.get(perusahaan)!;
         const nilai = Number(entry.nilai) || 0;
-        const transactionType = entry.transactionType || "";
-
-        // Categorize transaction
-        if (transactionType === "PENERIMAAN" || nilai > 0) {
-          companyData.penerimaan += Math.abs(nilai);
-        } else if (transactionType === "PENGELUARAN" || nilai < 0) {
-          companyData.pengeluaran += Math.abs(nilai);
-        } else if (transactionType === "SALDO_AKHIR") {
-          companyData.saldoAkhir = nilai;
+        // Mapping transactionType robust
+        let transactionType = entry.transactionType || "";
+        if (!transactionType) {
+          if (nilai > 0) transactionType = "PENERIMAAN";
+          else if (nilai < 0) transactionType = "PENGELUARAN";
         }
-
+        // Agregasi
+        if (transactionType === "PENERIMAAN")
+          companyData.penerimaan += Math.abs(nilai);
+        else if (transactionType === "PENGELUARAN")
+          companyData.pengeluaran += Math.abs(nilai);
+        else if (transactionType === "SALDO_AKHIR")
+          companyData.saldoAkhir = Number(entry.saldoAkhir ?? nilai);
         companyData.totalTransaksi += 1;
       });
-
-      // Convert map to array
-      const konsolidasiArray = Array.from(konsolidasiMap.values());
-      console.log("🏢 Konsolidasi per perusahaan:", konsolidasiArray);
-      setKonsolidasiData(konsolidasiArray);
-
-      // ✅ ADD: Store detailed breakdown for display
+      // 4. Simpan hasil ke state
+      setKonsolidasiData(Array.from(konsolidasiMap.values()));
+      // 5. Breakdown detail untuk tabel
       const breakdown = filteredEntries.map((entry) => {
         const account = accounts.find(
-          (acc) => acc.id.toString() === entry.accountId?.toString()
+          (acc) => acc.id?.toString() === entry.accountId?.toString()
         );
-        let perusahaan = "Unknown";
-
+        let perusahaan = "PT. Padudjaya Putera";
         if (account) {
-          const accountCode = account.accountCode?.toLowerCase() || "";
-          const divisionName = account.division?.name?.toLowerCase() || "";
-
+          const accountCode = (account.accountCode || "").toLowerCase();
+          const divisionName = (account.division?.name || "").toLowerCase();
           if (
             accountCode.includes("pjp") ||
             divisionName.includes("pjp") ||
             accountCode.startsWith("1-")
-          ) {
+          )
             perusahaan = "PT. Padudjaya Putera";
-          } else if (
+          else if (
             accountCode.includes("prima") ||
             divisionName.includes("prima") ||
             accountCode.startsWith("2-")
-          ) {
+          )
             perusahaan = "PT. Prima";
-          } else if (
+          else if (
             accountCode.includes("sp") ||
             divisionName.includes("sp") ||
             accountCode.startsWith("3-")
-          ) {
+          )
             perusahaan = "PT. SP";
-          } else if (
+          else if (
             accountCode.includes("blending") ||
             divisionName.includes("blending") ||
             accountCode.startsWith("4-")
-          ) {
+          )
             perusahaan = "PT. Blending";
-          } else if (
+          else if (
             accountCode.includes("holding") ||
             divisionName.includes("holding") ||
             accountCode.startsWith("5-")
-          ) {
+          )
             perusahaan = "PT. Holding";
-          } else {
-            if (accountCode.startsWith("1")) {
-              perusahaan = "PT. Padudjaya Putera";
-            } else if (accountCode.startsWith("2")) {
-              perusahaan = "PT. Prima";
-            } else if (accountCode.startsWith("3")) {
-              perusahaan = "PT. SP";
-            } else if (accountCode.startsWith("4")) {
-              perusahaan = "PT. Blending";
-            } else if (accountCode.startsWith("5")) {
-              perusahaan = "PT. Holding";
-            } else {
-              perusahaan = "PT. Padudjaya Putera";
-            }
-          }
         }
-
-        // Perbaikan: saldoAkhir hanya diisi jika transactionType SALDO_AKHIR, dan ambil dari entry.saldoAkhir (atau entry.nilai jika tidak ada)
-        const isSaldoAkhir = entry.transactionType === "SALDO_AKHIR";
+        const isSaldoAkhir = (entry.transactionType || "") === "SALDO_AKHIR";
         return {
           id: entry.id,
           tanggal: entry.tanggal || entry.date,
@@ -297,20 +236,16 @@ export default function KonsolidasiKeuangan() {
           saldoAkhir: isSaldoAkhir
             ? Number(entry.saldoAkhir ?? entry.nilai) || 0
             : undefined,
-          transactionType: entry.transactionType || "NOMINAL",
+          transactionType: entry.transactionType || "",
           description: entry.description || "",
           createdBy: entry.createdBy || "system",
         };
       });
-
-      console.log("🔎 Detailed breakdown:", breakdown);
       setDetailedBreakdown(breakdown);
 
-      // Calculate company summaries
+      // 6. Summary per perusahaan
       const summaries = daftarPerusahaan.map((perusahaan) => {
-        const companyData = konsolidasiArray.find(
-          (data) => data.perusahaan === perusahaan.nama
-        );
+        const companyData = konsolidasiMap.get(perusahaan.nama);
         return {
           nama: perusahaan.nama,
           totalPenerimaan: companyData?.penerimaan || 0,
@@ -319,23 +254,15 @@ export default function KonsolidasiKeuangan() {
           totalTransaksi: companyData?.totalTransaksi || 0,
         };
       });
-
-      console.log("📋 Perusahaan summary:", summaries);
       setPerusahaanSummary(summaries);
 
-      // Group by operator (username) - hanya yang mengandung 'keuangan'
+      // 7. Group by operator (summary per operator dari breakdown/detail)
       const operatorMap = new Map<string, any>();
-      const keuanganEntries = filteredEntries.filter((entry) =>
-        (entry.createdBy || "").toLowerCase().includes("keuangan")
-      );
-      console.log(
-        "FILTERED BY OPERATOR (keuangan):",
-        keuanganEntries.length,
-        keuanganEntries
-      );
-      keuanganEntries.forEach((entry) => {
+      // Untuk saldo akhir: simpan array entry SALDO_AKHIR per operator
+      // const saldoAkhirMap = new Map<string, any[]>(); // <-- tidak perlu lagi
+      breakdown.forEach((entry) => {
         const operator = (entry.createdBy || "unknown").toLowerCase();
-        if (!operator.includes("keuangan")) return; // hanya operator keuangan
+        if (operator.includes("hrd")) return; // skip operator HRD
         if (!operatorMap.has(operator)) {
           operatorMap.set(operator, {
             operator,
@@ -347,27 +274,47 @@ export default function KonsolidasiKeuangan() {
         }
         const op = operatorMap.get(operator);
         const nilai = Number(entry.nilai) || 0;
-        const transactionType = entry.transactionType || "";
-        if (transactionType === "PENERIMAAN" || nilai > 0) {
-          op.penerimaan += Math.abs(nilai);
-        } else if (transactionType === "PENGELUARAN" || nilai < 0) {
-          op.pengeluaran += Math.abs(nilai);
-        } else if (transactionType === "SALDO_AKHIR") {
-          op.saldoAkhir =
-            typeof entry.saldoAkhir === "number" ? entry.saldoAkhir : nilai;
+        let transactionType = entry.transactionType || "";
+        if (!transactionType) {
+          if (nilai > 0) transactionType = "PENERIMAAN";
+          else if (nilai < 0) transactionType = "PENGELUARAN";
         }
+        if (transactionType === "PENERIMAAN") op.penerimaan += Math.abs(nilai);
+        else if (transactionType === "PENGELUARAN")
+          op.pengeluaran += Math.abs(nilai);
+        // Tidak perlu lagi menampung saldoAkhirMap
         op.totalTransaksi += 1;
       });
+      // Setelah loop, jumlahkan semua saldoAkhir untuk setiap operator dari breakdown
+      for (const [operator, op] of operatorMap.entries()) {
+        // Ambil semua entry SALDO_AKHIR milik operator ini dari breakdown
+        const saldoAkhirEntries = breakdown.filter(
+          (entry) =>
+            (entry.createdBy || "unknown").toLowerCase() === operator &&
+            (entry.transactionType || "").toUpperCase() === "SALDO_AKHIR"
+        );
+        // Jumlahkan semua saldoAkhir
+        op.saldoAkhir = saldoAkhirEntries.reduce(
+          (sum, entry) => sum + (Number(entry.saldoAkhir ?? entry.nilai) || 0),
+          0
+        );
+      }
       const operatorArray = Array.from(operatorMap.values());
-      console.log("👤 Operator summary:", operatorArray);
       setOperatorSummary(operatorArray);
 
-      // Total keseluruhan
+      // 8. Total keseluruhan
+      // Jumlahkan seluruh saldo akhir pada tanggal yang dipilih
+      const saldoAkhirEntries = breakdown.filter(
+        (e) => (e.transactionType || "").toUpperCase() === "SALDO_AKHIR"
+      );
+      const totalSaldoAkhir = saldoAkhirEntries.reduce(
+        (acc, entry) => acc + (Number(entry?.saldoAkhir ?? entry?.nilai) || 0),
+        0
+      );
       const total = operatorArray.reduce(
         (acc, op) => {
           acc.penerimaan += op.penerimaan;
           acc.pengeluaran += op.pengeluaran;
-          acc.saldoAkhir += op.saldoAkhir;
           acc.totalTransaksi += op.totalTransaksi;
           return acc;
         },
@@ -379,14 +326,8 @@ export default function KonsolidasiKeuangan() {
           totalTransaksi: 0,
         }
       );
-      console.log("🧮 Total keseluruhan:", total);
+      total.saldoAkhir = totalSaldoAkhir;
       setTotalKeseluruhan(total);
-
-      console.log("✅ Konsolidasi data loaded:", {
-        date: selectedDate,
-        companies: operatorArray.length,
-        totalKeseluruhan: total,
-      });
     } catch (error) {
       console.error("❌ Error loading konsolidasi data:", error);
     } finally {
