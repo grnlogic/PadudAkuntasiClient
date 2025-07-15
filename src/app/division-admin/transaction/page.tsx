@@ -97,15 +97,12 @@ export default function TransactionPage() {
         const piutangEntries = await getPiutangTransaksi();
         const utangEntries = await getUtangTransaksi();
 
-        // Mapping piutang
-        const piutangAccount = accountsData.find((acc) =>
-          acc.accountName.toLowerCase().includes("piutang")
-        );
+        // Mapping piutang sesuai COA
         const mappedPiutang =
           piutangEntries?.map((p: any) => ({
             id: p.id,
             tanggal: p.tanggal_transaksi || p.tanggalTransaksi || "",
-            accountId: piutangAccount ? piutangAccount.id : "PIUTANG",
+            accountId: p.account?.id?.toString() || p.accountId?.toString() || "PIUTANG",
             nilai: p.nominal,
             description: p.keterangan,
             transactionType: p.tipe_transaksi || p.tipeTransaksi || "",
@@ -120,17 +117,12 @@ export default function TransactionPage() {
             createdBy: p.user?.username || "system",
           })) || [];
 
-        // Mapping utang
-        const utangAccount = accountsData.find(
-          (acc) =>
-            acc.accountName.toLowerCase().includes("utang") ||
-            acc.accountName.toLowerCase().includes("hutang")
-        );
+        // Mapping utang sesuai COA
         const mappedUtang =
           utangEntries?.map((u: any) => ({
             id: u.id,
             tanggal: u.tanggal_transaksi || u.tanggalTransaksi || "",
-            accountId: utangAccount ? utangAccount.id : "UTANG",
+            accountId: u.account?.id?.toString() || u.accountId?.toString() || "UTANG",
             nilai: u.nominal,
             description: u.keterangan,
             transactionType: u.tipe_transaksi || u.tipeTransaksi || "",
