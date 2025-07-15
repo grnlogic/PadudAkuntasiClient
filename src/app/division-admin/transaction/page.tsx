@@ -413,6 +413,16 @@ export default function TransactionPage() {
               return transactionType === "UTANG_BARU";
             } else if (filterType === "UtangDibayar") {
               return transactionType === "UTANG_DIBAYAR";
+            } else if (filterType === "SaldoAkhirUtang") {
+              return transactionType === "SALDO_AKHIR_UTANG";
+            } else if (filterType === "SaldoAkhirPiutang") {
+              return transactionType === "SALDO_AKHIR_PIUTANG";
+            } else if (filterType === "PiutangBaru") {
+              return transactionType === "PIUTANG_BARU";
+            } else if (filterType === "PiutangTertagih") {
+              return transactionType === "PIUTANG_TERTAGIH";
+            } else if (filterType === "PiutangMacet") {
+              return transactionType === "PIUTANG_MACET";
             }
             return true;
 
@@ -997,15 +1007,39 @@ export default function TransactionPage() {
           );
         } else if (transactionType === "UTANG_DIBAYAR") {
           return (
-            <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+            <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
               ✅ Utang Dibayar
             </span>
           );
-        } else if (transactionType === "SALDO_AKHIR") {
+        } else if (transactionType === "SALDO_AKHIR_UTANG") {
           return (
-            <Badge className="bg-blue-100 text-blue-800 border border-blue-300">
-              Saldo Akhir
-            </Badge>
+            <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+              📊 Saldo Akhir Utang
+            </span>
+          );
+        } else if (transactionType === "PIUTANG_BARU") {
+          return (
+            <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+              🆕 Piutang Baru
+            </span>
+          );
+        } else if (transactionType === "PIUTANG_TERTAGIH") {
+          return (
+            <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+              ✅ Piutang Tertagih
+            </span>
+          );
+        } else if (transactionType === "PIUTANG_MACET") {
+          return (
+            <span className="px-2 py-1 text-xs font-medium bg-orange-100 text-orange-800 rounded-full">
+              ⚠️ Piutang Macet
+            </span>
+          );
+        } else if (transactionType === "SALDO_AKHIR_PIUTANG") {
+          return (
+            <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+              📊 Saldo Akhir Piutang
+            </span>
           );
         } else {
           return (
@@ -1230,6 +1264,42 @@ export default function TransactionPage() {
             label: "Utang Dibayar",
             icon: ArrowUpCircle,
             color: "text-green-600",
+          },
+          {
+            value: "SaldoAkhirUtang",
+            label: "Saldo Akhir Utang",
+            icon: ArrowUpCircle,
+            color: "text-blue-600",
+          },
+          {
+            value: "SaldoAkhirPiutang",
+            label: "Saldo Akhir Piutang",
+            icon: ArrowUpCircle,
+            color: "text-blue-600",
+          },
+          {
+            value: "PiutangBaru",
+            label: "Piutang Baru",
+            icon: ArrowDownCircle,
+            color: "text-red-600",
+          },
+          {
+            value: "PiutangTertagih",
+            label: "Piutang Tertagih",
+            icon: ArrowUpCircle,
+            color: "text-green-600",
+          },
+          {
+            value: "PiutangMacet",
+            label: "Piutang Macet",
+            icon: ArrowDownCircle,
+            color: "text-orange-600",
+          },
+          {
+            value: "SaldoAkhirPiutang",
+            label: "Saldo Akhir Piutang",
+            icon: ArrowUpCircle,
+            color: "text-blue-600",
           },
         ];
 
@@ -1847,6 +1917,15 @@ export default function TransactionPage() {
                           {entry.description || "No description"}
                         </TableCell>
                         <TableCell>
+                          {(entry as any).transactionType === "SALDO_AKHIR" ? (
+                            <Badge className="bg-blue-100 text-blue-800 border border-blue-300">
+                              Saldo Akhir
+                            </Badge>
+                          ) : (
+                            getTransactionBadge(entry)
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium">
                           {(entry as any).transactionType === "SALDO_AKHIR"
                             ? formatCurrency(
                                 (entry as any).saldoAkhir ?? entry.nilai
@@ -1855,15 +1934,6 @@ export default function TransactionPage() {
                               account?.id === "SALES"
                             ? formatCurrency(entry.nilai)
                             : `${entry.nilai.toLocaleString("id-ID")} unit`}
-                        </TableCell>
-                        <TableCell>
-                          {(entry as any).transactionType === "SALDO_AKHIR" ? (
-                            <Badge className="bg-blue-100 text-blue-800 border border-blue-300">
-                              Saldo Akhir
-                            </Badge>
-                          ) : (
-                            getTransactionBadge(entry)
-                          )}
                         </TableCell>
 
                         {/* ✅ CONDITIONAL: Additional data columns */}
