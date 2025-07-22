@@ -50,7 +50,10 @@ export default function MonitoringProduksiPage() {
         const filtered = all.filter((item: any) => {
           const tgl =
             item.tanggalLaporan || item.tanggal_laporan || item.createdAt;
-          return tgl && tgl.slice(0, 10) === tanggal;
+          if (!tgl) return false;
+          // Normalisasi ke format YYYY-MM-DD agar lebih aman
+          const tglNorm = new Date(tgl).toISOString().slice(0, 10);
+          return tglNorm === tanggal;
         });
         // Filter hanya user produksi
         const produksiData = filtered.filter((item: any) => {

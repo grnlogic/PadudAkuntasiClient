@@ -1863,6 +1863,9 @@ export default function TransactionPage() {
                     <TableHead>Tanggal</TableHead>
                     <TableHead>Akun</TableHead>
                     <TableHead>Keterangan</TableHead>
+                    {divisionType === "PEMASARAN" && (
+                      <TableHead>Keterangan/Kendala</TableHead>
+                    )}
                     <TableHead>Status/Tipe</TableHead>
                     <TableHead>Nilai Utama</TableHead>
                     {/* ✅ CONDITIONAL: Additional columns based on division */}
@@ -1878,8 +1881,7 @@ export default function TransactionPage() {
                     )}
                     {divisionType === "HRD" && (
                       <TableHead>Detail Kehadiran</TableHead>
-                    )}{" "}
-                    {/* ✅ NEW: HRD column */}
+                    )} {/* ✅ NEW: HRD column */}
                     <TableHead>Waktu Input</TableHead>
                     <TableHead className="text-right">Aksi</TableHead>
                   </TableRow>
@@ -1908,6 +1910,11 @@ export default function TransactionPage() {
                         <TableCell>
                           {entry.description || "No description"}
                         </TableCell>
+                        {divisionType === "PEMASARAN" && (
+                          <TableCell>
+                            {(entry as any).keterangan || "-"}
+                          </TableCell>
+                        )}
                         <TableCell>
                           {(entry as any).transactionType === "SALDO_AKHIR" ? (
                             <Badge className="bg-blue-100 text-blue-800 border border-blue-300">
