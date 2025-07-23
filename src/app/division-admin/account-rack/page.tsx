@@ -100,7 +100,7 @@ export default function AccountRackPage() {
     allowedPrefixes = ["1-5", "1-6", "2-3", "5-3"];
   else if (username.includes("blending"))
     allowedPrefixes = ["1-7", "1-8", "2-3", "5-4"];
-  else if (username.includes("holding")) allowedPrefixes = ["1-9"];
+  else if (username.includes("holding")) allowedPrefixes = ["1-9", "2-5"];
 
   const filteredAccounts =
     allowedPrefixes.length > 0
