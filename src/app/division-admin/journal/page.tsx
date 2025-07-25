@@ -3883,7 +3883,7 @@ export default function JournalPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-indigo-600" />
-                Ringkasan Kehadiran Karyawan -{" "}
+                Ringkasan Kehadiran Karyawan "abaikan, masih dalam tahap pengembangan" -{" "}
                 {new Date(selectedDate).toLocaleDateString("id-ID")}
               </CardTitle>
             </CardHeader>
