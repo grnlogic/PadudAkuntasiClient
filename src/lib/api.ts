@@ -961,3 +961,40 @@ export const healthAPI = {
     return res.json();
   },
 };
+
+// ===== PUBLIC ABSENSI API =====
+export const publicAbsensiAPI = {
+  updateStatus: async (id: number, hadir: boolean, status: string) => {
+    try {
+      // Hardcode gunakan PUBLIC_API_URL
+      const response = await fetch(`http://localhost:8080/api/public-absensi/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hadir, status }),
+      });
+      if (!response.ok) {
+        let error = "Gagal menyimpan absensi.";
+        try {
+          const data = await response.json();
+          error = data?.error || error;
+        } catch {}
+        return { success: false, error };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: "Terjadi kesalahan jaringan." };
+    }
+  },
+};
+
+// ===== PUBLIC KARYAWAN API =====
+const PUBLIC_API_URL = "http://localhost:8080";
+
+export const publicKaryawanAPI = {
+  getAll: async () => {
+    const url = `${PUBLIC_API_URL}/api/public-karyawan`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Gagal mengambil data karyawan publik");
+    return res.json();
+  },
+};

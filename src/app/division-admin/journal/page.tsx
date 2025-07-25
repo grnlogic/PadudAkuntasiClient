@@ -18,6 +18,7 @@ import {
   Download, // ✅ Add for PDF download
   FileText, // ✅ Add for PDF preview
 } from "lucide-react";
+
 import ClientErrorBoundary from "@/components/client-error-boundary";
 import {
   toastSuccess,
@@ -80,6 +81,7 @@ import {
   CreatePiutangRequest,
   CreateUtangRequest,
   piutangAPI,
+  publicKaryawanAPI,
   utangAPI,
 } from "@/lib/api";
 import type {
@@ -98,6 +100,7 @@ import {
 } from "@/lib/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import dynamic from "next/dynamic";
+import PublicAbsensiForm from "@/components/PublicAbsensiForm";
 
 import { NumericFormat } from "react-number-format";
 
@@ -209,6 +212,7 @@ export default function JournalPage() {
     macet: 0,
     saldoAkhir: 0,
   });
+  const [publicAbsensiUsers, setPublicAbsensiUsers] = useState<any[]>([]);
 
   // Form rows untuk input multiple entries
   const [journalRows, setJournalRows] = useState<JournalRow[]>([
@@ -291,8 +295,11 @@ export default function JournalPage() {
   const [selectedPerusahaanForNewSales, setSelectedPerusahaanForNewSales] =
     useState<string>("");
 
-  useEffect(() => {
-    loadData();
+    useEffect(() => {
+      loadData();
+      if (getDivisionType() === "HRD") {
+        publicKaryawanAPI.getAll().then((karyawans) => setPublicAbsensiUsers(karyawans));
+      }
   }, [selectedDate]);
 
   // ✅ FIXED: Fungsi untuk menghitung summary keuangan
@@ -3880,6 +3887,20 @@ export default function JournalPage() {
                 {new Date(selectedDate).toLocaleDateString("id-ID")}
               </CardTitle>
             </CardHeader>
+            <Card className="mb-6">
+       <CardHeader>
+         <CardTitle className="flex items-center gap-2">
+           <Clock className="h-5 w-5 text-indigo-600" />
+           Absensi Publik Karyawan
+         </CardTitle>
+         <CardDescription>
+           Form absensi publik untuk karyawan HRD. Pilih karyawan dan status kehadiran, lalu simpan.
+         </CardDescription>
+       </CardHeader>
+       <CardContent>
+         <PublicAbsensiForm users={publicAbsensiUsers} />
+       </CardContent>
+     </Card>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {/* Total Karyawan */}

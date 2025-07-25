@@ -1,0 +1,92 @@
+API Documentation: Public Absensi
+=================================
+
+1. Update Status Hadir (Catat Absensi)
+--------------------------------------
+Endpoint:
+  PUT /api/public-absensi/{id}
+
+Deskripsi:
+  Mencatat absensi (status hadir) untuk karyawan pada hari ini. Data akan disimpan ke tabel absensi.
+
+Path Parameter:
+  - id (Long): ID karyawan
+
+Request Body (JSON):
+{
+  "hadir": true,
+  "status": "HADIR"
+}
+  - hadir (Boolean): Status kehadiran (true = hadir, false = tidak hadir)
+  - status (String): Keterangan status (misal: HADIR, SAKIT, IZIN, dll)
+
+Response (200 OK):
+{
+  "id": 1,
+  "karyawan": { ... },
+  "tanggal": "2024-06-07",
+  "hadir": true,
+  "status": "HADIR"
+  // field lain dari entity Absensi jika ada
+}
+
+Response (404 Not Found):
+{
+  "error": "Karyawan tidak ditemukan"
+}
+
+
+2. Get Status Hadir Hari Ini
+---------------------------
+Endpoint:
+  GET /api/public-absensi/{id}
+
+Deskripsi:
+  Mengambil status hadir karyawan untuk hari ini dari tabel absensi.
+
+Path Parameter:
+  - id (Long): ID karyawan
+
+Response (200 OK):
+true
+atau
+false
+(Hanya boolean, status hadir hari ini)
+
+Response (404 Not Found):
+{
+  "error": "Absensi tidak ditemukan"
+}
+
+Catatan:
+- Absensi dicatat per hari. Jika sudah ada absensi untuk hari ini, maka akan menambah record baru (bisa disesuaikan jika ingin update, bukan insert baru).
+- Field status pada request body bisa diisi sesuai kebutuhan (misal: HADIR, SAKIT, IZIN, ALPA, dll). 
+
+kode saya ada
+package com.pabrik.hr.sistem_padud.controller;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.pabrik.hr.sistem_padud.model.PublicKaryawan;
+import com.pabrik.hr.sistem_padud.repository.PublicKaryawanRepository;
+
+@RestController
+@RequestMapping("/api/public-karyawan")
+public class PublicKaryawanController {
+    private final PublicKaryawanRepository publicKaryawanRepository;
+
+    @Autowired
+    public PublicKaryawanController(PublicKaryawanRepository publicKaryawanRepository) {
+        this.publicKaryawanRepository = publicKaryawanRepository;
+    }
+
+    @GetMapping
+    public List<PublicKaryawan> getAllPublicKaryawan() {
+        return publicKaryawanRepository.findAll();
+    }
+} 
