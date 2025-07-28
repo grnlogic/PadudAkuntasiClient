@@ -967,7 +967,7 @@ export const publicAbsensiAPI = {
   updateStatus: async (id: number, hadir: boolean, status: string) => {
     try {
       // Hardcode gunakan PUBLIC_API_URL
-      const response = await fetch(`http://localhost:8080/api/public-absensi/${id}`, {
+      const response = await fetch(`https://sistem-hrd-padud.padudjayaputera.com/api/public-absensi/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ hadir, status }),
@@ -988,7 +988,7 @@ export const publicAbsensiAPI = {
 };
 
 // ===== PUBLIC KARYAWAN API =====
-const PUBLIC_API_URL = "http://localhost:8080";
+const PUBLIC_API_URL = "https://sistem-hrd-padud.padudjayaputera.com";
 
 export const publicKaryawanAPI = {
   getAll: async () => {
