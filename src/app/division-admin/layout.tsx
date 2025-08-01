@@ -19,25 +19,47 @@ import {
   User,
   Wrench,
   Archive,
+  ChevronRight,
+  Calendar,
+  TrendingUp,
+  Shield,
+  Briefcase,
 } from "lucide-react";
 import { AuthGuard } from "@/components/auth-guard";
 import { getCurrentUser, setCurrentUser } from "@/lib/auth";
 import ModernNotificationBell from "@/components/modern-notification-bell";
 
 const navigation = [
-  { name: "Laporan Harian", href: "/division-admin/journal", icon: BookOpen },
+  { 
+    name: "Laporan Harian", 
+    href: "/division-admin/journal", 
+    icon: Calendar,
+    description: "Buat laporan harian divisi"
+  },
   {
     name: "Rak Akun Divisi",
     href: "/division-admin/account-rack",
     icon: Archive,
+    description: "Kelola akun divisi"
   },
   {
     name: "Riwayat Transaksi",
     href: "/division-admin/transaction",
     icon: PlusCircle,
+    description: "Lihat transaksi"
   },
-  { name: "Laporan Divisi", href: "/division-admin/reports", icon: BarChart3 },
-  { name: "Pengaturan", href: "/division-admin/settings", icon: Settings },
+  { 
+    name: "Laporan Divisi", 
+    href: "/division-admin/reports", 
+    icon: TrendingUp,
+    description: "Analisis performa"
+  },
+  { 
+    name: "Pengaturan", 
+    href: "/division-admin/settings", 
+    icon: Settings,
+    description: "Konfigurasi sistem"
+  },
 ];
 
 export default function DivisionAdminLayout({
@@ -56,18 +78,26 @@ export default function DivisionAdminLayout({
   };
 
   const Sidebar = ({ mobile = false }) => (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 p-6 border-b">
-        <User className="h-8 w-8 text-blue-600" />
-        <div>
-          <h1 className="font-bold text-lg">Admin Divisi</h1>
-          <p className="text-sm text-gray-500">
-            Operator {user?.division?.name}
-          </p>
+    <div className="flex flex-col h-full bg-gradient-to-b from-slate-50 to-white">
+      {/* Header dengan avatar yang lebih menarik */}
+      <div className="relative p-6 border-b bg-gradient-to-r from-blue-600 to-blue-700">
+        <div className="absolute inset-0 bg-black/5"></div>
+        <div className="relative flex items-center gap-3">
+          <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
+            <Briefcase className="h-6 w-6 text-white" />
+          </div>
+          <div>
+            <h1 className="font-bold text-lg text-white">Admin Divisi</h1>
+            <p className="text-sm text-blue-100 flex items-center gap-1">
+              <Shield className="h-3 w-3" />
+              Operator {user?.division?.name}
+            </p>
+          </div>
         </div>
       </div>
 
-      <nav className="flex-1 p-4 space-y-2">
+      {/* Navigation dengan animasi dan hover effects */}
+      <nav className="flex-1 p-4 space-y-1">
         {navigation.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
@@ -76,37 +106,64 @@ export default function DivisionAdminLayout({
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              className={`group relative flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
                 isActive
-                  ? "bg-blue-100 text-blue-700 font-medium"
-                  : "text-gray-700 hover:bg-gray-100"
+                  ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-[1.02]"
+                  : "text-gray-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:scale-[1.01] hover:shadow-sm"
               }`}
               onClick={() => mobile && setSidebarOpen(false)}
             >
-              <Icon className="h-5 w-5" />
-              {item.name}
+              <div className={`p-2 rounded-lg transition-colors ${
+                isActive 
+                  ? "bg-white/20" 
+                  : "bg-gray-100 group-hover:bg-blue-100"
+              }`}>
+                <Icon className={`h-4 w-4 ${
+                  isActive ? "text-white" : "text-gray-600 group-hover:text-blue-600"
+                }`} />
+              </div>
+              <div className="flex-1">
+                <p className={`font-medium text-sm ${
+                  isActive ? "text-white" : "text-gray-900"
+                }`}>
+                  {item.name}
+                </p>
+                <p className={`text-xs ${
+                  isActive ? "text-blue-100" : "text-gray-500 group-hover:text-blue-600"
+                }`}>
+                  {item.description}
+                </p>
+              </div>
+              <ChevronRight className={`h-4 w-4 transition-transform ${
+                isActive 
+                  ? "text-white transform rotate-90" 
+                  : "text-gray-400 group-hover:text-blue-500 group-hover:translate-x-1"
+              }`} />
             </Link>
           );
         })}
       </nav>
 
-      <div className="p-4 border-t">
-        <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-          <div className="flex items-center gap-2 mb-1">
-            <Wrench className="h-4 w-4 text-blue-600" />
-            <p className="text-xs text-blue-800 font-medium">Hak Operator</p>
+      {/* Footer dengan styling yang lebih menarik */}
+      <div className="p-4 border-t bg-gray-50/50">
+        <div className="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-1 bg-amber-100 rounded-lg">
+              <Wrench className="h-3 w-3 text-amber-600" />
+            </div>
+            <p className="text-xs text-amber-800 font-semibold">Hak Operator</p>
           </div>
-          <p className="text-xs text-blue-700">
-            Anda dapat membuat akun baru untuk operasional divisi
+          <p className="text-xs text-amber-700 leading-relaxed">
+            Anda dapat membuat akun baru untuk operasional divisi dan mengelola data transaksi
           </p>
         </div>
         <Button
           variant="ghost"
-          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
+          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-all duration-200 group"
           onClick={handleLogout}
         >
-          <LogOut className="mr-3 h-5 w-5" />
-          Keluar
+          <LogOut className="mr-3 h-4 w-4 group-hover:transform group-hover:-translate-x-1 transition-transform" />
+          <span className="font-medium">Keluar</span>
         </Button>
       </div>
     </div>
@@ -115,14 +172,14 @@ export default function DivisionAdminLayout({
   return (
     <AuthGuard requiredRole="ADMIN_DIVISI">
       <div className="flex h-screen bg-gray-50">
-        {/* Desktop Sidebar */}
-        <div className="hidden lg:flex lg:w-64 lg:flex-col lg:bg-white lg:border-r">
+        {/* Desktop Sidebar dengan shadow yang lebih elegan */}
+        <div className="hidden lg:flex lg:w-72 lg:flex-col lg:bg-white lg:border-r lg:shadow-xl">
           <Sidebar />
         </div>
 
-        {/* Mobile Sidebar */}
+        {/* Mobile Sidebar dengan width yang disesuaikan */}
         <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-          <SheetContent side="left" className="p-0 w-64">
+          <SheetContent side="left" className="p-0 w-72">
             <Sidebar mobile />
           </SheetContent>
         </Sheet>
