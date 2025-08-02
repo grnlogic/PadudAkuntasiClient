@@ -22,6 +22,7 @@ interface AbsensiState {
   [id: number]: {
     hadir: boolean;
     status: string;
+    setengahHari: boolean;
   };
 }
 
@@ -60,7 +61,11 @@ export default function PublicAbsensiForm() {
     karyawan
       .filter((k) => k.departemen === dept)
       .forEach((k) => {
-        updated[k.id] = { hadir: true, status: "HADIR" };
+        updated[k.id] = { 
+          hadir: true, 
+          status: "HADIR",
+          setengahHari: false 
+        };
       });
     setAbsensi(updated);
     setShowList(false); // hide daftar karyawan setelah pilih departemen
@@ -69,7 +74,7 @@ export default function PublicAbsensiForm() {
   // Handle ubah status/ceklis per karyawan
   const handleChangeStatus = (
     id: number,
-    field: "hadir" | "status",
+    field: "hadir" | "status" | "setengahHari",
     value: any
   ) => {
     setAbsensi((prev) => ({
@@ -77,6 +82,10 @@ export default function PublicAbsensiForm() {
       [id]: {
         ...prev[id],
         [field]: value,
+        // Jika tidak hadir, setengah hari harus false
+        ...(field === "hadir" && !value && { setengahHari: false }),
+        // Jika setengah hari true, hadir harus true
+        ...(field === "setengahHari" && value && { hadir: true }),
       },
     }));
   };
@@ -98,13 +107,18 @@ export default function PublicAbsensiForm() {
     for (const k of deptKaryawan) {
       const absen = absensi[k.id];
       if (!absen) continue;
-      const res = await publicAbsensiAPI.updateStatus(
-        k.id,
-        absen.hadir,
-        absen.status
-      );
-      if (res.success) successCount++;
-      else failCount++;
+      try {
+        const res = await publicAbsensiAPI.updateStatus(
+          k.id,
+          absen.hadir,
+          absen.status,
+          absen.setengahHari
+        );
+        if (res.success) successCount++;
+        else failCount++;
+      } catch (err) {
+        failCount++;
+      }
     }
     setResult(
       `Absensi selesai. Berhasil: ${successCount}, Gagal: ${failCount}.`
@@ -112,7 +126,7 @@ export default function PublicAbsensiForm() {
     setLoading(false);
   };
 
-  // Tampilkan karyawan di departemen terpilih eee
+  // Tampilkan karyawan di departemen terpilih
   const filteredKaryawan = karyawan.filter(
     (k) => k.departemen === selectedDept
   );
@@ -189,8 +203,30 @@ export default function PublicAbsensiForm() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="checkbox"
+                        checked={absensi[k.id]?.setengahHari ?? false}
+                        onChange={(e) =>
+                          handleChangeStatus(k.id, "setengahHari", e.target.checked)
+                        }
+                        disabled={!(absensi[k.id]?.hadir ?? true)}
+                        id={`setengah-hari-${k.id}`}
+                        className="w-4 h-4"
+                      />
+                      <label 
+                        htmlFor={`setengah-hari-${k.id}`} 
+                        className="text-xs text-gray-600"
+                        title="Setengah hari - hanya dihitung setengah gaji"
+                      >
+                        Setengah Hari
+                      </label>
+                    </div>
                   </div>
                 ))}
+              </div>
+              <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                <strong>Info Setengah Hari:</strong> Jika dicentang, karyawan masuk tapi hanya dihitung setengah gaji pokok.
               </div>
             </div>
           )}
