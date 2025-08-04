@@ -966,22 +966,52 @@ export const healthAPI = {
 export const publicAbsensiAPI = {
   updateStatus: async (id: number, hadir: boolean, status: string, setengahHari: boolean = false, tanggal?: string) => {
     try {
+      // ✅ Validasi: Pastikan tanggal tidak kosong, jika kosong gunakan hari ini
+      let finalTanggal = tanggal || new Date().toISOString().split('T')[0];
+      
+      // ✅ Pastikan format tanggal adalah YYYY-MM-DD
+      if (finalTanggal && finalTanggal.length > 10) {
+        finalTanggal = finalTanggal.split('T')[0]; // Ambil bagian tanggal saja
+      }
+      
+      // OPSI 1: Coba dengan parameter query tanggal di URL
+      const url = `https://sistem-hrd-padud.padudjayaputera.com/api/public-absensi/${id}?tanggal=${finalTanggal}`;
+      
+      // OPSI 2: Atau coba dengan payload yang include tanggal
+      const payloadWithDate = { hadir, status, setengahHari, tanggal: finalTanggal };
+      
+      console.log("🚀 [PUBLIC ABSENSI API] Mengirim data absensi:", {
+        karyawanId: id,
+        url,
+        payloadWithDate,
+        tanggalAsli: tanggal,
+        tanggalFinal: finalTanggal,
+        tanggalHariIni: new Date().toISOString().split('T')[0]
+      });
+
       // Hardcode gunakan PUBLIC_API_URL
-      const response = await fetch(`https://sistem-hrd-padud.padudjayaputera.com/api/public-absensi/${id}`, {
+      const response = await fetch(url, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hadir, status, setengahHari, tanggal }),
+        body: JSON.stringify(payloadWithDate),
       });
       if (!response.ok) {
         let error = "Gagal menyimpan absensi.";
         try {
           const data = await response.json();
           error = data?.error || error;
+          console.error("❌ [PUBLIC ABSENSI API] Response error:", { status: response.status, data });
         } catch {}
         return { success: false, error };
       }
+      
+      // ✅ Debug: Log response sukses
+      const responseData = await response.json();
+      console.log("✅ [PUBLIC ABSENSI API] Response sukses:", responseData);
+      
       return { success: true };
     } catch (err: any) {
+      console.error("💥 [PUBLIC ABSENSI API] Network error:", err);
       return { success: false, error: "Terjadi kesalahan jaringan." };
     }
   },

@@ -30,35 +30,35 @@ import { getCurrentUser, setCurrentUser } from "@/lib/auth";
 import ModernNotificationBell from "@/components/modern-notification-bell";
 
 const navigation = [
-  { 
-    name: "Laporan Harian", 
-    href: "/division-admin/journal", 
+  {
+    name: "Laporan Harian",
+    href: "/division-admin/journal",
     icon: Calendar,
-    description: "Buat laporan harian divisi"
+    description: "Buat laporan harian divisi",
   },
   {
     name: "Rak Akun Divisi",
     href: "/division-admin/account-rack",
     icon: Archive,
-    description: "Kelola akun divisi"
+    description: "Kelola akun divisi",
   },
   {
     name: "Riwayat Transaksi",
     href: "/division-admin/transaction",
     icon: PlusCircle,
-    description: "Lihat transaksi"
+    description: "Lihat transaksi",
   },
-  { 
-    name: "Laporan Divisi", 
-    href: "/division-admin/reports", 
+  {
+    name: "Laporan Divisi",
+    href: "/division-admin/reports",
     icon: TrendingUp,
-    description: "Analisis performa"
+    description: "Analisis performa",
   },
-  { 
-    name: "Pengaturan", 
-    href: "/division-admin/settings", 
+  {
+    name: "Pengaturan",
+    href: "/division-admin/settings",
     icon: Settings,
-    description: "Konfigurasi sistem"
+    description: "Konfigurasi sistem",
   },
 ];
 
@@ -113,32 +113,46 @@ export default function DivisionAdminLayout({
               }`}
               onClick={() => mobile && setSidebarOpen(false)}
             >
-              <div className={`p-2 rounded-lg transition-colors ${
-                isActive 
-                  ? "bg-white/20" 
-                  : "bg-gray-100 group-hover:bg-blue-100"
-              }`}>
-                <Icon className={`h-4 w-4 ${
-                  isActive ? "text-white" : "text-gray-600 group-hover:text-blue-600"
-                }`} />
+              <div
+                className={`p-2 rounded-lg transition-colors ${
+                  isActive
+                    ? "bg-white/20"
+                    : "bg-gray-100 group-hover:bg-blue-100"
+                }`}
+              >
+                <Icon
+                  className={`h-4 w-4 ${
+                    isActive
+                      ? "text-white"
+                      : "text-gray-600 group-hover:text-blue-600"
+                  }`}
+                />
               </div>
               <div className="flex-1">
-                <p className={`font-medium text-sm ${
-                  isActive ? "text-white" : "text-gray-900"
-                }`}>
+                <p
+                  className={`font-medium text-sm ${
+                    isActive ? "text-white" : "text-gray-900"
+                  }`}
+                >
                   {item.name}
                 </p>
-                <p className={`text-xs ${
-                  isActive ? "text-blue-100" : "text-gray-500 group-hover:text-blue-600"
-                }`}>
+                <p
+                  className={`text-xs ${
+                    isActive
+                      ? "text-blue-100"
+                      : "text-gray-500 group-hover:text-blue-600"
+                  }`}
+                >
                   {item.description}
                 </p>
               </div>
-              <ChevronRight className={`h-4 w-4 transition-transform ${
-                isActive 
-                  ? "text-white transform rotate-90" 
-                  : "text-gray-400 group-hover:text-blue-500 group-hover:translate-x-1"
-              }`} />
+              <ChevronRight
+                className={`h-4 w-4 transition-transform ${
+                  isActive
+                    ? "text-white transform rotate-90"
+                    : "text-gray-400 group-hover:text-blue-500 group-hover:translate-x-1"
+                }`}
+              />
             </Link>
           );
         })}
@@ -154,7 +168,8 @@ export default function DivisionAdminLayout({
             <p className="text-xs text-amber-800 font-semibold">Hak Operator</p>
           </div>
           <p className="text-xs text-amber-700 leading-relaxed">
-            Anda dapat membuat akun baru untuk operasional divisi dan mengelola data transaksi
+            Anda dapat membuat akun baru untuk operasional divisi dan mengelola
+            data transaksi
           </p>
         </div>
         <Button
