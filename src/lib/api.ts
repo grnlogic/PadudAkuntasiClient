@@ -964,13 +964,13 @@ export const healthAPI = {
 
 // ===== PUBLIC ABSENSI API =====
 export const publicAbsensiAPI = {
-  updateStatus: async (id: number, hadir: boolean, status: string, setengahHari: boolean = false) => {
+  updateStatus: async (id: number, hadir: boolean, status: string, setengahHari: boolean = false, tanggal?: string) => {
     try {
       // Hardcode gunakan PUBLIC_API_URL
       const response = await fetch(`https://sistem-hrd-padud.padudjayaputera.com/api/public-absensi/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hadir, status, setengahHari }),
+        body: JSON.stringify({ hadir, status, setengahHari, tanggal }),
       });
       if (!response.ok) {
         let error = "Gagal menyimpan absensi.";
