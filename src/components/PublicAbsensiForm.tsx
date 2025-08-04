@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { publicKaryawanAPI, publicAbsensiAPI } from "@/lib/api";
 
-const statusOptions = ["HADIR", "SAKIT", "IZIN", "ALPA"];
+const statusOptions = ["HADIR", "SAKIT", "IZIN", "ALPA", "OFF"];
 
 interface Karyawan {
   id: number;
@@ -82,10 +82,11 @@ export default function PublicAbsensiForm() {
       [id]: {
         ...prev[id],
         [field]: value,
-        // Jika tidak hadir, setengah hari harus false
+        // Jika tidak hadir atau status OFF, setengah hari harus false
         ...(field === "hadir" && !value && { setengahHari: false }),
-        // Jika setengah hari true, hadir harus true
-        ...(field === "setengahHari" && value && { hadir: true }),
+        ...(field === "status" && value === "OFF" && { setengahHari: false, hadir: false }),
+        // Jika setengah hari true, hadir harus true dan status bukan OFF
+        ...(field === "setengahHari" && value && { hadir: true, status: prev[id]?.status === "OFF" ? "HADIR" : prev[id]?.status }),
       },
     }));
   };
@@ -181,6 +182,7 @@ export default function PublicAbsensiForm() {
                         handleChangeStatus(k.id, "hadir", e.target.checked)
                       }
                       id={`hadir-${k.id}`}
+                      disabled={absensi[k.id]?.status === "OFF"}
                     />
                     <label htmlFor={`hadir-${k.id}`} className="w-32">
                       {k.namaLengkap}
@@ -190,7 +192,7 @@ export default function PublicAbsensiForm() {
                       onValueChange={(val) =>
                         handleChangeStatus(k.id, "status", val)
                       }
-                      disabled={!(absensi[k.id]?.hadir ?? true)}
+                      disabled={!(absensi[k.id]?.hadir ?? true) && absensi[k.id]?.status !== "OFF"}
                     >
                       <SelectTrigger className="w-28">
                         <SelectValue placeholder="Status..." />
@@ -210,7 +212,7 @@ export default function PublicAbsensiForm() {
                         onChange={(e) =>
                           handleChangeStatus(k.id, "setengahHari", e.target.checked)
                         }
-                        disabled={!(absensi[k.id]?.hadir ?? true)}
+                        disabled={!(absensi[k.id]?.hadir ?? true) || absensi[k.id]?.status === "OFF"}
                         id={`setengah-hari-${k.id}`}
                         className="w-4 h-4"
                       />
@@ -226,7 +228,15 @@ export default function PublicAbsensiForm() {
                 ))}
               </div>
               <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
-                <strong>Info Setengah Hari:</strong> Jika dicentang, karyawan masuk tapi hanya dihitung setengah gaji pokok.
+                <strong>Info Status Absensi:</strong>
+                <ul className="mt-1 space-y-1">
+                  <li><strong>HADIR:</strong> Karyawan masuk kerja normal</li>
+                  <li><strong>SAKIT:</strong> Karyawan tidak masuk karena sakit</li>
+                  <li><strong>IZIN:</strong> Karyawan tidak masuk dengan izin</li>
+                  <li><strong>ALPA:</strong> Karyawan tidak masuk tanpa keterangan</li>
+                  <li><strong>OFF:</strong> Tidak ada jalur/tidak ada pekerjaan (tidak dihitung absensi)</li>
+                  <li><strong>Setengah Hari:</strong> Karyawan masuk tapi hanya dihitung setengah gaji pokok</li>
+                </ul>
               </div>
             </div>
           )}
@@ -244,3 +254,5 @@ export default function PublicAbsensiForm() {
     </form>
   );
 }
+
+
