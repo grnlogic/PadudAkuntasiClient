@@ -975,7 +975,7 @@ export const publicAbsensiAPI = {
       }
       
       // OPSI 1: Coba dengan parameter query tanggal di URL
-      const url = `https://sistem-hrd-padud.padudjayaputera.com/api/public-absensi/${id}?tanggal=${finalTanggal}`;
+      const url = `http://localhost:8084/api/public-absensi/${id}?tanggal=${finalTanggal}`;
       
       // OPSI 2: Atau coba dengan payload yang include tanggal
       const payloadWithDate = { hadir, status, setengahHari, tanggal: finalTanggal };
@@ -1018,7 +1018,7 @@ export const publicAbsensiAPI = {
 };
 
 // ===== PUBLIC KARYAWAN API =====
-const PUBLIC_API_URL = "https://sistem-hrd-padud.padudjayaputera.com";
+const PUBLIC_API_URL = "http://localhost:8084";
 
 export const publicKaryawanAPI = {
   getAll: async () => {
