@@ -9,7 +9,7 @@ export interface EntriHarian {
   createdBy: string;
   createdAt: string;
 
-  piutangType?: "PIUTANG_BARU" | "PIUTANG_TERTAGIH" | "PIUTANG_MACET"; // <-- Tambahkan ini jika ingin tracking di FE
+  piutangType?: "PIUTANG_BARU" | "PIUTANG_TERTAGIH" | "PIUTANG_MACET" | "SALDO_AKHIR_PIUTANG"; // <-- Tambahkan ini jika ingin tracking di FE
 
   // ✅ Specialized fields for different divisions
   transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR";
@@ -19,6 +19,9 @@ export interface EntriHarian {
   stokAkhir?: number;
   // ✅ NEW: Keuangan saldo akhir
   saldoAkhir?: number;
+  // ✅ NEW: Support for both date field formats
+  tanggalLaporan?: string;
+  tanggal_laporan?: string;
 
   // ✅ FIXED: Standardized HRD fields
   attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
@@ -44,10 +47,11 @@ export interface EntriHarian {
 
 export interface CreateEntriHarianRequest {
   accountId: number;
-  tanggal: string;
+  tanggal?: string; // Frontend format (backward compatibility)
+  tanggal_laporan?: string; // Backend format (preferred)
   nilai: number;
   description?: string;
-  piutangType?: "PIUTANG_BARU" | "PIUTANG_TERTAGIH" | "PIUTANG_MACET";
+  piutangType?: "PIUTANG_BARU" | "PIUTANG_TERTAGIH" | "PIUTANG_MACET" | "SALDO_AKHIR_PIUTANG";
 
   // ✅ Keuangan fields
   transactionType?: "PENERIMAAN" | "PENGELUARAN" | "SALDO_AKHIR";
@@ -66,11 +70,14 @@ export interface CreateEntriHarianRequest {
   // ✅ Gudang fields
   pemakaianAmount?: number;
   stokAkhir?: number;
-  // ✅ FIXED: Standardized HRD fields
+  // ✅ FIXED: Standardized HRD fields (support both camelCase and snake_case)
   attendanceStatus?: "HADIR" | "TIDAK_HADIR" | "SAKIT" | "IZIN";
+  attendance_status?: string; // Backend format
   absentCount?: number;
-  shift?: "REGULER" | "LEMBUR"; // ✅ BENAR: Sesuai meeting
+  absent_count?: number; // Backend format
+  shift?: "REGULER" | "LEMBUR";
   keteranganKendala?: string;
+  keterangan_kendala?: string; // Backend format
   // ✅ NEW: Gudang fields for PERSEDIAAN_BAHAN_BAKU - Updated field names
   stokAwal?: number;
   pemakaian?: number;

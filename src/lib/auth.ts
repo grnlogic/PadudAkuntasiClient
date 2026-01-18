@@ -9,6 +9,10 @@ export interface User {
     id: string;
     name: string;
   };
+  // ✅ ADDED: Support flat structure from backend (snake_case)
+  division_id?: number;
+  division_name?: string;
+  perusahaan_id?: number; // ✅ NEW: Company ID from backend
   status: "active" | "inactive";
 }
 
@@ -23,19 +27,61 @@ export const authenticateUser = async (
   password: string
 ): Promise<User | null> => {
   try {
+    console.log("🔐 [AUTH] Attempting login for:", username);
     const response = await authAPI.login(username, password);
+
+    console.log("📥 [AUTH] Login response:", {
+      success: response.success,
+      hasData: !!response.data,
+      hasToken: !!(response.data?.token),
+      hasUser: !!(response.data?.user),
+      userData: response.data?.user,
+      error: response.error,
+      fullResponse: response,
+      fullData: response.data
+    });
 
     if (response.success && response.data) {
       // Store token in localStorage
       if (response.data.token) {
         localStorage.setItem("auth_token", response.data.token);
+        console.log("✅ [AUTH] Token stored successfully");
+      } else {
+        console.warn("⚠️ [AUTH] No token in response!");
       }
 
-      return response.data.user;
+      if (response.data.user) {
+        console.log("✅ [AUTH] User data:", response.data.user);
+        
+        // ✅ FIXED: Convert flat structure to nested structure for frontend compatibility
+        const userData: User = {
+          id: String(response.data.user.id),
+          username: response.data.user.username,
+          role: response.data.user.role,
+          division: response.data.user.division_id ? {
+            id: String(response.data.user.division_id),
+            name: response.data.user.division_name || "Unknown Division"
+          } : undefined,
+          // Keep flat structure for backward compatibility
+          division_id: response.data.user.division_id,
+          division_name: response.data.user.division_name,
+          perusahaan_id: response.data.user.perusahaan_id, // ✅ NEW: Include company ID
+          status: "active"
+        };
+        
+        console.log("🔄 [AUTH] Converted user data:", userData);
+        setCurrentUser(userData);
+        
+        return userData;
+      } else {
+        console.warn("⚠️ [AUTH] No user data in response!");
+      }
     }
 
+    console.error("❌ [AUTH] Login failed:", response.error || "Unknown error");
     return null;
   } catch (error) {
+    console.error("💥 [AUTH] Exception during login:", error);
     return null;
   }
 };
@@ -46,7 +92,17 @@ export const getCurrentUser = (): User | null => {
   // Try to get user from localStorage first (for immediate access)
   const userData = localStorage.getItem("currentUser");
   if (userData) {
-    return JSON.parse(userData);
+    const user = JSON.parse(userData);
+    
+    // ✅ FIXED: Ensure backward compatibility - convert flat to nested if needed
+    if (user.division_id && !user.division) {
+      user.division = {
+        id: String(user.division_id),
+        name: user.division_name || "Unknown Division"
+      };
+    }
+    
+    return user;
   }
 
   // If no local data, we should fetch from API

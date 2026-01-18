@@ -34,10 +34,8 @@ export default function ChartOfAccountsPage() {
   }, []);
 
   const loadAccounts = async () => {
-    console.log("=== COMPONENT DEBUG: Loading accounts ===");
     try {
       const data = await getAccounts();
-      console.log("=== COMPONENT DEBUG: Received accounts data ===", data);
       setAccounts(data);
     } catch (error) {
       console.error("=== COMPONENT DEBUG: Error loading accounts ===", error);
@@ -130,7 +128,6 @@ export default function ChartOfAccountsPage() {
     setError("");
     setSuccess("");
 
-    console.log("=== FORM DEBUG: Form data ===", formData);
 
     // Validasi input yang lebih ketat
     if (!formData.accountCode?.trim()) {
@@ -200,7 +197,6 @@ export default function ChartOfAccountsPage() {
         createdBy: "current-user",
       };
 
-      console.log("=== FORM DEBUG: Account data to save ===", accountData);
 
       if (editingAccount) {
         await updateAccount(editingAccount.id, accountData);

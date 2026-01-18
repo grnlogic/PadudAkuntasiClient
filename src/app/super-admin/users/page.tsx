@@ -73,9 +73,7 @@ export default function UsersPage() {
 
   const loadUsers = async () => {
     try {
-      console.log("Loading users...");
       const data = await getUsers();
-      console.log("Users loaded:", data);
       setUsers(data);
     } catch (error) {
       console.error("Error loading users:", error);
@@ -152,10 +150,7 @@ export default function UsersPage() {
     setError("");
     setSuccess("");
 
-    console.log("=== FORM DEBUG: Form data ===", {
-      ...formData,
-      password: formData.password ? "[HIDDEN]" : "EMPTY",
-    });
+ 
 
     // Validation
     if (!formData.name || !formData.username || !formData.role) {
@@ -184,7 +179,6 @@ export default function UsersPage() {
         ? parseInt(formData.division)
         : null;
 
-    console.log("=== DEBUG: Division ID ===", divisionId);
 
     // Use the correct DTO format untuk backend
     const createRequest = {
@@ -194,19 +188,13 @@ export default function UsersPage() {
       divisionId: divisionId, // Backend expects divisionId as number or null
     };
 
-    console.log("=== DEBUG: Sending create request ===", {
-      ...createRequest,
-      password: createRequest.password ? "[HIDDEN]" : "EMPTY",
-    });
 
     if (editingUser) {
       // Update logic later
-      console.log("Update functionality not implemented yet");
     } else {
       // Create new user using the correct function
       saveUserWithDTO(createRequest)
         .then((savedUser) => {
-          console.log("=== DEBUG: User saved successfully ===", savedUser);
           setSuccess("User berhasil ditambahkan");
           resetForm();
           loadUsers();

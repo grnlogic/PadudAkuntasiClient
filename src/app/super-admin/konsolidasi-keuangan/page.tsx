@@ -1,13 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -16,847 +13,1168 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
+  DollarSign,
   TrendingUp,
   TrendingDown,
-  DollarSign,
-  Calendar,
-  Building,
-  Calculator,
-  Download,
+  Building2,
   RefreshCw,
+  Download,
+  Calendar,
 } from "lucide-react";
-import {
-  getEntriHarian,
-  getAccounts,
-  getKonsolidasiKeuanganByDate,
-} from "@/lib/data";
-import { Input } from "@/components/ui/input";
+import { NumericFormat } from "react-number-format";
+import { getToken } from "@/lib/data";
+import { toastError, toastSuccess } from "@/lib/toast-utils";
 
-interface KonsolidasiData {
-  tanggal: string;
-  perusahaan: string;
-  penerimaan: number;
-  pengeluaran: number;
-  saldoAkhir: number;
-  totalTransaksi: number;
+// ✅ Mapping perusahaan berdasarkan database
+const COMPANIES = {
+  1: { id: 1, name: "PT Padud Jaya Putera", code: "PJP", color: "bg-blue-500" },
+  2: { id: 2, name: "PT Sunarya Putera", code: "SP", color: "bg-green-500" },
+  3: { id: 3, name: "PT Prima", code: "PRIMA", color: "bg-purple-500" },
+  4: {
+    id: 4,
+    name: "Divisi Blending",
+    code: "BLENDING",
+    color: "bg-orange-500",
+  },
+  5: { id: 5, name: "Holding Company", code: "HOLDING", color: "bg-red-500" },
+};
+
+interface KeuanganData {
+  perusahaanId: number;
+  perusahaanName: string;
+  kas: {
+    penerimaan: number;
+    pengeluaran: number;
+    saldoAkhir: number;
+  };
+  piutang: {
+    baru: number;
+    tertagih: number;
+    macet: number;
+  };
+  utang: {
+    baru: number;
+    dibayar: number;
+  };
 }
 
-interface PerusahaanSummary {
-  nama: string;
-  totalPenerimaan: number;
-  totalPengeluaran: number;
-  totalSaldoAkhir: number;
-  totalTransaksi: number;
-}
-
-export default function KonsolidasiKeuangan() {
-  const [konsolidasiData, setKonsolidasiData] = useState<KonsolidasiData[]>([]);
-  const [perusahaanSummary, setPerusahaanSummary] = useState<
-    PerusahaanSummary[]
-  >([]);
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().slice(0, 10)
+export default function KonsolidasiKeuanganPage() {
+  const [selectedDate, setSelectedDate] = useState<string>(
+    new Date().toISOString().split("T")[0]
   );
-  const [selectedPerusahaan, setSelectedPerusahaan] = useState("all");
   const [loading, setLoading] = useState(false);
-  const [totalKeseluruhan, setTotalKeseluruhan] = useState({
-    penerimaan: 0,
-    pengeluaran: 0,
-    saldoAkhir: 0,
-    totalTransaksi: 0,
-  });
-  // ✅ ADD: State for detailed breakdown
-  const [detailedBreakdown, setDetailedBreakdown] = useState<any[]>([]);
-  const [operatorSummary, setOperatorSummary] = useState<any[]>([]);
-  // Tambahkan state accounts
-  const [accounts, setAccounts] = useState<any[]>([]);
+  const [keuanganData, setKeuanganData] = useState<KeuanganData[]>([]);
+  const [accountsData, setAccountsData] = useState<any[]>([]);
 
-  // Daftar perusahaan yang akan dikonsolidasi
-  const daftarPerusahaan = [
-    { id: "pjp", nama: "PT. Padudjaya Putera" },
-    { id: "prima", nama: "PT. Prima" },
-    { id: "sp", nama: "PT. SP" },
-    { id: "blending", nama: "PT. Blending" },
-    { id: "holding", nama: "PT. Holding" },
-  ];
+  // ✅ NEW: Mode tampilkan semua data
+  const [showAllData, setShowAllData] = useState(false);
 
-  const loadKonsolidasiData = async () => {
+  // ✅ NEW: Detail data untuk tabel lengkap
+  const [detailData, setDetailData] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<
+    number | null
+  >(null);
+  const itemsPerPage = 50;
+
+  // ✅ Fetch accounts untuk mapping perusahaan_id
+  const fetchAccounts = async () => {
+    try {
+      const token = getToken();
+      if (!token) return [];
+
+      const response = await fetch("http://localhost:7070/api/v1/accounts", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        return result.data || [];
+      }
+      return [];
+    } catch (error) {
+      console.error("Error fetching accounts:", error);
+      return [];
+    }
+  };
+
+  // ✅ Fetch data keuangan dari 3 sumber
+  const fetchKeuanganData = async () => {
     setLoading(true);
     try {
-      // 1. Ambil data entri harian & akun
-      const entries = await getEntriHarian();
-      const accounts = await getAccounts();
-      setAccounts(accounts);
-
-      // 2. Filter entri sesuai tanggal (format YYYY-MM-DD)
-      const filteredEntries = entries.filter((entry) => {
-        const entryDate = (entry.tanggal || entry.date || "").slice(0, 10);
-        return entryDate === selectedDate;
-      });
-
-      // 3. Agregasi per perusahaan
-      const konsolidasiMap = new Map<string, KonsolidasiData>();
-      filteredEntries.forEach((entry) => {
-        // Cari akun terkait
-        const account = accounts.find(
-          (acc) => acc.id?.toString() === entry.accountId?.toString()
-        );
-        // Mapping perusahaan
-        let perusahaan = "PT. Padudjaya Putera"; // Default fallback
-        if (account) {
-          const accountCode = (account.accountCode || "").toLowerCase();
-          const divisionName = (account.division?.name || "").toLowerCase();
-          if (
-            accountCode.includes("pjp") ||
-            divisionName.includes("pjp") ||
-            accountCode.startsWith("1-")
-          )
-            perusahaan = "PT. Padudjaya Putera";
-          else if (
-            accountCode.includes("prima") ||
-            divisionName.includes("prima") ||
-            accountCode.startsWith("2-")
-          )
-            perusahaan = "PT. Prima";
-          else if (
-            accountCode.includes("sp") ||
-            divisionName.includes("sp") ||
-            accountCode.startsWith("3-")
-          )
-            perusahaan = "PT. SP";
-          else if (
-            accountCode.includes("blending") ||
-            divisionName.includes("blending") ||
-            accountCode.startsWith("4-")
-          )
-            perusahaan = "PT. Blending";
-          else if (
-            accountCode.includes("holding") ||
-            divisionName.includes("holding") ||
-            accountCode.startsWith("5-")
-          )
-            perusahaan = "PT. Holding";
-        }
-        // Filter by selected company
-        if (selectedPerusahaan !== "all") {
-          const selectedCompany = daftarPerusahaan.find(
-            (p) => p.id === selectedPerusahaan
-          );
-          if (selectedCompany && perusahaan !== selectedCompany.nama) return;
-        }
-        // Siapkan data perusahaan jika belum ada
-        if (!konsolidasiMap.has(perusahaan)) {
-          konsolidasiMap.set(perusahaan, {
-            tanggal: selectedDate,
-            perusahaan,
-            penerimaan: 0,
-            pengeluaran: 0,
-            saldoAkhir: 0,
-            totalTransaksi: 0,
-          });
-        }
-        const companyData = konsolidasiMap.get(perusahaan)!;
-        const nilai = Number(entry.nilai) || 0;
-        // Mapping transactionType robust
-        let transactionType = entry.transactionType || "";
-        if (!transactionType) {
-          if (nilai > 0) transactionType = "PENERIMAAN";
-          else if (nilai < 0) transactionType = "PENGELUARAN";
-        }
-        // Agregasi
-        if (transactionType === "PENERIMAAN")
-          companyData.penerimaan += Math.abs(nilai);
-        else if (transactionType === "PENGELUARAN")
-          companyData.pengeluaran += Math.abs(nilai);
-        else if (transactionType === "SALDO_AKHIR")
-          companyData.saldoAkhir = Number(entry.saldoAkhir ?? nilai);
-        companyData.totalTransaksi += 1;
-      });
-      // 4. Simpan hasil ke state
-      setKonsolidasiData(Array.from(konsolidasiMap.values()));
-      // 5. Breakdown detail untuk tabel
-      const breakdown = filteredEntries.map((entry) => {
-        const account = accounts.find(
-          (acc) => acc.id?.toString() === entry.accountId?.toString()
-        );
-        let perusahaan = "PT. Padudjaya Putera";
-        if (account) {
-          const accountCode = (account.accountCode || "").toLowerCase();
-          const divisionName = (account.division?.name || "").toLowerCase();
-          if (
-            accountCode.includes("pjp") ||
-            divisionName.includes("pjp") ||
-            accountCode.startsWith("1-")
-          )
-            perusahaan = "PT. Padudjaya Putera";
-          else if (
-            accountCode.includes("prima") ||
-            divisionName.includes("prima") ||
-            accountCode.startsWith("2-")
-          )
-            perusahaan = "PT. Prima";
-          else if (
-            accountCode.includes("sp") ||
-            divisionName.includes("sp") ||
-            accountCode.startsWith("3-")
-          )
-            perusahaan = "PT. SP";
-          else if (
-            accountCode.includes("blending") ||
-            divisionName.includes("blending") ||
-            accountCode.startsWith("4-")
-          )
-            perusahaan = "PT. Blending";
-          else if (
-            accountCode.includes("holding") ||
-            divisionName.includes("holding") ||
-            accountCode.startsWith("5-")
-          )
-            perusahaan = "PT. Holding";
-        }
-        const isSaldoAkhir = (entry.transactionType || "") === "SALDO_AKHIR";
-        return {
-          id: entry.id,
-          tanggal: entry.tanggal || entry.date,
-          perusahaan,
-          accountId: account?.id || entry.accountId || "N/A",
-          accountCode: account?.accountCode || "N/A",
-          accountName: account?.accountName || "N/A",
-          nilai: Number(entry.nilai) || 0,
-          saldoAkhir: isSaldoAkhir
-            ? Number(entry.saldoAkhir ?? entry.nilai) || 0
-            : undefined,
-          transactionType: entry.transactionType || "",
-          description: entry.description || "",
-          createdBy: entry.createdBy || "system",
-        };
-      });
-      setDetailedBreakdown(breakdown);
-
-      // 6. Summary per perusahaan
-      const summaries = daftarPerusahaan.map((perusahaan) => {
-        const companyData = konsolidasiMap.get(perusahaan.nama);
-        return {
-          nama: perusahaan.nama,
-          totalPenerimaan: companyData?.penerimaan || 0,
-          totalPengeluaran: companyData?.pengeluaran || 0,
-          totalSaldoAkhir: companyData?.saldoAkhir || 0,
-          totalTransaksi: companyData?.totalTransaksi || 0,
-        };
-      });
-      setPerusahaanSummary(summaries);
-
-      // 7. Group by operator (summary per operator dari breakdown/detail)
-      const operatorMap = new Map<string, any>();
-      // Untuk saldo akhir: simpan array entry SALDO_AKHIR per operator
-      // const saldoAkhirMap = new Map<string, any[]>(); // <-- tidak perlu lagi
-      breakdown.forEach((entry) => {
-        const operator = (entry.createdBy || "unknown").toLowerCase();
-        if (operator.includes("hrd")) return; // skip operator HRD
-        if (!operatorMap.has(operator)) {
-          operatorMap.set(operator, {
-            operator,
-            penerimaan: 0,
-            pengeluaran: 0,
-            saldoAkhir: 0,
-            totalTransaksi: 0,
-          });
-        }
-        const op = operatorMap.get(operator);
-        const nilai = Number(entry.nilai) || 0;
-        let transactionType = entry.transactionType || "";
-        if (!transactionType) {
-          if (nilai > 0) transactionType = "PENERIMAAN";
-          else if (nilai < 0) transactionType = "PENGELUARAN";
-        }
-        if (transactionType === "PENERIMAAN") op.penerimaan += Math.abs(nilai);
-        else if (transactionType === "PENGELUARAN")
-          op.pengeluaran += Math.abs(nilai);
-        // Tidak perlu lagi menampung saldoAkhirMap
-        op.totalTransaksi += 1;
-      });
-      // Setelah loop, jumlahkan semua saldoAkhir untuk setiap operator dari breakdown
-      for (const [operator, op] of operatorMap.entries()) {
-        // Ambil semua entry SALDO_AKHIR milik operator ini dari breakdown
-        const saldoAkhirEntries = breakdown.filter(
-          (entry) =>
-            (entry.createdBy || "unknown").toLowerCase() === operator &&
-            (entry.transactionType || "").toUpperCase() === "SALDO_AKHIR"
-        );
-        // Jumlahkan semua saldoAkhir
-        op.saldoAkhir = saldoAkhirEntries.reduce(
-          (sum, entry) => sum + (Number(entry.saldoAkhir ?? entry.nilai) || 0),
-          0
-        );
+      const token = getToken();
+      if (!token) {
+        toastError.custom("Token tidak ditemukan. Silakan login kembali.");
+        return;
       }
-      const operatorArray = Array.from(operatorMap.values());
-      setOperatorSummary(operatorArray);
 
-      // 8. Total keseluruhan
-      // Jumlahkan seluruh saldo akhir pada tanggal yang dipilih
-      const saldoAkhirEntries = breakdown.filter(
-        (e) => (e.transactionType || "").toUpperCase() === "SALDO_AKHIR"
-      );
-      const totalSaldoAkhir = saldoAkhirEntries.reduce(
-        (acc, entry) => acc + (Number(entry?.saldoAkhir ?? entry?.nilai) || 0),
-        0
-      );
-      const total = operatorArray.reduce(
-        (acc, op) => {
-          acc.penerimaan += op.penerimaan;
-          acc.pengeluaran += op.pengeluaran;
-          acc.totalTransaksi += op.totalTransaksi;
-          return acc;
-        },
-        {
-          operator: "Total",
-          penerimaan: 0,
-          pengeluaran: 0,
-          saldoAkhir: 0,
-          totalTransaksi: 0,
+      console.log("🔄 Fetching konsolidasi keuangan for date:", selectedDate);
+      console.log("📊 Mode: ", showAllData ? "SEMUA DATA" : "PER TANGGAL");
+
+      // Fetch accounts dulu untuk mapping
+      const accounts = await fetchAccounts();
+      setAccountsData(accounts);
+
+      // Filter kas accounts (account yang namanya mengandung 'kas')
+      const kasAccountIds = accounts
+        .filter((acc: any) => {
+          const name =
+            acc.account_name?.toLowerCase() ||
+            acc.accountName?.toLowerCase() ||
+            "";
+          return (
+            name.includes("kas") &&
+            !name.includes("piutang") &&
+            !name.includes("utang")
+          );
+        })
+        .map((acc: any) => acc.id);
+
+      console.log("💰 KAS Account IDs:", kasAccountIds);
+
+      // ✅ Build URL dengan atau tanpa filter tanggal
+      // IMPORTANT: Tambahkan limit=999999 untuk mengambil semua data (bypass pagination)
+      const entriesUrl = showAllData
+        ? `http://localhost:7070/api/v1/entri-harian?limit=999999`
+        : `http://localhost:7070/api/v1/entri-harian?tanggal=${selectedDate}&limit=999999`;
+
+      const piutangUrl = showAllData
+        ? `http://localhost:7070/api/v1/piutang?limit=999999`
+        : `http://localhost:7070/api/v1/piutang?tanggal_dari=${selectedDate}&tanggal_sampai=${selectedDate}&limit=999999`;
+
+      const utangUrl = showAllData
+        ? `http://localhost:7070/api/v1/utang?limit=999999`
+        : `http://localhost:7070/api/v1/utang?tanggal_dari=${selectedDate}&tanggal_sampai=${selectedDate}&limit=999999`;
+
+      // Parallel fetch dari 3 endpoint
+      const [entriesResponse, piutangResponse, utangResponse] =
+        await Promise.all([
+          fetch(entriesUrl, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(piutangUrl, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(utangUrl, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+      let entriesData: any[] = [];
+      let piutangData: any[] = [];
+      let utangData: any[] = [];
+
+      if (entriesResponse.ok) {
+        const result = await entriesResponse.json();
+        entriesData = result.data || [];
+        console.log("📊 Entri Harian:", entriesData.length, "records");
+      }
+
+      if (piutangResponse.ok) {
+        const result = await piutangResponse.json();
+        piutangData = result.data || [];
+        console.log("📊 Piutang:", piutangData.length, "records");
+      }
+
+      if (utangResponse.ok) {
+        const result = await utangResponse.json();
+        utangData = result.data || [];
+        console.log("📊 Utang:", utangData.length, "records");
+      }
+
+      // ✅ Process data per perusahaan
+      const dataPerPerusahaan: { [key: number]: KeuanganData } = {};
+
+      // Initialize data untuk setiap perusahaan
+      Object.values(COMPANIES).forEach((company) => {
+        dataPerPerusahaan[company.id] = {
+          perusahaanId: company.id,
+          perusahaanName: company.name,
+          kas: { penerimaan: 0, pengeluaran: 0, saldoAkhir: 0 },
+          piutang: { baru: 0, tertagih: 0, macet: 0 },
+          utang: { baru: 0, dibayar: 0 },
+        };
+      });
+
+      // ✅ Process KAS data dari entri_harian
+      entriesData.forEach((entry: any) => {
+        // Get perusahaan_id dari account
+        const account = accounts.find(
+          (acc: any) => acc.id === entry.account_id
+        );
+        const perusahaanId = account?.perusahaan_id || account?.perusahaanId;
+
+        if (!perusahaanId || !kasAccountIds.includes(entry.account_id)) return;
+
+        const data = dataPerPerusahaan[perusahaanId];
+        if (!data) return;
+
+        const nilai = Number(entry.nilai) || 0;
+        const transactionType =
+          entry.transaction_type || entry.transactionType || "";
+
+        if (transactionType === "PENERIMAAN") {
+          data.kas.penerimaan += nilai;
+        } else if (transactionType === "PENGELUARAN") {
+          data.kas.pengeluaran += nilai;
+        } else if (transactionType === "SALDO_AKHIR") {
+          const saldoValue = Number(entry.saldo_akhir || entry.nilai) || 0;
+          data.kas.saldoAkhir += saldoValue;
         }
+      });
+
+      // ✅ Process PIUTANG data
+      piutangData.forEach((entry: any) => {
+        // Get perusahaan_id dari entry atau dari account
+        let perusahaanId = entry.perusahaan_id;
+
+        if (!perusahaanId) {
+          const account = accounts.find(
+            (acc: any) => acc.id === entry.account_id
+          );
+          perusahaanId = account?.perusahaan_id || account?.perusahaanId;
+        }
+
+        if (!perusahaanId) return;
+
+        const data = dataPerPerusahaan[perusahaanId];
+        if (!data) return;
+
+        const nominal = Number(entry.nominal) || 0;
+        const tipeTransaksi =
+          entry.tipe_transaksi || entry.jenis_transaksi || "";
+
+        if (tipeTransaksi === "PIUTANG_BARU") {
+          data.piutang.baru += nominal;
+        } else if (
+          tipeTransaksi === "PIUTANG_TERTAGIH" ||
+          tipeTransaksi === "PEMBAYARAN_PIUTANG"
+        ) {
+          data.piutang.tertagih += nominal;
+        } else if (tipeTransaksi === "PIUTANG_MACET") {
+          data.piutang.macet += nominal;
+        }
+      });
+
+      // ✅ Process UTANG data
+      utangData.forEach((entry: any) => {
+        // Get perusahaan_id dari entry atau dari account
+        let perusahaanId = entry.perusahaan_id;
+
+        if (!perusahaanId) {
+          const account = accounts.find(
+            (acc: any) => acc.id === entry.account_id
+          );
+          perusahaanId = account?.perusahaan_id || account?.perusahaanId;
+        }
+
+        if (!perusahaanId) return;
+
+        const data = dataPerPerusahaan[perusahaanId];
+        if (!data) return;
+
+        const nominal = Number(entry.nominal) || 0;
+        const tipeTransaksi =
+          entry.tipe_transaksi || entry.jenis_transaksi || "";
+
+        if (tipeTransaksi === "UTANG_BARU") {
+          data.utang.baru += nominal;
+        } else if (
+          tipeTransaksi === "UTANG_DIBAYAR" ||
+          tipeTransaksi === "PEMBAYARAN_UTANG"
+        ) {
+          data.utang.dibayar += nominal;
+        }
+      });
+
+      const result = Object.values(dataPerPerusahaan);
+      setKeuanganData(result);
+
+      // ✅ NEW: Proses detail data untuk tabel lengkap
+      const allDetailData: any[] = [];
+
+      // Add KAS entries
+      // Data structure from entri_harian API:
+      // - tanggal_laporan (date)
+      // - transaction_type (PENERIMAAN/PENGELUARAN/SALDO_AKHIR)
+      // - nilai (nominal amount)
+      // - saldo_akhir (ending balance)
+      // - perusahaan_id (from join with accounts)
+      // - account_name (from join with accounts)
+      // - description (description field)
+      entriesData.forEach((entry: any) => {
+        if (kasAccountIds.includes(entry.account_id)) {
+          allDetailData.push({
+            type: "KAS",
+            tanggal: entry.tanggal_laporan, // Field dari entri_harian table
+            perusahaan_id: entry.perusahaan_id, // Sudah ada dari JOIN dengan accounts
+            perusahaan_name:
+              COMPANIES[entry.perusahaan_id as keyof typeof COMPANIES]?.name ||
+              "Unknown",
+            account_name: entry.account_name, // Sudah ada dari JOIN
+            tipe_transaksi: entry.transaction_type, // Field dari entri_harian
+            nominal: Number(entry.nilai) || 0, // Field nilai dari entri_harian
+            saldo_akhir: Number(entry.saldo_akhir) || 0, // Field saldo_akhir dari entri_harian
+            keterangan: entry.description || "-", // Field description dari entri_harian
+          });
+        }
+      });
+
+      // Add PIUTANG entries
+      piutangData.forEach((entry: any) => {
+        let perusahaanId = entry.perusahaan_id;
+        if (!perusahaanId) {
+          const account = accounts.find(
+            (acc: any) => acc.id === entry.account_id
+          );
+          perusahaanId = account?.perusahaan_id;
+        }
+
+        allDetailData.push({
+          type: "PIUTANG",
+          tanggal: entry.tanggal_transaksi,
+          perusahaan_id: perusahaanId,
+          perusahaan_name:
+            COMPANIES[perusahaanId as keyof typeof COMPANIES]?.name ||
+            "Unknown",
+          account_name: entry.account_name || "-",
+          tipe_transaksi: entry.tipe_transaksi,
+          nominal: Number(entry.nominal) || 0,
+          saldo_akhir: null,
+          keterangan: entry.keterangan || "-",
+        });
+      });
+
+      // Add UTANG entries
+      utangData.forEach((entry: any) => {
+        let perusahaanId = entry.perusahaan_id;
+        if (!perusahaanId) {
+          const account = accounts.find(
+            (acc: any) => acc.id === entry.account_id
+          );
+          perusahaanId = account?.perusahaan_id;
+        }
+
+        allDetailData.push({
+          type: "UTANG",
+          tanggal: entry.tanggal_transaksi,
+          perusahaan_id: perusahaanId,
+          perusahaan_name:
+            COMPANIES[perusahaanId as keyof typeof COMPANIES]?.name ||
+            "Unknown",
+          account_name: entry.account_name || "-",
+          tipe_transaksi: entry.tipe_transaksi,
+          nominal: Number(entry.nominal) || 0,
+          saldo_akhir: null,
+          keterangan: entry.keterangan || "-",
+        });
+      });
+
+      // Sort by date descending
+      allDetailData.sort(
+        (a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime()
       );
-      total.saldoAkhir = totalSaldoAkhir;
-      setTotalKeseluruhan(total);
+
+      setDetailData(allDetailData);
+      setTotalPages(Math.ceil(allDetailData.length / itemsPerPage));
+      setCurrentPage(1); // Reset to first page
+
+      console.log("✅ Konsolidasi selesai:", result);
+      toastSuccess.custom("Data konsolidasi berhasil dimuat");
     } catch (error) {
-      console.error("❌ Error loading konsolidasi data:", error);
+      console.error("❌ Error fetching konsolidasi:", error);
+      toastError.custom("Gagal memuat data konsolidasi");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadKonsolidasiData();
-  }, [selectedDate, selectedPerusahaan]);
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(amount);
+  // ✅ Calculate total konsolidasi
+  const calculateTotal = () => {
+    return keuanganData.reduce(
+      (total, data) => ({
+        kas: {
+          penerimaan: total.kas.penerimaan + data.kas.penerimaan,
+          pengeluaran: total.kas.pengeluaran + data.kas.pengeluaran,
+          saldoAkhir: total.kas.saldoAkhir + data.kas.saldoAkhir,
+        },
+        piutang: {
+          baru: total.piutang.baru + data.piutang.baru,
+          tertagih: total.piutang.tertagih + data.piutang.tertagih,
+          macet: total.piutang.macet + data.piutang.macet,
+        },
+        utang: {
+          baru: total.utang.baru + data.utang.baru,
+          dibayar: total.utang.dibayar + data.utang.dibayar,
+        },
+      }),
+      {
+        kas: { penerimaan: 0, pengeluaran: 0, saldoAkhir: 0 },
+        piutang: { baru: 0, tertagih: 0, macet: 0 },
+        utang: { baru: 0, dibayar: 0 },
+      }
+    );
   };
 
+  const totalKonsolidasi = calculateTotal();
+
+  // ✅ Auto load on mount
+  useEffect(() => {
+    fetchKeuanganData();
+  }, []);
+
+  // ✅ Export to Excel/CSV
   const handleExport = () => {
-    if (konsolidasiData.length === 0) return;
-
-    const header = [
-      "Tanggal",
+    const headers = [
       "Perusahaan",
-      "Penerimaan",
-      "Pengeluaran",
-      "Saldo Akhir",
-      "Total Transaksi",
+      "Kas Penerimaan",
+      "Kas Pengeluaran",
+      "Kas Saldo Akhir",
+      "Piutang Baru",
+      "Piutang Tertagih",
+      "Kas Saldo Akhir",
+      "Piutang Baru",
+      "Piutang Tertagih",
+      "Piutang Macet",
+      "Utang Baru",
+      "Utang Dibayar",
     ];
-    const csv = [
-      header.join(","),
-      ...konsolidasiData.map((row) =>
-        [
-          row.tanggal,
-          row.perusahaan,
-          row.penerimaan,
-          row.pengeluaran,
-          row.saldoAkhir,
-          row.totalTransaksi,
-        ].join(",")
-      ),
-    ].join("\n");
 
+    const rows = keuanganData.map((data) => [
+      data.perusahaanName,
+      data.kas.penerimaan,
+      data.kas.pengeluaran,
+      data.kas.saldoAkhir,
+      data.piutang.baru,
+      data.piutang.tertagih,
+      data.piutang.macet,
+      data.utang.baru,
+      data.utang.dibayar,
+    ]);
+
+    // Add total row
+    rows.push([
+      "TOTAL KONSOLIDASI",
+      totalKonsolidasi.kas.penerimaan,
+      totalKonsolidasi.kas.pengeluaran,
+      totalKonsolidasi.kas.saldoAkhir,
+      totalKonsolidasi.piutang.baru,
+      totalKonsolidasi.piutang.tertagih,
+      totalKonsolidasi.piutang.macet,
+      totalKonsolidasi.utang.baru,
+      totalKonsolidasi.utang.dibayar,
+    ]);
+
+    const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `konsolidasi_keuangan_${selectedDate}.csv`;
+    a.download = `konsolidasi-keuangan-${selectedDate}.csv`;
     a.click();
-    URL.revokeObjectURL(url);
+
+    toastSuccess.custom("Data berhasil diexport");
   };
-
-  // Helper function for division color
-  const getDivisionColor = (divisionName: string) => {
-    if (divisionName.toLowerCase().includes("pjp"))
-      return "bg-blue-100 text-blue-800";
-    if (divisionName.toLowerCase().includes("prima"))
-      return "bg-purple-100 text-purple-800";
-    if (divisionName.toLowerCase().includes("sp"))
-      return "bg-green-100 text-green-800";
-    if (divisionName.toLowerCase().includes("blending"))
-      return "bg-yellow-100 text-yellow-800";
-    if (divisionName.toLowerCase().includes("holding"))
-      return "bg-orange-100 text-orange-800";
-    return "bg-gray-100 text-gray-800";
-  };
-
-  // Komponen Tabel Konsolidasi Keuangan (identik dashboard, filter keuangan, mapping data asli)
-  function TabelKonsolidasiKeuangan({
-    entries,
-    accounts,
-  }: {
-    entries: any[];
-    accounts: any[];
-  }) {
-    // Filter hanya operator keuangan
-    const keuanganEntries = entries.filter((entry) =>
-      (entry.createdBy || "").toLowerCase().includes("keuangan")
-    );
-    console.log(
-      "📝 TabelKonsolidasiKeuangan - keuanganEntries:",
-      keuanganEntries
-    );
-
-    // Perhitungan total
-    const total = keuanganEntries.reduce(
-      (acc, entry) => {
-        const nilai = Number(entry.nilai) || 0;
-        if (
-          (entry.transactionType || "").toUpperCase() === "PENERIMAAN" ||
-          nilai > 0
-        )
-          acc.penerimaan += Math.abs(nilai);
-        else if (
-          (entry.transactionType || "").toUpperCase() === "PENGELUARAN" ||
-          nilai < 0
-        )
-          acc.pengeluaran += Math.abs(nilai);
-        else if ((entry.transactionType || "").toUpperCase() === "SALDO_AKHIR")
-          acc.saldoAkhir += nilai;
-        acc.totalTransaksi += 1;
-        return acc;
-      },
-      { penerimaan: 0, pengeluaran: 0, saldoAkhir: 0, totalTransaksi: 0 }
-    );
-
-    return (
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Waktu</TableHead>
-              <TableHead>Divisi</TableHead>
-              <TableHead>Akun</TableHead>
-              <TableHead>Keterangan</TableHead>
-              <TableHead>Tipe</TableHead>
-              <TableHead>Nominal</TableHead>
-              <TableHead>Info Tambahan</TableHead>
-              <TableHead>Operator</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {keuanganEntries.length > 0 ? (
-              keuanganEntries.map((entry, index) => {
-                // Mapping akun dan divisi
-                const account = accounts.find(
-                  (acc) =>
-                    (acc?.id != null &&
-                      entry?.accountId != null &&
-                      acc.id.toString() === entry.accountId.toString()) ||
-                    (acc.accountCode &&
-                      entry.accountCode &&
-                      acc.accountCode === entry.accountCode)
-                );
-
-                const divisionName = account?.division?.name || "N/A";
-                const accountCode = account?.accountCode || "N/A";
-                const accountName = account?.accountName || "N/A";
-                const valueType = account?.valueType || "NOMINAL";
-                // Perbaikan: jika transactionType SALDO_AKHIR, gunakan saldoAkhir
-                const nominalValue =
-                  entry.transactionType === "SALDO_AKHIR"
-                    ? entry.saldoAkhir ?? entry.nilai
-                    : entry.nilai;
-                return (
-                  <TableRow key={entry.id || `entry-${index}`}>
-                    <TableCell className="text-sm">
-                      {entry.createdAt
-                        ? new Date(entry.createdAt).toLocaleTimeString(
-                            "id-ID",
-                            { hour: "2-digit", minute: "2-digit" }
-                          )
-                        : "N/A"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getDivisionColor(divisionName)}>
-                        {divisionName}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      <div>
-                        <div className="font-medium">{accountCode}</div>
-                        <div className="text-gray-500 text-xs">
-                          {accountName}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {entry.description || "-"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={
-                          valueType === "NOMINAL"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-green-100 text-green-800"
-                        }
-                      >
-                        {valueType === "NOMINAL"
-                          ? "💰 Nominal"
-                          : "📦 Kuantitas"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {formatCurrency(nominalValue || 0)}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {/* Info tambahan, sama persis dashboard */}
-                      {(() => {
-                        const divisionName =
-                          account?.division?.name?.toLowerCase() || "";
-                        // Keuangan: Show transaction type and amount
-                        if (divisionName.includes("keuangan")) {
-                          const transactionType = entry.transactionType;
-                          const saldoAkhir = entry.saldoAkhir ?? entry.nilai;
-                          if (transactionType === "SALDO_AKHIR" && saldoAkhir) {
-                            return (
-                              <div className="text-sm flex items-center gap-2">
-                                <Badge className="bg-purple-100 text-purple-800">
-                                  SALDO AKHIR
-                                </Badge>
-                              </div>
-                            );
-                          }
-                          if (
-                            transactionType &&
-                            transactionType !== "NOMINAL"
-                          ) {
-                            return (
-                              <Badge
-                                className={
-                                  transactionType === "PENERIMAAN"
-                                    ? "bg-green-100 text-green-800"
-                                    : transactionType === "PENGELUARAN"
-                                    ? "bg-red-100 text-red-800"
-                                    : "bg-purple-100 text-purple-800"
-                                }
-                              >
-                                {transactionType}
-                              </Badge>
-                            );
-                          }
-                        }
-                        return "-";
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-500">
-                      {entry.createdBy || "system"}
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={8}
-                  className="text-center py-8 text-gray-500"
-                >
-                  Tidak ada entri keuangan untuk tanggal dan filter yang dipilih
-                </TableCell>
-              </TableRow>
-            )}
-            {/* Baris total keseluruhan */}
-            <TableRow className="bg-gray-50 font-bold">
-              <TableCell colSpan={4}>Total</TableCell>
-              <TableCell></TableCell>
-              <TableCell className="text-green-600">
-                {formatCurrency(total.penerimaan)}
-              </TableCell>
-              <TableCell className="text-red-600">
-                {formatCurrency(total.pengeluaran)}
-              </TableCell>
-              <TableCell className="text-blue-600">
-                {formatCurrency(total.saldoAkhir)}
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </div>
-    );
-  }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             Konsolidasi Keuangan
           </h1>
-          <p className="text-gray-600 mt-2">
-            Total kas per perusahaan per hari
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            Ringkasan keuangan seluruh perusahaan
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={loadKonsolidasiData}
-            disabled={loading}
-          >
-            <RefreshCw
-              className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
-          <Button
-            onClick={handleExport}
-            disabled={konsolidasiData.length === 0}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export CSV
-          </Button>
-        </div>
+        <Button onClick={handleExport} variant="outline" className="gap-2">
+          <Download className="w-4 h-4" />
+          Export CSV
+        </Button>
       </div>
 
-      {/* Filters */}
+      {/* Date Filter */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calculator className="h-5 w-5" />
-            Filter Konsolidasi
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
+        <CardContent className="pt-6">
+          <div className="flex items-end gap-4">
             <div className="flex-1">
-              <label className="text-sm font-medium">Tanggal</label>
-              <div className="relative mt-1">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+              <Label htmlFor="date">Tanggal</Label>
+              <Input
+                id="date"
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="mt-1"
+                disabled={showAllData}
+              />
             </div>
-            <div className="flex-1">
-              <label className="text-sm font-medium">Perusahaan</label>
-              <Select
-                value={selectedPerusahaan}
-                onValueChange={setSelectedPerusahaan}
-              >
-                <SelectTrigger className="mt-1">
-                  <Building className="mr-2 h-4 w-4" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua Perusahaan</SelectItem>
-                  {daftarPerusahaan.map((perusahaan) => (
-                    <SelectItem key={perusahaan.id} value={perusahaan.id}>
-                      {perusahaan.nama}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="showAll"
+                checked={showAllData}
+                onChange={(e) => setShowAllData(e.target.checked)}
+                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <Label htmlFor="showAll" className="cursor-pointer text-sm">
+                Tampilkan Semua Data (All Time)
+              </Label>
             </div>
+            <Button
+              onClick={fetchKeuanganData}
+              disabled={loading}
+              className="gap-2"
+            >
+              {loading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh Data
+                </>
+              )}
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Overall Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Total Penerimaan
+      {/* Summary Cards - Total Konsolidasi */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* KAS Card */}
+        <Card className="border-2 border-blue-200 dark:border-blue-800">
+          <CardHeader className="bg-blue-50 dark:bg-blue-900/20">
+            <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+              <DollarSign className="w-5 h-5" />
+              Total KAS
             </CardTitle>
-            <TrendingUp className="h-5 w-5 text-green-600" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(totalKeseluruhan.penerimaan)}
+          <CardContent className="pt-6 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Penerimaan
+              </span>
+              <NumericFormat
+                value={totalKonsolidasi.kas.penerimaan}
+                displayType="text"
+                thousandSeparator="."
+                decimalSeparator=","
+                prefix="Rp "
+                className="font-semibold text-green-600"
+              />
             </div>
-            <p className="text-xs text-gray-500 mt-1">Seluruh perusahaan</p>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Pengeluaran
+              </span>
+              <NumericFormat
+                value={totalKonsolidasi.kas.pengeluaran}
+                displayType="text"
+                thousandSeparator="."
+                decimalSeparator=","
+                prefix="Rp "
+                className="font-semibold text-red-600"
+              />
+            </div>
+            <div className="border-t pt-3">
+              <div className="flex justify-between items-center">
+                <span className="font-medium text-gray-900 dark:text-white">
+                  Saldo Akhir
+                </span>
+                <NumericFormat
+                  value={totalKonsolidasi.kas.saldoAkhir}
+                  displayType="text"
+                  thousandSeparator="."
+                  decimalSeparator=","
+                  prefix="Rp "
+                  className="font-bold text-lg text-blue-600"
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Total Pengeluaran
+        {/* PIUTANG Card */}
+        <Card className="border-2 border-green-200 dark:border-green-800">
+          <CardHeader className="bg-green-50 dark:bg-green-900/20">
+            <CardTitle className="flex items-center gap-2 text-green-700 dark:text-green-300">
+              <TrendingUp className="w-5 h-5" />
+              Total PIUTANG
             </CardTitle>
-            <TrendingDown className="h-5 w-5 text-red-600" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {formatCurrency(totalKeseluruhan.pengeluaran)}
+          <CardContent className="pt-6 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Piutang Baru
+              </span>
+              <NumericFormat
+                value={totalKonsolidasi.piutang.baru}
+                displayType="text"
+                thousandSeparator="."
+                decimalSeparator=","
+                prefix="Rp "
+                className="font-semibold"
+              />
             </div>
-            <p className="text-xs text-gray-500 mt-1">Seluruh perusahaan</p>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Tertagih
+              </span>
+              <NumericFormat
+                value={totalKonsolidasi.piutang.tertagih}
+                displayType="text"
+                thousandSeparator="."
+                decimalSeparator=","
+                prefix="Rp "
+                className="font-semibold text-green-600"
+              />
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Macet
+              </span>
+              <NumericFormat
+                value={totalKonsolidasi.piutang.macet}
+                displayType="text"
+                thousandSeparator="."
+                decimalSeparator=","
+                prefix="Rp "
+                className="font-semibold text-red-600"
+              />
+            </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Total Saldo Akhir
+        {/* UTANG Card */}
+        <Card className="border-2 border-orange-200 dark:border-orange-800">
+          <CardHeader className="bg-orange-50 dark:bg-orange-900/20">
+            <CardTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+              <TrendingDown className="w-5 h-5" />
+              Total UTANG
             </CardTitle>
-            <DollarSign className="h-5 w-5 text-blue-600" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {formatCurrency(totalKeseluruhan.saldoAkhir)}
+          <CardContent className="pt-6 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Utang Baru
+              </span>
+              <NumericFormat
+                value={totalKonsolidasi.utang.baru}
+                displayType="text"
+                thousandSeparator="."
+                decimalSeparator=","
+                prefix="Rp "
+                className="font-semibold"
+              />
             </div>
-            <p className="text-xs text-gray-500 mt-1">Seluruh perusahaan</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              Total Transaksi
-            </CardTitle>
-            <Calculator className="h-5 w-5 text-purple-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">
-              {totalKeseluruhan.totalTransaksi}
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Dibayar
+              </span>
+              <NumericFormat
+                value={totalKonsolidasi.utang.dibayar}
+                displayType="text"
+                thousandSeparator="."
+                decimalSeparator=","
+                prefix="Rp "
+                className="font-semibold text-green-600"
+              />
             </div>
-            <p className="text-xs text-gray-500 mt-1">Seluruh perusahaan</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Company Summary Table */}
+      {/* Detail Per Perusahaan */}
       <Card>
         <CardHeader>
-          <CardTitle>Ringkasan Per Operator</CardTitle>
-          <CardDescription>
-            Total kas per operator untuk tanggal{" "}
-            {new Date(selectedDate).toLocaleDateString("id-ID")}
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="w-5 h-5" />
+            Detail Per Perusahaan
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Operator</TableHead>
-                  <TableHead>Penerimaan</TableHead>
-                  <TableHead>Pengeluaran</TableHead>
-                  <TableHead>Saldo Akhir</TableHead>
-                  <TableHead>Total Transaksi</TableHead>
-                  <TableHead>Net Cash Flow</TableHead>
+                  <TableHead className="font-bold">Perusahaan</TableHead>
+                  <TableHead className="text-center font-bold" colSpan={3}>
+                    KAS
+                  </TableHead>
+                  <TableHead className="text-center font-bold" colSpan={3}>
+                    PIUTANG
+                  </TableHead>
+                  <TableHead className="text-center font-bold" colSpan={2}>
+                    UTANG
+                  </TableHead>
+                </TableRow>
+                <TableRow className="bg-gray-50 dark:bg-gray-800">
+                  <TableHead></TableHead>
+                  <TableHead className="text-right">Penerimaan</TableHead>
+                  <TableHead className="text-right">Pengeluaran</TableHead>
+                  <TableHead className="text-right">Saldo Akhir</TableHead>
+                  <TableHead className="text-right">Baru</TableHead>
+                  <TableHead className="text-right">Tertagih</TableHead>
+                  <TableHead className="text-right">Macet</TableHead>
+                  <TableHead className="text-right">Baru</TableHead>
+                  <TableHead className="text-right">Dibayar</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {operatorSummary.map((op, idx) => {
-                  const netCashFlow = op.penerimaan - op.pengeluaran;
+                {keuanganData.map((data) => {
+                  const company =
+                    COMPANIES[data.perusahaanId as keyof typeof COMPANIES];
                   return (
-                    <TableRow key={op.operator}>
+                    <TableRow key={data.perusahaanId}>
                       <TableCell className="font-medium">
-                        {op.operator}
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-3 h-3 rounded-full ${company?.color}`}
+                          />
+                          <div>
+                            <div className="font-semibold">
+                              {data.perusahaanName}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {company?.code}
+                            </div>
+                          </div>
+                        </div>
                       </TableCell>
-                      <TableCell className="text-green-600 font-medium">
-                        {formatCurrency(op.penerimaan)}
+                      {/* KAS */}
+                      <TableCell className="text-right">
+                        <NumericFormat
+                          value={data.kas.penerimaan}
+                          displayType="text"
+                          thousandSeparator="."
+                          decimalSeparator=","
+                          prefix="Rp "
+                          className="text-sm"
+                        />
                       </TableCell>
-                      <TableCell className="text-red-600 font-medium">
-                        {formatCurrency(op.pengeluaran)}
+                      <TableCell className="text-right">
+                        <NumericFormat
+                          value={data.kas.pengeluaran}
+                          displayType="text"
+                          thousandSeparator="."
+                          decimalSeparator=","
+                          prefix="Rp "
+                          className="text-sm"
+                        />
                       </TableCell>
-                      <TableCell className="text-blue-600 font-medium">
-                        {formatCurrency(op.saldoAkhir)}
+                      <TableCell className="text-right font-semibold">
+                        <NumericFormat
+                          value={data.kas.saldoAkhir}
+                          displayType="text"
+                          thousandSeparator="."
+                          decimalSeparator=","
+                          prefix="Rp "
+                          className="text-sm text-blue-600"
+                        />
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{op.totalTransaksi}</Badge>
+                      {/* PIUTANG */}
+                      <TableCell className="text-right">
+                        <NumericFormat
+                          value={data.piutang.baru}
+                          displayType="text"
+                          thousandSeparator="."
+                          decimalSeparator=","
+                          prefix="Rp "
+                          className="text-sm"
+                        />
                       </TableCell>
-                      <TableCell>
-                        <Badge
-                          className={
-                            netCashFlow >= 0
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }
-                        >
-                          {formatCurrency(netCashFlow)}
-                        </Badge>
+                      <TableCell className="text-right">
+                        <NumericFormat
+                          value={data.piutang.tertagih}
+                          displayType="text"
+                          thousandSeparator="."
+                          decimalSeparator=","
+                          prefix="Rp "
+                          className="text-sm"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <NumericFormat
+                          value={data.piutang.macet}
+                          displayType="text"
+                          thousandSeparator="."
+                          decimalSeparator=","
+                          prefix="Rp "
+                          className="text-sm"
+                        />
+                      </TableCell>
+                      {/* UTANG */}
+                      <TableCell className="text-right">
+                        <NumericFormat
+                          value={data.utang.baru}
+                          displayType="text"
+                          thousandSeparator="."
+                          decimalSeparator=","
+                          prefix="Rp "
+                          className="text-sm"
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <NumericFormat
+                          value={data.utang.dibayar}
+                          displayType="text"
+                          thousandSeparator="."
+                          decimalSeparator=","
+                          prefix="Rp "
+                          className="text-sm"
+                        />
                       </TableCell>
                     </TableRow>
                   );
                 })}
-                {/* Baris total keseluruhan */}
-                <TableRow className="bg-gray-50 font-bold">
-                  <TableCell>Total</TableCell>
-                  <TableCell className="text-green-600">
-                    {formatCurrency(totalKeseluruhan.penerimaan)}
+                {/* Total Row */}
+                <TableRow className="bg-gray-100 dark:bg-gray-800 font-bold">
+                  <TableCell>TOTAL KONSOLIDASI</TableCell>
+                  {/* KAS */}
+                  <TableCell className="text-right">
+                    <NumericFormat
+                      value={totalKonsolidasi.kas.penerimaan}
+                      displayType="text"
+                      thousandSeparator="."
+                      decimalSeparator=","
+                      prefix="Rp "
+                    />
                   </TableCell>
-                  <TableCell className="text-red-600">
-                    {formatCurrency(totalKeseluruhan.pengeluaran)}
+                  <TableCell className="text-right">
+                    <NumericFormat
+                      value={totalKonsolidasi.kas.pengeluaran}
+                      displayType="text"
+                      thousandSeparator="."
+                      decimalSeparator=","
+                      prefix="Rp "
+                    />
                   </TableCell>
-                  <TableCell className="text-blue-600">
-                    {formatCurrency(totalKeseluruhan.saldoAkhir)}
+                  <TableCell className="text-right text-blue-600">
+                    <NumericFormat
+                      value={totalKonsolidasi.kas.saldoAkhir}
+                      displayType="text"
+                      thousandSeparator="."
+                      decimalSeparator=","
+                      prefix="Rp "
+                    />
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {totalKeseluruhan.totalTransaksi}
-                    </Badge>
+                  {/* PIUTANG */}
+                  <TableCell className="text-right">
+                    <NumericFormat
+                      value={totalKonsolidasi.piutang.baru}
+                      displayType="text"
+                      thousandSeparator="."
+                      decimalSeparator=","
+                      prefix="Rp "
+                    />
                   </TableCell>
-                  <TableCell>
-                    <Badge
-                      className={
-                        totalKeseluruhan.penerimaan -
-                          totalKeseluruhan.pengeluaran >=
-                        0
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      }
-                    >
-                      {formatCurrency(
-                        totalKeseluruhan.penerimaan -
-                          totalKeseluruhan.pengeluaran
-                      )}
-                    </Badge>
+                  <TableCell className="text-right">
+                    <NumericFormat
+                      value={totalKonsolidasi.piutang.tertagih}
+                      displayType="text"
+                      thousandSeparator="."
+                      decimalSeparator=","
+                      prefix="Rp "
+                    />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <NumericFormat
+                      value={totalKonsolidasi.piutang.macet}
+                      displayType="text"
+                      thousandSeparator="."
+                      decimalSeparator=","
+                      prefix="Rp "
+                    />
+                  </TableCell>
+                  {/* UTANG */}
+                  <TableCell className="text-right">
+                    <NumericFormat
+                      value={totalKonsolidasi.utang.baru}
+                      displayType="text"
+                      thousandSeparator="."
+                      decimalSeparator=","
+                      prefix="Rp "
+                    />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <NumericFormat
+                      value={totalKonsolidasi.utang.dibayar}
+                      displayType="text"
+                      thousandSeparator="."
+                      decimalSeparator=","
+                      prefix="Rp "
+                    />
                   </TableCell>
                 </TableRow>
               </TableBody>
             </Table>
           </div>
+
+          {loading && (
+            <div className="text-center py-8 text-gray-500">
+              <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2" />
+              <p>Memuat data konsolidasi...</p>
+            </div>
+          )}
+
+          {!loading && keuanganData.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <Building2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>Tidak ada data untuk tanggal yang dipilih</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Detailed Transactions Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Detail Transaksi Konsolidasi</CardTitle>
-          <CardDescription>
-            Detail transaksi per perusahaan untuk tanggal{" "}
-            {new Date(selectedDate).toLocaleDateString("id-ID")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="text-center py-8">
-              <RefreshCw className="w-8 h-8 animate-spin mx-auto text-gray-400" />
-              <p className="text-gray-500 mt-2">Memuat data konsolidasi...</p>
+      {/* ✅ NEW: Tabel Detail Keseluruhan Transaksi */}
+      {detailData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="w-5 h-5" />
+                Detail Transaksi Keseluruhan ({detailData.length} records)
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">Filter Perusahaan:</Label>
+                <select
+                  value={selectedCompanyFilter || ""}
+                  onChange={(e) =>
+                    setSelectedCompanyFilter(
+                      e.target.value ? Number(e.target.value) : null
+                    )
+                  }
+                  className="border rounded px-3 py-1 text-sm"
+                >
+                  <option value="">Semua Perusahaan</option>
+                  {Object.values(COMPANIES).map((company) => (
+                    <option key={company.id} value={company.id}>
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          ) : konsolidasiData.length > 0 ? (
-            <TabelKonsolidasiKeuangan
-              entries={detailedBreakdown}
-              accounts={accounts}
-            />
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <Calculator className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-              <p>Tidak ada data konsolidasi untuk tanggal yang dipilih</p>
-              <p className="text-sm mt-2">
-                Coba pilih tanggal lain atau periksa data entri harian
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50 dark:bg-gray-800">
+                    <TableHead className="w-12">#</TableHead>
+                    <TableHead>Tanggal</TableHead>
+                    <TableHead>Jenis</TableHead>
+                    <TableHead>Perusahaan</TableHead>
+                    <TableHead>Akun</TableHead>
+                    <TableHead>Tipe Transaksi</TableHead>
+                    <TableHead className="text-right">Nominal</TableHead>
+                    <TableHead className="text-right">Saldo Akhir</TableHead>
+                    <TableHead>Keterangan</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {detailData
+                    .filter((item) =>
+                      selectedCompanyFilter
+                        ? item.perusahaan_id === selectedCompanyFilter
+                        : true
+                    )
+                    .slice(
+                      (currentPage - 1) * itemsPerPage,
+                      currentPage * itemsPerPage
+                    )
+                    .map((item, index) => {
+                      const company =
+                        COMPANIES[item.perusahaan_id as keyof typeof COMPANIES];
+                      const globalIndex =
+                        (currentPage - 1) * itemsPerPage + index + 1;
+
+                      return (
+                        <TableRow
+                          key={globalIndex}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                        >
+                          <TableCell className="text-gray-500 text-sm">
+                            {globalIndex}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {new Date(item.tanggal).toLocaleDateString(
+                              "id-ID",
+                              {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              }
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={`px-2 py-1 rounded text-xs font-medium ${
+                                item.type === "KAS"
+                                  ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                                  : item.type === "PIUTANG"
+                                  ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                                  : "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
+                              }`}
+                            >
+                              {item.type}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className={`w-2 h-2 rounded-full ${company?.color}`}
+                              />
+                              <span className="text-sm font-medium">
+                                {company?.code}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm max-w-[200px] truncate">
+                            {item.account_name}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {item.tipe_transaksi}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <NumericFormat
+                              value={item.nominal}
+                              displayType="text"
+                              thousandSeparator="."
+                              decimalSeparator=","
+                              prefix="Rp "
+                              className="text-sm font-medium"
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {item.saldo_akhir !== null ? (
+                              <NumericFormat
+                                value={item.saldo_akhir}
+                                displayType="text"
+                                thousandSeparator="."
+                                decimalSeparator=","
+                                prefix="Rp "
+                                className="text-sm text-blue-600 font-medium"
+                              />
+                            ) : (
+                              <span className="text-gray-400 text-sm">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm max-w-[250px] truncate">
+                            {item.keterangan}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                <div className="text-sm text-gray-600">
+                  Halaman {currentPage} dari {totalPages} (Total{" "}
+                  {
+                    detailData.filter((item) =>
+                      selectedCompanyFilter
+                        ? item.perusahaan_id === selectedCompanyFilter
+                        : true
+                    ).length
+                  }{" "}
+                  transaksi)
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Sebelumnya
+                  </Button>
+                  <div className="flex gap-1">
+                    {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={
+                            currentPage === pageNum ? "default" : "outline"
+                          }
+                          size="sm"
+                          onClick={() => setCurrentPage(pageNum)}
+                          className="min-w-[40px]"
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setCurrentPage(Math.min(totalPages, currentPage + 1))
+                    }
+                    disabled={currentPage === totalPages}
+                  >
+                    Selanjutnya
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Info Footer */}
+      <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-3">
+            <Calendar className="w-5 h-5 text-blue-600 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                Informasi Konsolidasi
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                {showAllData ? (
+                  <>
+                    Data konsolidasi menampilkan <strong>SEMUA DATA</strong>{" "}
+                    dari seluruh bulan dan tahun yang ada di database. Data
+                    ditampilkan apa adanya tanpa perhitungan tambahan. Termasuk
+                    data KAS, PIUTANG, dan UTANG dari 5 perusahaan: PT Padud
+                    Jaya Putera, PT Sunarya Putera, PT Prima, Divisi Blending,
+                    dan Holding Company.
+                  </>
+                ) : (
+                  <>
+                    Data konsolidasi keuangan menampilkan data mentah dari
+                    database untuk tanggal <strong>{selectedDate}</strong>. Data
+                    ditampilkan apa adanya tanpa perhitungan tambahan. Termasuk
+                    data KAS, PIUTANG, dan UTANG dari 5 perusahaan: PT Padud
+                    Jaya Putera, PT Sunarya Putera, PT Prima, Divisi Blending,
+                    dan Holding Company.
+                  </>
+                )}
               </p>
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
     </div>

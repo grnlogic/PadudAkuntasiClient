@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -8,16 +8,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -26,651 +19,326 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  BookOpen,
-  Users,
-  TrendingUp,
-  Eye,
-  Filter,
-  Calendar,
-  Bell,
-  X,
-} from "lucide-react";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
-  getAccounts,
-  getUsers,
-  getEntriHarian,
-  getPiutangTransaksi,
-  getUtangTransaksi,
-  getLaporanGudang,
-  getLaporanPenjualanProduk,
-  getLaporanProduksi,
-} from "@/lib/data";
-import { notificationAPI } from "@/lib/api";
-import ModernNotificationBell from "@/components/modern-notification-bell";
-import { Input } from "@/components/ui/input";
-import { toastSuccess, toastError } from "@/lib/toast-utils";
-import { useRef } from "react";
-import { healthAPI } from "@/lib/api";
+  Eye,
+  TrendingUp,
+  TrendingDown,
+  Users,
+  DollarSign,
+  Package,
+  AlertTriangle,
+  Calendar,
+  Filter,
+  RefreshCw,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
+// Import the correct auth function or use localStorage directly
+// If your auth module exports a different function, adjust accordingly
+// For now, using localStorage directly as a common pattern
+const getToken = () => {
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("token");
+  }
+  return null;
+};
 
-// Tambahan: Komponen SystemStatusBar
-function SystemStatusBar() {
-  const [status, setStatus] = useState<any>({ status: "checking", version: "-", service: "-", timestamp: "-" });
-  const [lastChecked, setLastChecked] = useState<string | null>(null);
-  const [error, setError] = useState(false);
-
-  const checkHealth = async () => {
-    try {
-      setError(false);
-      const data = await healthAPI.getStatus();
-      setStatus(data);
-      setLastChecked(new Date().toLocaleTimeString("id-ID"));
-    } catch (e) {
-      setError(true);
-      setStatus({ status: "offline", version: "-", service: "-", timestamp: "-" });
-      setLastChecked(new Date().toLocaleTimeString("id-ID"));
-    }
-  };
-
-  useEffect(() => {
-    checkHealth();
-  }, []);
-
-  return (
-    <div className="flex items-center gap-4 mb-2">
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-semibold">Status API:</span>
-        <span
-          className={
-            error || status.status !== "UP"
-              ? "text-red-600"
-              : status.status === "checking"
-              ? "text-gray-500"
-              : "text-green-600"
-          }
-        >
-          {error
-            ? "Offline"
-            : status.status === "UP"
-            ? "Online"
-            : status.status === "checking"
-            ? "Mengecek..."
-            : "Offline"}
-        </span>
-      </div>
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-semibold">Versi:</span>
-        <span className="text-gray-700">{status.version || "-"}</span>
-      </div>
-      <div className="flex items-center gap-2 text-sm">
-        <span className="font-semibold">Service:</span>
-        <span className="text-gray-700">{status.service || "-"}</span>
-      </div>
-      <div className="text-xs text-gray-400 ml-2">
-        {lastChecked && `Cek terakhir: ${lastChecked}`}
-      </div>
-      <Button
-        size="sm"
-        variant="outline"
-        className="ml-4"
-        onClick={checkHealth}
-      >
-        Cek Ulang Status
-      </Button>
-    </div>
-  );
+interface DivisionStat {
+  division: string;
+  totalEntries: number;
+  todayEntries: number;
+  totalAmount: number;
+  lastActivity: string | null;
 }
 
-// Tambahan: Komponen ErrorLogList (dummy fetch)
-function ErrorLogList() {
-  const [logs, setLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const fetchLogs = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/error-log");
-      const data = await res.json();
-      setLogs(data.logs || []);
-    } catch (e) {
-      setLogs([
-        {
-          time: new Date().toLocaleString("id-ID"),
-          message: "Gagal mengambil log error.",
-        },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchLogs();
-  }, []);
-
-  
+interface EntryData {
+  id: number;
+  tanggal_laporan: string;
+  account_code: string;
+  account_name: string;
+  division: string;
+  transaction_type: string;
+  nilai: number;
+  description: string;
+  created_by: string;
+  created_at: string;
 }
 
-// Tambahan: Export & Refresh & Auto Refresh
-function DashboardActions({
-  onExport,
-  onRefresh,
-  autoRefresh,
-  setAutoRefresh,
-}: any) {
-  return (
-    <div className="flex gap-2 items-center mb-2">
-      <Button size="sm" variant="outline" onClick={onExport}>
-        Export Data
-      </Button>
-      <Button size="sm" variant="outline" onClick={onRefresh}>
-        Refresh
-      </Button>
-      <label className="flex items-center gap-1 text-xs ml-2">
-        <input
-          type="checkbox"
-          checked={autoRefresh}
-          onChange={(e) => setAutoRefresh(e.target.checked)}
-        />
-        Auto Refresh
-      </label>
-    </div>
-  );
+interface PaginationInfo {
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
 }
 
-export default function SuperAdminDashboard() {
-  const [stats, setStats] = useState({
-    totalAccounts: 0,
-    activeUsers: 0,
-    todayTransactions: 0,
-    totalDivisions: 0,
+export default function DashboardPage() {
+  // Data states
+  const [entries, setEntries] = useState<EntryData[]>([]);
+  const [divisionStats, setDivisionStats] = useState<DivisionStat[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Pagination & Filter states
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    total: 0,
+    page: 1,
+    limit: 50,
+    total_pages: 0,
+  });
+  const [selectedDivision, setSelectedDivision] = useState("all");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limitPerPage, setLimitPerPage] = useState(50);
+
+  // Summary stats
+  const [summaryStats, setSummaryStats] = useState({
+    totalPenerimaan: 0,
+    totalPengeluaran: 0,
+    totalTransaksi: 0,
+    activeDivisions: 0,
   });
 
-  const [recentEntries, setRecentEntries] = useState<any[]>([]);
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [selectedDivision, setSelectedDivision] = useState("all");
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const [startDate, setStartDate] = useState("2025-06-19"); // Tanggal awal
-  const [endDate, setEndDate] = useState(todayStr); // Tanggal akhir default: hari ini
-
-  // Separate state for applied filters
-  const [appliedStartDate, setAppliedStartDate] = useState("2025-06-19");
-  const [appliedEndDate, setAppliedEndDate] = useState(todayStr);
-  const [appliedDivision, setAppliedDivision] = useState("all");
-
-  const [autoRefresh, setAutoRefresh] = useState(false);
-  const autoRefreshRef = useRef<NodeJS.Timeout | null>(null);
-
-  // ✅ ADD: Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
-  const [allEntries, setAllEntries] = useState<any[]>([]); // Store all entries for pagination
-
   useEffect(() => {
-    loadMonitoringData();
-  }, [appliedStartDate, appliedEndDate, appliedDivision]);
+    loadData();
+  }, [currentPage, limitPerPage, selectedDivision, selectedDate]);
 
-  // ✅ ADD: Reset pagination when data changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [allEntries.length]);
-
-  // Tambah efek auto refresh
-  useEffect(() => {
-    if (autoRefresh) {
-      autoRefreshRef.current = setInterval(() => {
-        loadMonitoringData();
-      }, 10000); // 10 detik
-    } else if (autoRefreshRef.current) {
-      clearInterval(autoRefreshRef.current);
-    }
-    return () => {
-      if (autoRefreshRef.current) clearInterval(autoRefreshRef.current);
-    };
-  }, [autoRefresh, appliedStartDate, appliedEndDate, appliedDivision]);
-
-  // Fungsi export data (CSV)
-  const handleExport = () => {
-    if (!allEntries || allEntries.length === 0) return;
-    const header = Object.keys(allEntries[0]);
-    const csv = [
-      header.join(","),
-      ...allEntries.map((row) =>
-        header.map((field) => JSON.stringify(row[field] ?? "")).join(",")
-      ),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `dashboard_export_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const loadMonitoringData = async () => {
+  const loadData = async () => {
     try {
-      console.log("=== SUPER ADMIN: Loading monitoring data ===");
-      console.log("Applied filters:", {
-        appliedStartDate,
-        appliedEndDate,
-        appliedDivision,
-      });
+      setLoading(true);
+      const token = getToken();
 
-      const accounts = await getAccounts();
-      const users = await getUsers();
-
-      // ✅ ENHANCED: Load data from ALL sources
-      const entries = await getEntriHarian();
-      const piutangData = await getPiutangTransaksi();
-      const utangData = await getUtangTransaksi();
-      const laporanGudangData = await getLaporanGudang();
-      const laporanPenjualanProdukData = await getLaporanPenjualanProduk();
-      const laporanProduksiData = await getLaporanProduksi();
-
-      console.log("Raw accounts data:", accounts);
-      console.log("Raw users data:", users);
-      console.log("Raw entries data:", entries);
-      console.log("Raw piutang data:", piutangData);
-      console.log("Raw utang data:", utangData);
-      console.log("Raw laporan gudang data:", laporanGudangData);
-      console.log(
-        "Raw laporan penjualan produk data:",
-        laporanPenjualanProdukData
-      );
-      console.log("Raw laporan produksi data:", laporanProduksiData);
-
-      setAccounts(accounts);
-
-      // Calculate stats
-      const divisions = [
-        ...new Set(users.map((u) => u.division?.id).filter(Boolean)),
-      ];
-
-      // ✅ ENHANCED: Combine all data sources for comprehensive monitoring
-      const allDataSources = [
-        // Entri Harian (existing)
-        ...entries.map((entry) => ({
-          ...entry,
-          source: "entri_harian",
-          originalData: entry,
-        })),
-
-        // Piutang Transaksi
-        ...(piutangData || []).map((piutang) => ({
-          id: `piutang-${piutang.id}`,
-          accountId: piutang.account?.id?.toString() || "PIUTANG",
-          tanggal: piutang.tanggalTransaksi || piutang.tanggal_transaksi || "",
-          date: piutang.tanggalTransaksi || piutang.tanggal_transaksi || "",
-          nilai: Number(piutang.nominal) || 0,
-          description: piutang.keterangan || "Transaksi Piutang",
-          createdBy: piutang.user?.username || "system",
-          createdAt:
-            piutang.createdAt || piutang.created_at || new Date().toISOString(),
-          transactionType:
-            piutang.tipeTransaksi || piutang.tipe_transaksi || "PIUTANG",
-          source: "piutang_transaksi",
-          originalData: piutang,
-        })),
-
-        // Utang Transaksi
-        ...(utangData || []).map((utang) => ({
-          id: `utang-${utang.id}`,
-          accountId: utang.account?.id?.toString() || "UTANG",
-          tanggal: utang.tanggalTransaksi || utang.tanggal_transaksi || "",
-          date: utang.tanggalTransaksi || utang.tanggal_transaksi || "",
-          nilai: Number(utang.nominal) || 0,
-          description: utang.keterangan || "Transaksi Utang",
-          createdBy: utang.user?.username || "system",
-          createdAt:
-            utang.createdAt || utang.created_at || new Date().toISOString(),
-          transactionType:
-            utang.tipeTransaksi || utang.tipe_transaksi || "UTANG",
-          source: "utang_transaksi",
-          originalData: utang,
-        })),
-
-        // Laporan Gudang
-        ...(laporanGudangData || []).map((gudang) => ({
-          id: `gudang-${gudang.id}`,
-          accountId: gudang.account?.id?.toString() || "GUDANG",
-          tanggal: gudang.tanggalLaporan || "",
-          date: gudang.tanggalLaporan || "",
-          nilai: Number(gudang.stokAkhir || 0),
-          description: gudang.keterangan || "Laporan Gudang",
-          createdBy: gudang.createdBy?.username || "system",
-          createdAt: gudang.createdAt || new Date().toISOString(),
-          transactionType: "GUDANG",
-          stokAwal: gudang.barangMasuk,
-          pemakaian: gudang.pemakaian,
-          stokAkhir: gudang.stokAkhir,
-          kondisiGudang: gudang.keterangan,
-          source: "laporan_gudang_harian",
-          originalData: gudang,
-        })),
-
-        // Laporan Penjualan Produk
-        ...(laporanPenjualanProdukData || []).map((penjualan) => ({
-          id: `penjualan-${penjualan?.id || "unknown"}`,
-          accountId: penjualan?.productAccountId?.toString() || "PENJUALAN",
-          tanggal: penjualan?.tanggalLaporan || "",
-          date: penjualan?.tanggalLaporan || "",
-          nilai: Number(penjualan?.realisasiKuantitas || 0),
-          description: `Penjualan ${penjualan?.namaAccount || "Unknown"} - ${
-            penjualan?.namaSalesperson || "Unknown"
-          }`,
-          createdBy: penjualan?.createdByUsername || "system",
-          createdAt: penjualan?.createdAt || new Date().toISOString(),
-          transactionType: "PENJUALAN_PRODUK",
-          targetAmount: penjualan?.targetKuantitas,
-          realisasiAmount: penjualan?.realisasiKuantitas,
-          source: "laporan_penjualan_produk",
-          originalData: penjualan,
-        })),
-
-        // Laporan Produksi
-        ...(laporanProduksiData || []).map((produksi) => ({
-          id: `produksi-${produksi.id}`,
-          accountId: produksi.account?.id?.toString() || "PRODUKSI",
-          tanggal: produksi.tanggalLaporan || "",
-          date: produksi.tanggalLaporan || "",
-          nilai: Number(produksi.hasilProduksi || 0),
-          description: "Laporan Produksi",
-          createdBy: produksi.createdBy?.username || "system",
-          createdAt: produksi.createdAt || new Date().toISOString(),
-          transactionType: "PRODUKSI",
-          hasilProduksi: produksi.hasilProduksi,
-          barangGagal: produksi.barangGagal,
-          stockBarangJadi: produksi.stockBarangJadi,
-          hpBarangJadi: produksi.hpBarangJadi,
-          source: "laporan_produksi_harian",
-          originalData: produksi,
-        })),
-      ];
-
-      console.log("📊 Combined data sources:", {
-        totalEntries: entries.length,
-        totalPiutang: piutangData?.length || 0,
-        totalUtang: utangData?.length || 0,
-        totalGudang: laporanGudangData?.length || 0,
-        totalPenjualanProduk: laporanPenjualanProdukData?.length || 0,
-        totalProduksi: laporanProduksiData?.length || 0,
-        combinedTotal: allDataSources.length,
-      });
-
-      // ✅ FIXED: Use applied filter variables instead of startDate/endDate
-      const rangeEntries = allDataSources.filter((entry) => {
-        const entryDate = entry.tanggal || entry.date;
-        let entryDateOnly = null;
-
-        if (entryDate) {
-          entryDateOnly = entryDate.includes("T")
-            ? entryDate.split("T")[0]
-            : entryDate;
-        }
-
-        if (!entryDateOnly) return false;
-
-        const startDateOnly = appliedStartDate.includes("T")
-          ? appliedStartDate.split("T")[0]
-          : appliedStartDate;
-        const endDateOnly = appliedEndDate.includes("T")
-          ? appliedEndDate.split("T")[0]
-          : appliedEndDate;
-
-        const isInRange =
-          entryDateOnly >= startDateOnly && entryDateOnly <= endDateOnly;
-        console.log(
-          `Entry ${entry.id} (${entry.source}): date='${entryDateOnly}' in range [${startDateOnly} - ${endDateOnly}] → match=${isInRange}`
-        );
-        return isInRange;
-      });
-
-      console.log(
-        "✅ Matched entries for range",
-        `${appliedStartDate} - ${appliedEndDate}`,
-        ":",
-        rangeEntries.length,
-        rangeEntries
-      );
-
-      setStats({
-        totalAccounts: accounts.length,
-        activeUsers: users.filter((u) => u.status === "active").length,
-        todayTransactions: allDataSources.length,
-        totalDivisions: divisions.length,
-      });
-
-      // Filter entries by division and date range
-      let filteredEntries = allDataSources.filter((entry) => {
-        const entryDate = entry.tanggal || entry.date;
-        let entryDateOnly = null;
-
-        if (entryDate) {
-          entryDateOnly = entryDate.includes("T")
-            ? entryDate.split("T")[0]
-            : entryDate;
-        }
-
-        if (!entryDateOnly) return false;
-
-        const startDateOnly = appliedStartDate.includes("T")
-          ? appliedStartDate.split("T")[0]
-          : appliedStartDate;
-        const endDateOnly = appliedEndDate.includes("T")
-          ? appliedEndDate.split("T")[0]
-          : appliedEndDate;
-
-        return entryDateOnly >= startDateOnly && entryDateOnly <= endDateOnly;
-      });
-
-      console.log(
-        "📅 Entries filtered by date range:",
-        filteredEntries.length,
-        filteredEntries
-      );
-
-      if (appliedDivision !== "all") {
-        const divisionAccounts = accounts.filter((acc) => {
-          const accDivisionId = acc.division?.id?.toString();
-          console.log(
-            `Account ${acc.id} division: ${accDivisionId}, comparing with selected: ${appliedDivision}`
-          );
-          return accDivisionId === appliedDivision;
-        });
-
-        const accountIds = divisionAccounts.map((acc) => acc.id);
-        console.log("🏢 Division accounts:", divisionAccounts);
-        console.log("📋 Account IDs to filter:", accountIds);
-
-        filteredEntries = filteredEntries.filter((entry) => {
-          const entryAccountId = entry.accountId.toString();
-          const belongs = accountIds.some(
-            (id) => id.toString() === entryAccountId
-          );
-          console.log(
-            `Entry ${entry.id} (${entry.source}) accountId ${entryAccountId} belongs to division:`,
-            belongs
-          );
-          return belongs;
-        });
-
-        console.log(
-          "🏢 Entries filtered by division:",
-          filteredEntries.length,
-          filteredEntries
-        );
+      if (!token) {
+        console.error("Token tidak ditemukan");
+        return;
       }
 
-      // ✅ ENHANCED: Comprehensive data mapping for all division types
-      const enrichedEntries = filteredEntries.map((entry, index) => {
-        console.log(
-          `🔄 Processing entry ${index + 1}/${filteredEntries.length} (${
-            entry.source
-          }):`,
-          entry
-        );
+      // Build query parameters dengan pagination
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: limitPerPage.toString(),
+        sort_by: "tanggal_laporan",
+        sort_order: "DESC",
+      });
 
-        const account = accounts.find((acc) => {
-          const match = acc.id.toString() === entry.accountId.toString();
-          if (match) {
-            console.log(
-              `✅ Found matching account for entry ${entry.id}:`,
-              acc
-            );
-          }
-          return match;
-        });
+      if (selectedDate) {
+        params.append("tanggal_dari", selectedDate);
+        params.append("tanggal_sampai", selectedDate);
+      }
 
-        if (!account) {
-          console.warn(
-            `❌ Account not found for entry ${entry.id} with accountId ${entry.accountId}`
-          );
-          return {
-            ...entry,
-            account_code: "N/A",
-            account_name: "Account Not Found",
-            division_name: "N/A",
-            value_type: "NOMINAL",
-            created_by: entry.createdBy || "system",
-          };
-        }
-
-        // ✅ ENHANCED: Map all specialized fields with comprehensive fallbacks
-        const enriched = {
-          ...entry,
-          account_code: account.accountCode || "N/A",
-          account_name: account.accountName || "N/A",
-          division_name: account.division?.name || "N/A",
-          value_type: account.valueType || "NOMINAL",
-          created_by: entry.createdBy || "system",
-
-          // ✅ COMPREHENSIVE: Map all division-specific fields
-          // Keuangan fields
-          transactionType: entry.transactionType || "NOMINAL",
-          targetAmount:
-            "targetAmount" in entry ? (entry as any).targetAmount : undefined,
-          realisasiAmount:
-            "realisasiAmount" in entry
-              ? (entry as any).realisasiAmount
-              : undefined,
-          saldoAkhir:
-            "saldoAkhir" in entry ? (entry as any).saldoAkhir : undefined,
-
-          // HRD fields
-          attendanceStatus: (entry as any).attendanceStatus,
-          absentCount: (entry as any).absentCount,
-          shift: (entry as any).shift,
-          keteranganKendala: (entry as any).keteranganKendala,
-
-          // Pemasaran fields
-          salesUserId: (entry as any).salesUserId,
-          returPenjualan: (entry as any).returPenjualan,
-
-          // Produksi fields
-          hasilProduksi: (entry as any).hasilProduksi,
-          barangGagal: (entry as any).barangGagal,
-          stockBarangJadi: (entry as any).stockBarangJadi,
-          hpBarangJadi: (entry as any).hpBarangJadi,
-
-          // Gudang/Persediaan fields
-          stokAwal: (entry as any).stokAwal,
-          pemakaian: (entry as any).pemakaian,
-          kondisiGudang: (entry as any).kondisiGudang,
-
-          // Additional specialized fields
-          hppAmount: (entry as any).hppAmount,
-          pemakaianAmount: (entry as any).pemakaianAmount,
-          stokAkhir: (entry as any).stokAkhir,
+      if (selectedDivision !== "all") {
+        // Ambil division_id dari nama divisi
+        const divisionMap: { [key: string]: number } = {
+          Keuangan: 1,
+          Produksi: 2,
+          Penjualan: 3,
+          Pembelian: 4,
+          HRD: 5,
         };
-
-        // ✅ ADD: Enhanced logging for division-specific data
-        const divisionName = account.division?.name?.toLowerCase() || "";
-        if (divisionName.includes("hrd")) {
-          console.log(`👥 HRD Entry ${entry.id}:`, {
-            attendanceStatus: enriched.attendanceStatus,
-            absentCount: enriched.absentCount,
-            shift: enriched.shift,
-            keteranganKendala: enriched.keteranganKendala,
-          });
-        } else if (divisionName.includes("pemasaran")) {
-          console.log(`📈 PEMASARAN Entry ${entry.id}:`, {
-            targetAmount: enriched.targetAmount,
-            realisasiAmount: enriched.realisasiAmount,
-            salesUserId: enriched.salesUserId,
-            returPenjualan: enriched.returPenjualan,
-          });
-        } else if (divisionName.includes("produksi")) {
-          console.log(`🏭 PRODUKSI Entry ${entry.id}:`, {
-            hasilProduksi: enriched.hasilProduksi,
-            barangGagal: enriched.barangGagal,
-            stockBarangJadi: enriched.stockBarangJadi,
-            hpBarangJadi: enriched.hpBarangJadi,
-          });
-        } else if (
-          divisionName.includes("gudang") ||
-          divisionName.includes("persediaan")
-        ) {
-          console.log(`📦 GUDANG Entry ${entry.id}:`, {
-            stokAwal: enriched.stokAwal,
-            pemakaian: enriched.pemakaian,
-            kondisiGudang: enriched.kondisiGudang,
-            stokAkhir: enriched.stokAkhir,
-          });
-        } else if (divisionName.includes("keuangan")) {
-          console.log(`💰 KEUANGAN Entry ${entry.id}:`, {
-            transactionType: enriched.transactionType,
-            saldoAkhir: enriched.saldoAkhir,
-          });
+        const divisionId = divisionMap[selectedDivision];
+        if (divisionId) {
+          params.append("division_id", divisionId.toString());
         }
+      }
 
-        console.log(
-          `✅ Successfully enriched entry ${entry.id} (${entry.source}):`,
-          enriched
-        );
-        return enriched;
+      const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1/entri-harian?${params}`;
+      console.log("🔍 Fetching dashboard data:", url);
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
-      // Sort by creation time (most recent first)
-      enrichedEntries.sort((a, b) => {
-        const dateA = new Date(a.createdAt).getTime();
-        const dateB = new Date(b.createdAt).getTime();
-        return dateB - dateA;
-      });
+      const result = await response.json();
+      console.log("✅ Dashboard response:", result);
 
-      console.log(
-        "📊 FINAL ENRICHED ENTRIES:",
-        enrichedEntries.length,
-        enrichedEntries
-      );
-      console.log("🔄 Setting recent entries state...");
+      if (result.success && result.data) {
+        setEntries(result.data);
+        setPagination(result.pagination);
 
-      setRecentEntries(enrichedEntries.slice(0, 20));
-      setAllEntries(enrichedEntries); // Store all entries for pagination
+        // Calculate summary stats dari data yang di-fetch
+        calculateSummaryStats(result.data);
+      }
 
-      // ✅ ADD: Enhanced verification with division breakdown
-      setTimeout(() => {
-        const divisionBreakdown = enrichedEntries.reduce((acc, entry) => {
-          const division = entry.division_name || "Unknown";
-          acc[division] = (acc[division] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-
-        const sourceBreakdown = enrichedEntries.reduce((acc, entry) => {
-          const source = entry.source || "Unknown";
-          acc[source] = (acc[source] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>);
-
-        console.log("🔍 Verification - recentEntries state should now be:", {
-          total: enrichedEntries.slice(0, 20).length,
-          divisionBreakdown,
-          sourceBreakdown,
-          sampleEntries: enrichedEntries.slice(0, 3),
-        });
-      }, 100);
+      // Load division stats (summary saja, tidak perlu semua data)
+      await loadDivisionStats();
     } catch (error) {
-      console.error("❌ Error loading monitoring data:", error);
+      console.error("❌ Error loading dashboard data:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const loadDivisionStats = async () => {
+    try {
+      const token = getToken();
+
+      // Fetch accounts untuk mendapatkan division info
+      const accountsResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1/accounts?limit=1000`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      const accountsResult = await accountsResponse.json();
+      const accounts = accountsResult.data || [];
+
+      // Group by division
+      const divisions = [
+        ...new Set(accounts.map((a: any) => a.division?.name).filter(Boolean)),
+      ];
+
+      // Untuk setiap divisi, ambil summary stats (count saja, tidak ambil semua data)
+      const stats = await Promise.all(
+        divisions.map(async (division: any) => {
+          const divisionAccounts = accounts.filter(
+            (a: any) => a.division?.name === division
+          );
+          const accountIds = divisionAccounts.map((acc: any) => acc.id);
+
+          if (accountIds.length === 0) {
+            return {
+              division,
+              totalEntries: 0,
+              todayEntries: 0,
+              totalAmount: 0,
+              lastActivity: null,
+            };
+          }
+
+          // Query count untuk divisi ini (tanpa limit)
+          const params = new URLSearchParams({
+            division_id: divisionAccounts[0].division_id.toString(),
+            limit: "1", // Ambil 1 saja untuk dapat pagination info
+          });
+
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1/entri-harian?${params}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+
+          const result = await response.json();
+          const totalEntries = result.pagination?.total || 0;
+
+          // Query untuk hari ini
+          const today = new Date().toISOString().split("T")[0];
+          const todayParams = new URLSearchParams({
+            division_id: divisionAccounts[0].division_id.toString(),
+            tanggal_dari: today,
+            tanggal_sampai: today,
+            limit: "1",
+          });
+
+          const todayResponse = await fetch(
+            `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/v1/entri-harian?${todayParams}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+
+          const todayResult = await todayResponse.json();
+          const todayEntries = todayResult.pagination?.total || 0;
+
+          // Ambil entry terakhir untuk last activity
+          const lastEntry = result.data?.[0];
+
+          return {
+            division,
+            totalEntries,
+            todayEntries,
+            totalAmount: 0, // Bisa dihitung jika perlu
+            lastActivity: lastEntry?.created_at || null,
+          };
+        })
+      );
+
+      setDivisionStats(stats);
+    } catch (error) {
+      console.error("❌ Error loading division stats:", error);
+    }
+  };
+
+  const calculateSummaryStats = (data: EntryData[]) => {
+    const penerimaan = data
+      .filter((e) => e.transaction_type === "PENERIMAAN")
+      .reduce((sum, e) => sum + Math.abs(e.nilai || 0), 0);
+
+    const pengeluaran = data
+      .filter((e) => e.transaction_type === "PENGELUARAN")
+      .reduce((sum, e) => sum + Math.abs(e.nilai || 0), 0);
+
+    const uniqueDivisions = new Set(data.map((e) => e.division).filter(Boolean))
+      .size;
+
+    setSummaryStats({
+      totalPenerimaan: penerimaan,
+      totalPengeluaran: pengeluaran,
+      totalTransaksi: data.length,
+      activeDivisions: uniqueDivisions,
+    });
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    setCurrentPage(1);
+    loadData();
+  };
+
+  const handleReset = () => {
+    setSelectedDivision("all");
+    setSelectedDate("");
+    setSearchTerm("");
+    setCurrentPage(1);
+    setLimitPerPage(50);
+  };
+
+  const handleExport = () => {
+    const headers = [
+      "Tanggal",
+      "Divisi",
+      "Kode Akun",
+      "Nama Akun",
+      "Tipe",
+      "Nominal",
+      "Keterangan",
+      "Dibuat Oleh",
+    ];
+
+    const csvData = filteredEntries.map((entry) => [
+      new Date(entry.tanggal_laporan).toLocaleDateString("id-ID"),
+      entry.division || "-",
+      entry.account_code,
+      entry.account_name,
+      entry.transaction_type || "-",
+      entry.nilai,
+      entry.description || "-",
+      entry.created_by,
+    ]);
+
+    const csv = [
+      headers.join(","),
+      ...csvData.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `dashboard-export-${
+      new Date().toISOString().split("T")[0]
+    }.csv`;
+    link.click();
   };
 
   const formatCurrency = (amount: number) => {
@@ -681,450 +349,40 @@ export default function SuperAdminDashboard() {
     }).format(amount);
   };
 
-  const getDivisionColor = (divisionName: string) => {
+  const getDivisionColor = (division: string) => {
     const colors: { [key: string]: string } = {
-      "KEUANGAN & ADMINISTRASI": "bg-blue-100 text-blue-800",
-      "PEMASARAN & PENJUALAN": "bg-green-100 text-green-800",
-      PRODUKSI: "bg-yellow-100 text-yellow-800",
-      PERSEDIAAN_BAHAN_BAKU: "bg-purple-100 text-purple-800",
-      HRD: "bg-orange-100 text-orange-800",
+      Keuangan: "bg-blue-100 text-blue-800",
+      Produksi: "bg-yellow-100 text-yellow-800",
+      Penjualan: "bg-green-100 text-green-800",
+      Pembelian: "bg-purple-100 text-purple-800",
+      HRD: "bg-pink-100 text-pink-800",
     };
-    return colors[divisionName] || "bg-gray-100 text-gray-800";
+    return colors[division] || "bg-gray-100 text-gray-800";
   };
 
-  // ✅ FIXED: Get unique divisions with better logging
-  const getAvailableDivisions = () => {
-    if (!accounts || accounts.length === 0) {
-      console.log("No accounts available for divisions");
-      return [];
-    }
-
-    const divisions = accounts
-      .filter((acc) => {
-        const hasValidDivision =
-          acc.division && acc.division.id && acc.division.name;
-        if (!hasValidDivision) {
-          console.log("Account with invalid division:", acc);
-        }
-        return hasValidDivision;
-      })
-      .map((acc) => ({
-        id: acc.division.id.toString(),
-        name: acc.division.name,
-      }));
-
-    // Remove duplicates by id
-    const uniqueDivisions = divisions.filter(
-      (div, index, self) => index === self.findIndex((d) => d.id === div.id)
-    );
-
-    console.log("Available divisions:", uniqueDivisions);
-    return uniqueDivisions;
-  };
-
-  // ✅ Dynamic title for period stats
-  const getPeriodTitle = () => {
-    if (startDate === endDate) {
-      return `Entri ${new Date(startDate).toLocaleDateString("id-ID")}`;
-    }
-    return `Entri ${new Date(startDate).toLocaleDateString(
-      "id-ID"
-    )} - ${new Date(endDate).toLocaleDateString("id-ID")}`;
-  };
-
-  const statsData = [
-    {
-      title: "Total Akun",
-      value: stats.totalAccounts.toString(),
-      description: "Akun dari semua divisi",
-      icon: BookOpen,
-      color: "text-blue-600",
-    },
-    {
-      title: "Admin Aktif",
-      value: stats.activeUsers.toString(),
-      description: "Operator divisi",
-      icon: Users,
-      color: "text-green-600",
-    },
-    {
-      title: getPeriodTitle(),
-      value: stats.todayTransactions.toString(),
-      description:
-        "Transaksi dari semua sumber (entri, piutang, utang, laporan)",
-      icon: TrendingUp,
-      color: "text-purple-600",
-    },
-    {
-      title: "Total Divisi",
-      value: stats.totalDivisions.toString(),
-      description: "Divisi operasional",
-      icon: Eye,
-      color: "text-orange-600",
-    },
-  ];
-
-  // ✅ Function to apply filters
-  const applyFilters = () => {
-    console.log("Applying filters:", { startDate, endDate, selectedDivision });
-    setAppliedStartDate(startDate);
-    setAppliedEndDate(endDate);
-    setAppliedDivision(selectedDivision);
-    // ✅ ADD: Reset pagination when filters change
-    setCurrentPage(1);
-  };
-
-  // ✅ Function to reset all filters
-  const resetFilters = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    setStartDate("2025-06-19");
-    setEndDate(today);
-    setSelectedDivision("all");
-    setAppliedStartDate("2025-06-19");
-    setAppliedEndDate(today);
-    setAppliedDivision("all");
-    // ✅ ADD: Reset pagination when filters reset
-    setCurrentPage(1);
-  };
-
-  function SendNotificationForm() {
-    const [message, setMessage] = useState("");
-    const [linkUrl, setLinkUrl] = useState("");
-    const [isLoading, setIsLoading] = useState(false);
-
-    const handleSend = async () => {
-      if (!message.trim()) return;
-
-      setIsLoading(true);
-      try {
-        // ✅ FIXED: Gunakan notificationAPI yang konsisten dengan pola lainnya
-        const response = await notificationAPI.send(message, linkUrl);
-
-        if (!response.success) {
-          throw new Error(response.error || "Gagal mengirim notifikasi");
-        }
-
-        toastSuccess.custom(
-          "🎉 Notifikasi berhasil dikirim ke semua pengguna!"
-        );
-        setMessage("");
-        setLinkUrl("");
-      } catch (e: any) {
-        console.error("Error sending notification:", e);
-        toastError.custom(e.message || "Gagal mengirim notifikasi");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
+  // Client-side search filter (untuk data yang sudah di-fetch)
+  const filteredEntries = entries.filter((entry) => {
+    if (!searchTerm) return true;
+    const search = searchTerm.toLowerCase();
     return (
-      <>
-        <style jsx>{`
-          .notification-form {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 20px;
-            padding: 24px;
-            margin-bottom: 24px;
-            color: white;
-            box-shadow: 0 20px 50px rgba(102, 126, 234, 0.3);
-          }
-
-          .form-title {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-          }
-
-          .form-subtitle {
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 14px;
-            margin-bottom: 20px;
-          }
-
-          .form-input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            font-size: 14px;
-            margin-bottom: 12px;
-            transition: all 0.2s ease;
-            backdrop-filter: blur(10px);
-          }
-
-          .form-input::placeholder {
-            color: rgba(255, 255, 255, 0.6);
-          }
-
-          .form-input:focus {
-            outline: none;
-            border-color: rgba(255, 255, 255, 0.5);
-            background: rgba(255, 255, 255, 0.15);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-          }
-
-          .form-textarea {
-            resize: vertical;
-            min-height: 80px;
-            font-family: inherit;
-          }
-
-          .form-actions {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            margin-top: 16px;
-          }
-
-          .send-button {
-            background: rgba(255, 255, 255, 0.9);
-            color: #667eea;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 14px;
-          }
-
-          .send-button:hover:not(:disabled) {
-            background: white;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-          }
-
-          .send-button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-          }
-
-          .clear-button {
-            background: transparent;
-            color: rgba(255, 255, 255, 0.8);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            padding: 12px 20px;
-            border-radius: 12px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            font-size: 14px;
-          }
-
-          .clear-button:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(255, 255, 255, 0.5);
-          }
-
-          .loading-spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(102, 126, 234, 0.3);
-            border-radius: 50%;
-            border-top: 2px solid #667eea;
-            animation: spin 1s linear infinite;
-          }
-
-          @keyframes spin {
-            0% {
-              transform: rotate(0deg);
-            }
-            100% {
-              transform: rotate(360deg);
-            }
-          }
-
-          .char-count {
-            font-size: 12px;
-            color: rgba(255, 255, 255, 0.6);
-            text-align: right;
-            margin-top: -8px;
-            margin-bottom: 12px;
-          }
-        `}</style>
-
-        <div className="notification-form">
-          <div className="form-title">
-            <Bell size={24} />
-            Kirim Notifikasi Broadcast
-          </div>
-          <div className="form-subtitle">
-            Kirim pesan penting ke semua pengguna sistem secara bersamaan
-          </div>
-
-          <textarea
-            className="form-input form-textarea"
-            placeholder="Tulis pesan notifikasi di sini... (contoh: Sistem akan maintenance pada hari Minggu jam 02:00 - 04:00 WIB)"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            maxLength={200}
-          />
-          <div className="char-count">{message.length}/200 karakter</div>
-
-          <input
-            type="url"
-            className="form-input"
-            placeholder="🔗 Link terkait (opsional) - contoh: https://example.com/info"
-            value={linkUrl}
-            onChange={(e) => setLinkUrl(e.target.value)}
-          />
-
-          <div className="form-actions">
-            <button
-              className="send-button"
-              onClick={handleSend}
-              disabled={!message.trim() || isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <div className="loading-spinner" />
-                  Mengirim...
-                </>
-              ) : (
-                <>
-                  <Bell size={16} />
-                  Kirim ke Semua Pengguna
-                </>
-              )}
-            </button>
-
-            {(message || linkUrl) && !isLoading && (
-              <button
-                className="clear-button"
-                onClick={() => {
-                  setMessage("");
-                  setLinkUrl("");
-                }}
-              >
-                <X size={16} />
-                Bersihkan
-              </button>
-            )}
-          </div>
-        </div>
-      </>
+      entry.account_name?.toLowerCase().includes(search) ||
+      entry.account_code?.toLowerCase().includes(search) ||
+      entry.description?.toLowerCase().includes(search)
     );
-  }
+  });
 
-  // ✅ ADD: Pagination component
-  function PaginationControls() {
-    const totalPages = Math.ceil(allEntries.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const currentEntries = allEntries.slice(startIndex, endIndex);
-
-    const goToPage = (page: number) => {
-      setCurrentPage(page);
-    };
-
-    const goToPreviousPage = () => {
-      if (currentPage > 1) {
-        setCurrentPage(currentPage - 1);
-      }
-    };
-
-    const goToNextPage = () => {
-      if (currentPage < totalPages) {
-        setCurrentPage(currentPage + 1);
-      }
-    };
-
-    const handleItemsPerPageChange = (newItemsPerPage: number) => {
-      setItemsPerPage(newItemsPerPage);
-      setCurrentPage(1); // Reset to first page when changing items per page
-    };
-
-    if (allEntries.length === 0) {
-      return null;
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= pagination.total_pages) {
+      setCurrentPage(newPage);
     }
+  };
 
+  if (loading && entries.length === 0) {
     return (
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 p-4 bg-gray-50 rounded-lg">
-        <div className="flex items-center gap-2 text-sm text-gray-600">
-          <span>
-            Menampilkan {startIndex + 1}-{Math.min(endIndex, allEntries.length)}{" "}
-            dari {allEntries.length} entri
-          </span>
-          <span className="text-gray-400">|</span>
-          <span>
-            Halaman {currentPage} dari {totalPages}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Tampilkan:</label>
-          <Select
-            value={itemsPerPage.toString()}
-            onValueChange={(value) => handleItemsPerPageChange(Number(value))}
-          >
-            <SelectTrigger className="w-20 h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10</SelectItem>
-              <SelectItem value="20">20</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-              <SelectItem value="100">100</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={goToPreviousPage}
-            disabled={currentPage === 1}
-            className="h-8 w-8 p-0"
-          >
-            ‹
-          </Button>
-
-          {/* Page numbers */}
-          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-            let pageNumber;
-            if (totalPages <= 5) {
-              pageNumber = i + 1;
-            } else if (currentPage <= 3) {
-              pageNumber = i + 1;
-            } else if (currentPage >= totalPages - 2) {
-              pageNumber = totalPages - 4 + i;
-            } else {
-              pageNumber = currentPage - 2 + i;
-            }
-
-            return (
-              <Button
-                key={pageNumber}
-                variant={currentPage === pageNumber ? "default" : "outline"}
-                size="sm"
-                onClick={() => goToPage(pageNumber)}
-                className="h-8 w-8 p-0"
-              >
-                {pageNumber}
-              </Button>
-            );
-          })}
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={goToNextPage}
-            disabled={currentPage === totalPages}
-            className="h-8 w-8 p-0"
-          >
-            ›
-          </Button>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Memuat dashboard...</p>
         </div>
       </div>
     );
@@ -1132,195 +390,221 @@ export default function SuperAdminDashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex justify-between items-start">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
-            Menara Kontrol - Dashboard Pemantauan
+            Dashboard Pemantauan
           </h1>
           <p className="text-gray-600 mt-2">
-            Pantau seluruh aktivitas dari semua divisi secara real-time
+            Monitor seluruh aktivitas sistem dari semua divisi
           </p>
         </div>
-        <ModernNotificationBell />
+        <div className="flex gap-2">
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
+            disabled={refreshing}
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+            />
+            Refresh
+          </Button>
+          <Button
+            onClick={handleExport}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </Button>
+        </div>
       </div>
 
-      {/* Tambahan: System Status & Error Log */}
-      <SystemStatusBar />
-      <ErrorLogList />
-      <DashboardActions
-        onExport={handleExport}
-        onRefresh={loadMonitoringData}
-        autoRefresh={autoRefresh}
-        setAutoRefresh={setAutoRefresh}
-      />
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Total Transaksi
+                </p>
+                <p className="text-2xl font-bold">{pagination.total || 0}</p>
+                <p className="text-xs text-gray-500 mt-1">Dari semua divisi</p>
+              </div>
+              <div className="h-12 w-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Eye className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statsData.map((stat, index) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={index}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">
-                  {stat.title}
-                </CardTitle>
-                <Icon className={`h-5 w-5 ${stat.color}`} />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className="text-xs text-gray-500 mt-1">{stat.description}</p>
-              </CardContent>
-            </Card>
-          );
-        })}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Total Penerimaan
+                </p>
+                <p className="text-2xl font-bold text-green-600">
+                  {formatCurrency(summaryStats.totalPenerimaan)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Halaman ini</p>
+              </div>
+              <div className="h-12 w-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Total Pengeluaran
+                </p>
+                <p className="text-2xl font-bold text-red-600">
+                  {formatCurrency(summaryStats.totalPengeluaran)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Halaman ini</p>
+              </div>
+              <div className="h-12 w-12 bg-red-100 rounded-lg flex items-center justify-center">
+                <TrendingDown className="h-6 w-6 text-red-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Divisi Aktif
+                </p>
+                <p className="text-2xl font-bold">{divisionStats.length}</p>
+                <p className="text-xs text-gray-500 mt-1">Total divisi</p>
+              </div>
+              <div className="h-12 w-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Users className="h-6 w-6 text-purple-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Monitoring Filters */}
+      {/* Division Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {divisionStats.map((stat) => (
+          <Card key={stat.division}>
+            <CardContent className="pt-6">
+              <div className="space-y-2">
+                <Badge className={getDivisionColor(stat.division)}>
+                  {stat.division}
+                </Badge>
+                <div>
+                  <p className="text-2xl font-bold">{stat.todayEntries}</p>
+                  <p className="text-xs text-gray-500">entri hari ini</p>
+                </div>
+                <div className="pt-2 border-t">
+                  <p className="text-sm text-gray-600">
+                    Total: {stat.totalEntries} entri
+                  </p>
+                  {stat.lastActivity && (
+                    <p className="text-xs text-gray-500">
+                      Terakhir:{" "}
+                      {new Date(stat.lastActivity).toLocaleTimeString("id-ID")}
+                    </p>
+                  )}
+                </div>
+                {stat.todayEntries === 0 && (
+                  <AlertTriangle className="h-5 w-5 text-orange-500" />
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filters */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Eye className="h-5 w-5" />
-            Pemantauan Real-Time
+            <Filter className="h-5 w-5" />
+            Filter Data
           </CardTitle>
-          <CardDescription>Filter dan pantau aktivitas divisi</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <label className="text-sm font-medium">Tanggal Awal</label>
-              <div className="relative mt-1">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="relative">
+              <Input
+                placeholder="Cari akun, keterangan..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-            <div className="flex-1">
-              <label className="text-sm font-medium">Tanggal Akhir</label>
-              <div className="relative mt-1">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+
+            <Select
+              value={selectedDivision}
+              onValueChange={setSelectedDivision}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Semua Divisi" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Divisi</SelectItem>
+                <SelectItem value="Keuangan">Keuangan</SelectItem>
+                <SelectItem value="Produksi">Produksi</SelectItem>
+                <SelectItem value="Penjualan">Penjualan</SelectItem>
+                <SelectItem value="Pembelian">Pembelian</SelectItem>
+                <SelectItem value="HRD">HRD</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="relative">
+              <Calendar className="absolute left-3 top-3 h-4 w-4 text-gray-400 pointer-events-none" />
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="pl-10"
+              />
             </div>
-            <div className="flex-1">
-              <label className="text-sm font-medium">Filter Divisi</label>
-              <Select
-                value={selectedDivision}
-                onValueChange={setSelectedDivision}
-              >
-                <SelectTrigger className="mt-1">
-                  <Filter className="mr-2 h-4 w-4" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Semua Divisi</SelectItem>
-                  {getAvailableDivisions().map((division) => (
-                    <SelectItem key={division.id} value={division.id}>
-                      {division.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col justify-end">
-              <Button
-                onClick={applyFilters}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                Tampilkan Data
-              </Button>
-            </div>
-          </div>
-          {/* ✅ Quick action buttons */}
-          <div className="mt-4 flex gap-2 flex-wrap items-center">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                console.log("All Data button clicked - before:", {
-                  startDate,
-                  endDate,
-                  selectedDivision,
-                });
-                setStartDate("2025-06-19");
-                setEndDate(todayStr);
-                setSelectedDivision("all");
-                console.log("All Data button clicked - after setting states");
+
+            <Select
+              value={limitPerPage.toString()}
+              onValueChange={(val) => {
+                setLimitPerPage(parseInt(val));
+                setCurrentPage(1);
               }}
-              className="hover:bg-gray-50"
             >
-              All Data
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="25">25 per halaman</SelectItem>
+                <SelectItem value="50">50 per halaman</SelectItem>
+                <SelectItem value="100">100 per halaman</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button variant="outline" onClick={handleReset} className="w-full">
+              Reset Filter
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={resetFilters}
-              className="hover:bg-gray-50"
-            >
-              Reset Filters
-            </Button>
-            {/* Show filter status ONLY when user changes from defaults */}
-            {(startDate !== "2025-06-19" ||
-              endDate !== todayStr ||
-              selectedDivision !== "all") && (
-              <span className="text-sm text-blue-600 ml-2">
-                📊 Filter:
-                {startDate === endDate
-                  ? new Date(startDate).toLocaleDateString("id-ID")
-                  : `${new Date(startDate).toLocaleDateString(
-                      "id-ID"
-                    )} - ${new Date(endDate).toLocaleDateString("id-ID")}`}
-                {selectedDivision !== "all" &&
-                  ` | ${
-                    getAvailableDivisions().find(
-                      (d) => d.id === selectedDivision
-                    )?.name || "Divisi"
-                  }`}
-              </span>
-            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Real-time Monitoring Table */}
+      {/* Data Table */}
       <Card>
         <CardHeader>
-          <CardTitle>
-            Aktivitas Entri Harian -{" "}
-            {startDate === endDate
-              ? new Date(startDate).toLocaleDateString("id-ID")
-              : `${new Date(startDate).toLocaleDateString(
-                  "id-ID"
-                )} s/d ${new Date(endDate).toLocaleDateString("id-ID")}`}
-          </CardTitle>
+          <CardTitle>Log Aktivitas Detail</CardTitle>
           <CardDescription>
-            Menampilkan{" "}
-            {(() => {
-              const totalPages = Math.ceil(allEntries.length / itemsPerPage);
-              const startIndex = (currentPage - 1) * itemsPerPage;
-              const endIndex = startIndex + itemsPerPage;
-              const currentEntries = allEntries.slice(startIndex, endIndex);
-              return currentEntries.length;
-            })()}{" "}
-            dari {allEntries.length} entri
-            {selectedDivision !== "all"
-              ? ` dari divisi yang dipilih`
-              : " dari semua divisi"}
-            {/* ✅ ADD: Helpful hint if no data */}
-            {allEntries.length === 0 && (
-              <span className="text-yellow-600 ml-2">
-                • Coba ubah tanggal ke 19 Juni 2025 untuk melihat data yang
-                tersedia
-              </span>
-            )}
+            Menampilkan {filteredEntries.length} dari {pagination.total} total
+            aktivitas | Halaman {pagination.page} dari {pagination.total_pages}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1328,453 +612,187 @@ export default function SuperAdminDashboard() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Waktu</TableHead>
+                  <TableHead>Tanggal & Waktu</TableHead>
                   <TableHead>Divisi</TableHead>
                   <TableHead>Akun</TableHead>
                   <TableHead>Keterangan</TableHead>
                   <TableHead>Tipe</TableHead>
-                  <TableHead>Nominal</TableHead>
-                  <TableHead>Info Tambahan</TableHead>
+                  <TableHead className="text-right">Nominal</TableHead>
                   <TableHead>Operator</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(() => {
-                  const totalPages = Math.ceil(
-                    allEntries.length / itemsPerPage
-                  );
-                  const startIndex = (currentPage - 1) * itemsPerPage;
-                  const endIndex = startIndex + itemsPerPage;
-                  const currentEntries = allEntries.slice(startIndex, endIndex);
-
-                  return currentEntries &&
-                    Array.isArray(currentEntries) &&
-                    currentEntries.length > 0 ? (
-                    currentEntries.map((entry: any, index) => {
-                      console.log(
-                        `Rendering table row ${index + 1} for entry:`,
-                        entry
-                      );
-
-                      return (
-                        <TableRow key={entry.id || `entry-${index}`}>
-                          <TableCell className="text-sm">
-                            {entry.createdAt
-                              ? new Date(entry.createdAt).toLocaleTimeString(
-                                  "id-ID",
-                                  {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  }
-                                )
-                              : "N/A"}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              className={getDivisionColor(
-                                entry.division_name || "N/A"
-                              )}
-                            >
-                              {entry.division_name || "N/A"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">
-                            <div>
-                              <div className="font-medium">
-                                {entry.account_code || "N/A"}
-                              </div>
-                              <div className="text-gray-500 text-xs">
-                                {entry.account_name || "N/A"}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {entry.description || "-"}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              className={
-                                entry.value_type === "NOMINAL"
-                                  ? "bg-blue-100 text-blue-800"
-                                  : "bg-green-100 text-green-800"
-                              }
-                            >
-                              {entry.value_type === "NOMINAL"
-                                ? "💰 Nominal"
-                                : "📦 Kuantitas"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {/* ✅ ENHANCED: Show division-specific values */}
-                            {(() => {
-                              const divisionName =
-                                entry.division_name?.toLowerCase() || "";
-
-                              // HRD: Show attendance info
-                              if (divisionName.includes("hrd")) {
-                                const attendanceStatus = (entry as any)
-                                  .attendanceStatus;
-                                const absentCount = (entry as any).absentCount;
-                                const shift = (entry as any).shift;
-
-                                if (attendanceStatus && absentCount) {
-                                  return (
-                                    <div className="text-sm">
-                                      <div className="font-medium">
-                                        {absentCount} orang - {attendanceStatus}
-                                      </div>
-                                      {shift && (
-                                        <div className="text-xs text-gray-500">
-                                          Shift: {shift}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                }
-                              }
-
-                              // Pemasaran: Show target vs realisasi
-                              if (divisionName.includes("pemasaran")) {
-                                const targetAmount = (entry as any)
-                                  .targetAmount;
-                                const realisasiAmount = (entry as any)
-                                  .realisasiAmount;
-
-                                if (targetAmount || realisasiAmount) {
-                                  return (
-                                    <div className="text-sm">
-                                      {targetAmount && (
-                                        <div className="text-blue-600">
-                                          Target: {formatCurrency(targetAmount)}
-                                        </div>
-                                      )}
-                                      {realisasiAmount && (
-                                        <div className="text-green-600">
-                                          Realisasi:{" "}
-                                          {formatCurrency(realisasiAmount)}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                }
-                              }
-
-                              // Produksi: Show production data
-                              if (divisionName.includes("produksi")) {
-                                const hasilProduksi = (entry as any)
-                                  .hasilProduksi;
-                                const barangGagal = (entry as any).barangGagal;
-                                const stockBarangJadi = (entry as any)
-                                  .stockBarangJadi;
-
-                                if (
-                                  hasilProduksi ||
-                                  barangGagal ||
-                                  stockBarangJadi
-                                ) {
-                                  return (
-                                    <div className="text-sm">
-                                      {hasilProduksi && (
-                                        <div className="text-green-600">
-                                          Hasil: {hasilProduksi} unit
-                                        </div>
-                                      )}
-                                      {barangGagal && (
-                                        <div className="text-red-600">
-                                          Gagal: {barangGagal} unit
-                                        </div>
-                                      )}
-                                      {stockBarangJadi && (
-                                        <div className="text-blue-600">
-                                          Stock: {stockBarangJadi} unit
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                }
-                              }
-
-                              // Gudang/Persediaan: Show stock data
-                              if (
-                                divisionName.includes("gudang") ||
-                                divisionName.includes("persediaan")
-                              ) {
-                                const stokAwal = (entry as any).stokAwal;
-                                const pemakaian = (entry as any).pemakaian;
-                                const stokAkhir = (entry as any).stokAkhir;
-
-                                if (stokAwal || pemakaian || stokAkhir) {
-                                  return (
-                                    <div className="text-sm">
-                                      {stokAwal && (
-                                        <div className="text-blue-600">
-                                          Awal: {stokAwal} unit
-                                        </div>
-                                      )}
-                                      {pemakaian && (
-                                        <div className="text-orange-600">
-                                          Pakai: {pemakaian} unit
-                                        </div>
-                                      )}
-                                      {stokAkhir && (
-                                        <div className="text-green-600">
-                                          Akhir: {stokAkhir} unit
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                }
-                              }
-
-                              // Keuangan: Show transaction type and amount
-                              if (divisionName.includes("keuangan")) {
-                                const transactionType = (entry as any)
-                                  .transactionType;
-                                const saldoAkhir = (entry as any).saldoAkhir;
-
-                                if (
-                                  transactionType === "SALDO_AKHIR" &&
-                                  saldoAkhir
-                                ) {
-                                  return (
-                                    <div className="text-sm">
-                                      <div className="font-medium text-purple-600">
-                                        Saldo: {formatCurrency(saldoAkhir)}
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                              }
-
-                              // Default: Show standard nilai
-                              return entry.value_type === "NOMINAL"
-                                ? formatCurrency(entry.nilai || 0)
-                                : `${(entry.nilai || 0).toLocaleString(
-                                    "id-ID"
-                                  )} unit`;
-                            })()}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {/* ✅ ENHANCED: Show additional division-specific information */}
-                            {(() => {
-                              const divisionName =
-                                entry.division_name?.toLowerCase() || "";
-
-                              // HRD: Show shift and keterangan kendala
-                              if (divisionName.includes("hrd")) {
-                                const shift = (entry as any).shift;
-                                const keteranganKendala = (entry as any)
-                                  .keteranganKendala;
-
-                                return (
-                                  <div className="text-xs">
-                                    {shift && (
-                                      <div className="text-blue-600 mb-1">
-                                        Shift: {shift}
-                                      </div>
-                                    )}
-                                    {keteranganKendala && (
-                                      <div
-                                        className="text-gray-600 truncate max-w-[150px]"
-                                        title={keteranganKendala}
-                                      >
-                                        {keteranganKendala}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              }
-
-                              // Pemasaran: Show retur and kendala
-                              if (divisionName.includes("pemasaran")) {
-                                const returPenjualan = (entry as any)
-                                  .returPenjualan;
-                                const keteranganKendala = (entry as any)
-                                  .keteranganKendala;
-
-                                return (
-                                  <div className="text-xs">
-                                    {returPenjualan && (
-                                      <div className="text-red-600 mb-1">
-                                        Retur: {formatCurrency(returPenjualan)}
-                                      </div>
-                                    )}
-                                    {keteranganKendala && (
-                                      <div
-                                        className="text-gray-600 truncate max-w-[150px]"
-                                        title={keteranganKendala}
-                                      >
-                                        {keteranganKendala}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              }
-
-                              // Produksi: Show HPP and kendala
-                              if (divisionName.includes("produksi")) {
-                                const hpBarangJadi = (entry as any)
-                                  .hpBarangJadi;
-                                const keteranganKendala = (entry as any)
-                                  .keteranganKendala;
-
-                                return (
-                                  <div className="text-xs">
-                                    {hpBarangJadi && (
-                                      <div className="text-purple-600 mb-1">
-                                        HPP: {formatCurrency(hpBarangJadi)}
-                                      </div>
-                                    )}
-                                    {keteranganKendala && (
-                                      <div
-                                        className="text-gray-600 truncate max-w-[150px]"
-                                        title={keteranganKendala}
-                                      >
-                                        {keteranganKendala}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              }
-
-                              // Gudang/Persediaan: Show kondisi gudang
-                              if (
-                                divisionName.includes("gudang") ||
-                                divisionName.includes("persediaan")
-                              ) {
-                                const kondisiGudang = (entry as any)
-                                  .kondisiGudang;
-
-                                if (kondisiGudang) {
-                                  return (
-                                    <div
-                                      className="text-xs text-gray-600 truncate max-w-[150px]"
-                                      title={kondisiGudang}
-                                    >
-                                      {kondisiGudang}
-                                    </div>
-                                  );
-                                }
-                              }
-
-                              // Keuangan: Show transaction details
-                              if (divisionName.includes("keuangan")) {
-                                const transactionType = (entry as any)
-                                  .transactionType;
-
-                                if (
-                                  transactionType &&
-                                  transactionType !== "NOMINAL"
-                                ) {
-                                  return (
-                                    <div className="text-xs">
-                                      <Badge
-                                        className={
-                                          transactionType === "PENERIMAAN"
-                                            ? "bg-green-100 text-green-800"
-                                            : transactionType === "PENGELUARAN"
-                                            ? "bg-red-100 text-red-800"
-                                            : "bg-purple-100 text-purple-800"
-                                        }
-                                      >
-                                        {transactionType}
-                                      </Badge>
-                                    </div>
-                                  );
-                                }
-                              }
-
-                              return "-";
-                            })()}
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-500">
-                            {entry.created_by || "system"}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        colSpan={8}
-                        className="text-center py-8 text-gray-500"
+                {filteredEntries.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">
+                          {new Date(entry.tanggal_laporan).toLocaleDateString(
+                            "id-ID"
+                          )}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(entry.created_at).toLocaleTimeString(
+                            "id-ID"
+                          )}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getDivisionColor(entry.division)}>
+                        {entry.division || "-"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      <div className="flex flex-col">
+                        <span className="font-semibold">
+                          {entry.account_code}
+                        </span>
+                        <span className="text-xs text-gray-600">
+                          {entry.account_name}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate">
+                      {entry.description || "-"}
+                    </TableCell>
+                    <TableCell>
+                      {entry.transaction_type ? (
+                        <Badge
+                          variant={
+                            entry.transaction_type === "PENERIMAAN"
+                              ? "default"
+                              : "destructive"
+                          }
+                        >
+                          {entry.transaction_type}
+                        </Badge>
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      <span
+                        className={
+                          entry.transaction_type === "PENERIMAAN"
+                            ? "text-green-600"
+                            : entry.transaction_type === "PENGELUARAN"
+                            ? "text-red-600"
+                            : ""
+                        }
                       >
-                        <div className="space-y-2">
-                          <div>
-                            Tidak ada entri untuk tanggal dan divisi yang
-                            dipilih
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            Debug: allEntries.length = {allEntries?.length || 0}
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            Debug: Array.isArray ={" "}
-                            {Array.isArray(allEntries) ? "true" : "false"}
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            Debug: Applied filters = {appliedStartDate} -{" "}
-                            {appliedEndDate} (Division: {appliedDivision})
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            Debug: Total accounts = {accounts?.length || 0}
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            Debug: Current page = {currentPage}, Items per page
-                            = {itemsPerPage}
-                          </div>
-                          {/* ✅ ADD: Helpful suggestion */}
-                          <div className="text-sm text-blue-600 mt-4">
-                            💡 Tip: Klik tombol "19 Jun (Ada Data)" di atas
-                            untuk melihat transaksi yang tersedia
-                          </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })()}
+                        {formatCurrency(Math.abs(entry.nilai || 0))}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-600">
+                      {entry.created_by}
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>
-          <PaginationControls />
+
+          {filteredEntries.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              Tidak ada data yang sesuai dengan filter
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {pagination.total > 0 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <p className="text-sm text-gray-600">
+                Menampilkan {(pagination.page - 1) * pagination.limit + 1} -{" "}
+                {Math.min(pagination.page * pagination.limit, pagination.total)}{" "}
+                dari {pagination.total} entri
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Prev
+                </Button>
+                <div className="flex items-center gap-1">
+                  {[...Array(Math.min(5, pagination.total_pages))].map(
+                    (_, idx) => {
+                      let pageNum;
+                      if (pagination.total_pages <= 5) {
+                        pageNum = idx + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = idx + 1;
+                      } else if (currentPage >= pagination.total_pages - 2) {
+                        pageNum = pagination.total_pages - 4 + idx;
+                      } else {
+                        pageNum = currentPage - 2 + idx;
+                      }
+
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={
+                            currentPage === pageNum ? "default" : "outline"
+                          }
+                          size="sm"
+                          onClick={() => handlePageChange(pageNum)}
+                        >
+                          {pageNum}
+                        </Button>
+                      );
+                    }
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === pagination.total_pages}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Quick Actions for Emergency */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-red-600">Mode Darurat</CardTitle>
-          <CardDescription>
-            Aksi cepat untuk situasi darurat atau perbaikan sistem
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              className="text-red-600 border-red-200 hover:bg-red-50"
-            >
-              Backup Darurat
-            </Button>
-            <Button
-              variant="outline"
-              className="text-orange-600 border-orange-200 hover:bg-orange-50"
-            >
-              Reset Sesi User
-            </Button>
-            <Button
-              variant="outline"
-              className="text-yellow-600 border-yellow-200 hover:bg-yellow-50"
-            >
-              Maintenance Mode
-            </Button>
+      {/* Info Footer */}
+      <Card className="bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Eye className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-blue-900 dark:text-blue-100">
+                Dashboard Pemantauan Real-time
+              </h3>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                Dashboard ini menggunakan pagination server-side untuk performa
+                optimal. Data statistik divisi diambil secara efisien tanpa
+                memuat seluruh data. Filter dan pencarian bekerja dengan cepat
+                untuk membantu Anda menemukan informasi yang dibutuhkan.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Badge variant="outline" className="bg-white">
+                  ✅ Server-side Pagination
+                </Badge>
+                <Badge variant="outline" className="bg-white">
+                  ✅ Efficient Data Loading
+                </Badge>
+                <Badge variant="outline" className="bg-white">
+                  ✅ Real-time Monitoring
+                </Badge>
+              </div>
+            </div>
           </div>
-          <p className="text-xs text-gray-500 mt-2">
-            * Gunakan hanya dalam keadaan darurat atau untuk perbaikan sistem
-          </p>
         </CardContent>
       </Card>
-
-      <SendNotificationForm />
     </div>
   );
 }

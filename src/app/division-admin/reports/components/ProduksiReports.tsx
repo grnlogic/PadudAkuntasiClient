@@ -135,7 +135,6 @@ export default function ProduksiReports() {
   };
 
   const exportToPDF = () => {
-    console.log("Exporting Produksi report to PDF...");
   };
 
   const refreshData = () => {

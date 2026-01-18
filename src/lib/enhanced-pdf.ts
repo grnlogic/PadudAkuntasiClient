@@ -11,6 +11,23 @@ interface PDFReportData {
     totalPengeluaran: number;
     totalSaldoAkhir: number;
   };
+  // ✅ UPDATED: Support for keuangan specific summaries
+  keuanganSummary?: {
+    totalPenerimaan: number;
+    totalPengeluaran: number;
+    totalSaldoAkhir: number;
+  };
+  piutangSummary?: {
+    baru: number;
+    tertagih: number;
+    macet: number;
+    saldoAkhir: number;
+  };
+  utangSummary?: {
+    baru: number;
+    dibayar: number;
+    saldoAkhir: number;
+  };
   // ✅ NEW: Support for specialized division data
   laporanPenjualanSales?: any[];
   laporanPenjualanProduk?: any[]; // ✅ ADD: Support for new product sales reports
@@ -22,7 +39,7 @@ interface PDFReportData {
   salespeople?: any[];
 }
 
-// ✅ NEW: Helper function untuk transform data dari backend format ke frontend format
+// ✅ UPDATED: Helper function untuk transform data dari backend format ke frontend format
 function transformBackendData(entry: any): any {
   return {
     ...entry,
@@ -49,15 +66,25 @@ function transformBackendData(entry: any): any {
     attendanceStatus: entry.attendance_status || entry.attendanceStatus,
     absentCount: entry.absent_count || entry.absentCount,
     overtimeHours: entry.overtime_hours || entry.overtimeHours,
-    // Keuangan specific fields
+    
+    // ✅ UPDATED: Keuangan specific fields - support new backend structure
     saldoAkhir: entry.saldo_akhir || entry.saldoAkhir,
-    transactionType: entry.transaction_type || entry.transactionType,
+    transactionType: entry.transaction_type || entry.transactionType || entry.tipe_transaksi,
+    nilai: entry.nilai || entry.nominal || entry.amount,
+    
+    // ✅ ADDED: Account mapping for piutang/utang entries
+    accountId: entry.accountId || entry.account_id,
+    accountName: entry.accountName || entry.account_name,
+    accountCode: entry.accountCode || entry.account_code,
+    
     // Sales specific fields
     salesUserId: entry.sales_user_id || entry.salesUserId,
-    // Date fields
+    
+    // ✅ UPDATED: Date fields - better handling
     tanggalLaporan:
-      entry.tanggal_laporan || entry.tanggalLaporan || entry.created_at,
-    tanggalTransaksi: entry.tanggal_transaksi || entry.tanggalTransaksi,
+      entry.tanggal_laporan || entry.tanggalLaporan || entry.tanggal_transaksi || entry.created_at,
+    tanggalTransaksi: entry.tanggal_transaksi || entry.tanggalTransaksi || entry.tanggal_laporan,
+    createdAt: entry.created_at || entry.createdAt,
   };
 }
 
@@ -121,6 +148,7 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
         "🔍 [PDF DEBUG] ALL laporanPenjualanProduk:",
         data.laporanPenjualanProduk.length
       );
+      console.log("🔍 [PDF DEBUG] Sample data:", data.laporanPenjualanProduk[0]);
       const produkEntries = data.laporanPenjualanProduk.map((produk: any) => {
         return {
           id: `produk-${produk.id}`,
@@ -128,20 +156,37 @@ function getAllTransformedEntries(data: PDFReportData): any[] {
             produk.productAccountId?.toString() ||
             produk.product_account_id?.toString(),
           accountCode:
-            produk.accountCode || produk.productAccountId?.toString() || "N/A",
+            produk.accountCode || 
+            produk.product_code || 
+            produk.productAccountId?.toString() || 
+            "N/A",
           description: `${
-            produk.namaAccount || produk.nama_account || "Produk"
+            produk.namaAccount || 
+            produk.product_name || 
+            produk.nama_account || 
+            "Produk"
           } - ${
-            produk.namaSalesperson || produk.nama_salesperson || "Unknown"
+            produk.namaSalesperson || 
+            produk.salesperson_nama || 
+            produk.nama_salesperson || 
+            "Unknown"
           }`,
-          keterangan: `${
-            produk.namaPerusahaan || produk.nama_perusahaan || "Unknown Company"
-          } - Target: ${produk.targetKuantitas || 0}, Realisasi: ${
-            produk.realisasiKuantitas || 0
+          keterangan: `Target: ${
+            produk.targetKuantitas || 
+            produk.target_kuantitas || 
+            0
+          }, Realisasi: ${
+            produk.realisasiKuantitas || 
+            produk.realisasi_kuantitas || 
+            0
+          }${
+            produk.keteranganKendala || produk.keterangan_kendala 
+              ? ` - ${produk.keteranganKendala || produk.keterangan_kendala}`
+              : ''
           }`,
-          nilai: Number(produk.realisasiKuantitas) || 0,
-          targetAmount: Number(produk.targetKuantitas) || 0,
-          realisasiAmount: Number(produk.realisasiKuantitas) || 0,
+          nilai: Number(produk.realisasiKuantitas || produk.realisasi_kuantitas) || 0,
+          targetAmount: Number(produk.targetKuantitas || produk.target_kuantitas) || 0,
+          realisasiAmount: Number(produk.realisasiKuantitas || produk.realisasi_kuantitas) || 0,
           keteranganKendala:
             produk.keteranganKendala || produk.keterangan_kendala || "",
           tanggalLaporan: produk.tanggalLaporan || produk.tanggal_laporan,
@@ -539,6 +584,9 @@ function generateEnhancedHTML(data: PDFReportData): string {
 function generateSummarySection(data: PDFReportData): string {
   const {
     summary,
+    keuanganSummary,
+    piutangSummary,
+    utangSummary,
     divisionName,
     laporanProduksi,
     laporanBlendingData,
@@ -564,12 +612,14 @@ function generateSummarySection(data: PDFReportData): string {
       (entry) =>
         entry.transactionType === "PIUTANG_BARU" ||
         entry.transactionType === "PIUTANG_TERTAGIH" ||
-        entry.transactionType === "PIUTANG_MACET"
+        entry.transactionType === "PIUTANG_MACET" ||
+        entry.transactionType === "SALDO_AKHIR_PIUTANG"
     );
     const hasUtang = allEntries.some(
       (entry) =>
         entry.transactionType === "UTANG_BARU" ||
-        entry.transactionType === "UTANG_DIBAYAR"
+        entry.transactionType === "UTANG_DIBAYAR" ||
+        entry.transactionType === "SALDO_AKHIR_UTANG"
     );
 
     console.log("🔍 [PDF KEUANGAN DEBUG] Transaction types:", {
@@ -580,14 +630,9 @@ function generateSummarySection(data: PDFReportData): string {
 
     let summaryHTML = "";
 
-    // ✅ KAS Summary (hanya jika ada transaksi kas)
-    if (
-      hasKas &&
-      summary &&
-      (summary.totalPenerimaan > 0 ||
-        summary.totalPengeluaran > 0 ||
-        summary.totalSaldoAkhir > 0)
-    ) {
+    // ✅ KAS Summary - use keuanganSummary data
+    const kasData = keuanganSummary || summary || { totalPenerimaan: 0, totalPengeluaran: 0, totalSaldoAkhir: 0 };
+    if (hasKas || (kasData.totalPenerimaan > 0 || kasData.totalPengeluaran > 0 || kasData.totalSaldoAkhir > 0)) {
       summaryHTML += `
         <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
           <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">💰 RINGKASAN KAS HARIAN</h3>
@@ -599,34 +644,18 @@ function generateSummarySection(data: PDFReportData): string {
               </tr>
             </thead>
             <tbody>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Penerimaan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalPenerimaan.toLocaleString()}</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Pengeluaran</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalPengeluaran.toLocaleString()}</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${summary.totalSaldoAkhir.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Penerimaan</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${kasData.totalPenerimaan.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Total Pengeluaran</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${kasData.totalPengeluaran.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${kasData.totalSaldoAkhir.toLocaleString()}</td></tr>
             </tbody>
           </table>
         </div>
       `;
     }
 
-    // ✅ PIUTANG Summary (hanya jika ada transaksi piutang)
-    if (hasPiutang) {
-      const piutangBaru = allEntries
-        .filter((entry) => entry.transactionType === "PIUTANG_BARU")
-        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      const piutangTertagih = allEntries
-        .filter((entry) => entry.transactionType === "PIUTANG_TERTAGIH")
-        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      const piutangMacet = allEntries
-        .filter((entry) => entry.transactionType === "PIUTANG_MACET")
-        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      // Saldo Akhir Piutang hanya dari entri manual user
-      const saldoAkhirPiutang = allEntries
-        .filter((entry) => entry.transactionType === "SALDO_AKHIR_PIUTANG")
-        .reduce(
-          (sum, entry) => sum + (entry.saldoAkhir || entry.nilai || 0),
-          0
-        );
-
+    // ✅ PIUTANG Summary - use piutangSummary data
+    const piutangData = piutangSummary || { baru: 0, tertagih: 0, macet: 0, saldoAkhir: 0 };
+    if (hasPiutang || (piutangData.baru > 0 || piutangData.tertagih > 0 || piutangData.macet > 0 || piutangData.saldoAkhir > 0)) {
       summaryHTML += `
         <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
           <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">📊 RINGKASAN PIUTANG HARIAN</h3>
@@ -638,35 +667,19 @@ function generateSummarySection(data: PDFReportData): string {
               </tr>
             </thead>
             <tbody>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Piutang Baru</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${piutangBaru.toLocaleString()}</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Piutang Tertagih</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${piutangTertagih.toLocaleString()}</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Piutang Macet</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${piutangMacet.toLocaleString()}</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir Piutang</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${saldoAkhirPiutang.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Piutang Baru</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${piutangData.baru.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Piutang Tertagih</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${piutangData.tertagih.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Piutang Macet</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${piutangData.macet.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir Piutang</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${piutangData.saldoAkhir.toLocaleString()}</td></tr>
             </tbody>
           </table>
         </div>
       `;
     }
 
-    // ✅ UTANG Summary (hanya jika ada transaksi utang)
-    if (hasUtang) {
-      const utangBaru = allEntries
-        .filter((entry) => entry.transactionType === "UTANG_BARU")
-        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      const utangDibayar = allEntries
-        .filter((entry) => entry.transactionType === "UTANG_DIBAYAR")
-        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      const bahanBaku = allEntries
-        .filter((entry) => entry.kategori === "BAHAN_BAKU")
-        .reduce((sum, entry) => sum + (entry.nilai || 0), 0);
-      // TAMBAH: saldo akhir utang
-      const saldoAkhirUtang = allEntries
-        .filter((entry) => entry.transactionType === "SALDO_AKHIR_UTANG")
-        .reduce(
-          (sum, entry) => sum + (entry.saldoAkhir || entry.nilai || 0),
-          0
-        );
-
+    // ✅ UTANG Summary - use utangSummary data
+    const utangData = utangSummary || { baru: 0, dibayar: 0, saldoAkhir: 0 };
+    if (hasUtang || (utangData.baru > 0 || utangData.dibayar > 0 || utangData.saldoAkhir > 0)) {
       summaryHTML += `
         <div class="summary-section" style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px;">
           <h3 style="color: #333; margin-bottom: 15px; font-size: 16px;">💳 RINGKASAN UTANG HARIAN</h3>
@@ -678,9 +691,9 @@ function generateSummarySection(data: PDFReportData): string {
               </tr>
             </thead>
             <tbody>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Utang Baru</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${utangBaru.toLocaleString()}</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Utang Dibayar</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${utangDibayar.toLocaleString()}</td></tr>
-              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir Utang</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${saldoAkhirUtang.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Utang Baru</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${utangData.baru.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Utang Dibayar</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${utangData.dibayar.toLocaleString()}</td></tr>
+              <tr><td style="border: 1px solid #ddd; padding: 8px;">Saldo Akhir Utang</td><td style="border: 1px solid #ddd; padding: 8px; text-align: right;">Rp ${utangData.saldoAkhir.toLocaleString()}</td></tr>
             </tbody>
           </table>
         </div>
@@ -991,9 +1004,9 @@ function generateSummarySection(data: PDFReportData): string {
     `;
   }
 
-  // ✅ KEUANGAN: Summary keuangan - FIXED: Tampilkan meskipun nilai 0
+  // ✅ KEUANGAN: Summary keuangan - UPDATED: Use proper summary data
   if (divisionName.includes("KEUANGAN")) {
-    const safeSummary = summary || {
+    const safeSummary = keuanganSummary || summary || {
       totalPenerimaan: 0,
       totalPengeluaran: 0,
       totalSaldoAkhir: 0,
@@ -1032,8 +1045,8 @@ function generateSummarySection(data: PDFReportData): string {
       : 0;
     if (data.laporanPenjualanProduk) {
       data.laporanPenjualanProduk.forEach((produk: any) => {
-        totalTarget += Number(produk.targetKuantitas || 0);
-        totalRealisasi += Number(produk.realisasiKuantitas || 0);
+        totalTarget += Number(produk.targetKuantitas || produk.target_kuantitas || 0);
+        totalRealisasi += Number(produk.realisasiKuantitas || produk.realisasi_kuantitas || 0);
       });
     }
 

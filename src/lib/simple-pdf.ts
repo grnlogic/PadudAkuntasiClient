@@ -275,7 +275,8 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
                   data.entries
                     .filter(
                       (entry) =>
-                        (entry as any).transactionType === "PIUTANG_BARU"
+                        (entry as any).transactionType === "PIUTANG_BARU" ||
+                        (entry as any).transactionType === "SALDO_AKHIR_PIUTANG"
                     )
                     .reduce((sum, entry) => sum + Number(entry.nilai), 0)
                 )}</td>
@@ -443,9 +444,13 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
           </table>
         </div>
         `
-            : data.laporanProduksiData && data.laporanProduksiData.length > 0
+            : ""
+        }
+        
+        <!-- ✅ Production Data Table (if exists) -->
+        ${
+          data.laporanProduksiData && data.laporanProduksiData.length > 0
             ? `
-        <!-- ✅ NEW: Production Data Table -->
         <div class="summary-section">
           <div class="summary-title">DETAIL LAPORAN PRODUKSI</div>
           <table class="summary-table">
@@ -486,11 +491,10 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
           </table>
         </div>
         `
-            : data.laporanBlendingData && data.laporanBlendingData.length > 0
-            ? `
-
+            : ""
+        }
         
-        <!-- ✅ NEW: Blending Data Table -->
+        <!-- ✅ Blending Data Table (if exists) -->
         ${
           data.laporanBlendingData && data.laporanBlendingData.length > 0
             ? `
@@ -532,55 +536,9 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
         `
             : ""
         }
-        `
-            : data.divisionName.includes("BLENDING")
-            ? `
-
         
-        <!-- ✅ NEW: Blending Data Table -->
         ${
-          data.laporanBlendingData && data.laporanBlendingData.length > 0
-            ? `
-        <div class="summary-section">
-          <div class="summary-title">DETAIL LAPORAN BLENDING</div>
-          <table class="summary-table">
-            <thead>
-              <tr>
-                <th>Bahan Baku</th>
-                <th>Barang Masuk</th>
-                <th>Pemakaian</th>
-                <th>Stok Akhir</th>
-                <th>Keterangan</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.laporanBlendingData
-                .map(
-                  (item) => `
-                <tr>
-                  <td>${item.accountName}</td>
-                  <td style="text-align: right;">${item.barangMasuk.toLocaleString(
-                    "id-ID"
-                  )}</td>
-                  <td style="text-align: right;">${item.pemakaian.toLocaleString(
-                    "id-ID"
-                  )}</td>
-                  <td style="text-align: right;">${item.stokAkhir.toLocaleString(
-                    "id-ID"
-                  )}</td>
-                  <td>${item.keteranganGudang || "-"}</td>
-                </tr>
-              `
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-        `
-            : ""
-        }
-        `
-            : data.divisionName.includes("HRD")
+          data.divisionName.includes("HRD")
             ? `
         <div class="summary-section">
           <div class="summary-title">RINGKASAN KEHADIRAN HARIAN</div>

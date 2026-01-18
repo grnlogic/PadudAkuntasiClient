@@ -15,6 +15,8 @@ export interface Account {
     id: string;
     name: string;
   };
+  perusahaan_id?: number; // ✅ NEW: Company ID from backend
+  perusahaanId?: number; // Alternative naming
   status: "active" | "inactive";
   createdBy: string;
   createdAt: string;
@@ -25,6 +27,7 @@ interface ApiResponse<T> {
   data?: T;
   message?: string;
   error?: string;
+  maintenance?: boolean; // Add maintenance flag
 }
 
 // Request helper function
@@ -39,12 +42,7 @@ async function apiRequest<T>(
       typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
     // ✅ ADD: Log request details
-    console.log("🌐 API REQUEST:", {
-      endpoint: `${API_BASE_URL}${endpoint}`,
-      method: options.method || "GET",
-      hasToken: !!token,
-      body: options.body ? JSON.parse(options.body as string) : null,
-    });
+
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       headers: {
@@ -72,6 +70,15 @@ async function apiRequest<T>(
         errorMessage: data?.message || data?.error || "Unknown error",
       });
 
+      // Check for maintenance mode (503 status)
+      if (response.status === 503 && data?.maintenance) {
+        return {
+          success: false,
+          error: data?.message || "Sistem sedang dalam mode maintenance",
+          maintenance: true,
+        };
+      }
+
       return {
         success: false,
         error:
@@ -81,6 +88,18 @@ async function apiRequest<T>(
       };
     }
 
+    // ✅ FIX: Unwrap backend response yang sudah punya struktur {success, data}
+    // Backend mengembalikan: {success: true, message: "...", data: {token, user}}
+    // Kita unwrap agar frontend bisa akses langsung response.data.token
+    if (data && typeof data === 'object' && 'success' in data && 'data' in data) {
+      return {
+        success: data.success,
+        data: data.data,  // Unwrap: ambil data.data, bukan data
+        message: data.message,
+      };
+    }
+
+    // Fallback untuk response yang tidak punya nested structure
     return {
       success: true,
       data: data,
@@ -133,31 +152,24 @@ export const accountsAPI = {
   getByDivision: async (divisionId: string | number) => {
     const numericId =
       typeof divisionId === "string" ? parseInt(divisionId) : divisionId;
-    return apiRequest<any[]>(`/api/v1/accounts/by-division/${numericId}`);
+    return apiRequest<any[]>(`/api/v1/accounts/division/${numericId}`);
   },
 
   create: async (account: any) => {
     const backendAccount = {
-      accountCode: account.accountCode?.trim() || null,
-      accountName: account.accountName?.trim() || null,
-      valueType: account.valueType || null,
-      division: {
-        id: account.division?.id ? parseInt(account.division.id) : null,
-        name: account.division?.name || null,
-      },
+      division_id: account.division?.id ? parseInt(account.division.id) : null,
+      account_code: account.accountCode?.trim() || null,
+      account_name: account.accountName?.trim() || null,
     };
 
     // Validation
-    if (!backendAccount.accountCode) {
+    if (!backendAccount.account_code) {
       throw new Error("Account code is required");
     }
-    if (!backendAccount.accountName) {
+    if (!backendAccount.account_name) {
       throw new Error("Account name is required");
     }
-    if (!backendAccount.valueType) {
-      throw new Error("Value type is required");
-    }
-    if (!backendAccount.division.id) {
+    if (!backendAccount.division_id) {
       throw new Error("Division is required");
     }
 
@@ -170,54 +182,39 @@ export const accountsAPI = {
   update: async (id: string, updates: any) => {
     const numericId = parseInt(id);
 
-    // ✅ Enhanced validation and logging
     console.log("🔍 [UPDATE ACCOUNT DEBUG] Input:", {
       id,
       numericId,
       updates,
-      rawUpdates: JSON.stringify(updates, null, 2),
     });
 
-    // ✅ Build payload with proper validation
+    // Build payload with proper validation
     const backendUpdates: any = {};
 
     // Only include non-empty fields
     if (updates.accountCode?.trim()) {
-      backendUpdates.accountCode = updates.accountCode.trim();
+      backendUpdates.account_code = updates.accountCode.trim();
     }
 
     if (updates.accountName?.trim()) {
-      backendUpdates.accountName = updates.accountName.trim();
+      backendUpdates.account_name = updates.accountName.trim();
     }
 
-    if (updates.valueType) {
-      backendUpdates.valueType = updates.valueType;
-    }
-
-    // ✅ Handle division field properly
-    if (updates.division) {
+    // Handle division field properly
+    if (updates.division?.id) {
       const divisionId =
         typeof updates.division.id === "string"
           ? parseInt(updates.division.id)
           : updates.division.id;
 
       if (divisionId && divisionId > 0) {
-        backendUpdates.division = {
-          id: divisionId,
-          name: updates.division.name || "",
-        };
+        backendUpdates.division_id = divisionId;
       }
-    } else {
-      // ✅ IMPORTANT: Include division if not provided to avoid backend errors
-      console.warn(
-        "⚠️ No division provided in update. This might cause backend errors."
-      );
     }
 
     console.log("🚀 [UPDATE ACCOUNT] Final payload:", {
       url: `/api/v1/accounts/${numericId}`,
       payload: backendUpdates,
-      payloadJson: JSON.stringify(backendUpdates, null, 2),
     });
 
     return apiRequest<any>(`/api/v1/accounts/${numericId}`, {
@@ -232,18 +229,9 @@ export const accountsAPI = {
       method: "DELETE",
     });
   },
-
-  getProducts: async () => {
-    return apiRequest<Account[]>("/api/v1/accounts/products");
-  },
-
-  getProductsByDivision: async (divisionId: number) => {
-    const endpoint = `/api/v1/accounts/products/by-division/${divisionId}?t=${Date.now()}`;
-    return apiRequest<Account[]>(endpoint);
-  },
 };
 
-// Users API (untuk yang belum ada endpoint)
+// Users API
 export const usersAPI = {
   getAll: async () => {
     return apiRequest<any[]>("/api/v1/users");
@@ -274,11 +262,10 @@ export const usersAPI = {
 export interface CreatePiutangRequest {
   tanggalTransaksi: string; // format: 'YYYY-MM-DD'
   tipeTransaksi:
-    | "PIUTANG_BARU"
-    | "PIUTANG_TERTAGIH"
-    | "PIUTANG_MACET"
-    | "SALDO_AKHIR_PIUTANG";
-  kategori: "KARYAWAN" | "TOKO" | "BAHAN_BAKU";
+  | "PIUTANG_BARU"
+  | "PIUTANG_TERTAGIH"
+  | "PIUTANG_MACET"
+  | "SALDO_AKHIR_PIUTANG";
   nominal: number;
   keterangan?: string;
   accountId: number;
@@ -290,10 +277,9 @@ export const piutangAPI = {
     const response = await apiRequest<any>("/api/v1/piutang", {
       method: "POST",
       body: JSON.stringify({
-        accountId: Number(data.accountId),
-        tanggalTransaksi: data.tanggalTransaksi,
-        tipeTransaksi: data.tipeTransaksi,
-        kategori: data.kategori,
+        account_id: Number(data.accountId),
+        tanggal_transaksi: data.tanggalTransaksi,
+        tipe_transaksi: data.tipeTransaksi,
         nominal: Number(data.nominal),
         keterangan: data.keterangan || "",
       }),
@@ -302,7 +288,7 @@ export const piutangAPI = {
   },
 
   getAll: async () => {
-    return apiRequest<any[]>("/api/v1/piutang");
+    return apiRequest<any[]>("/api/v1/piutang?limit=10000");
   },
 
   delete: async (id: number) => {
@@ -347,7 +333,7 @@ export interface LaporanPenjualanSales {
 //Api LaporanPenjualanSales
 export const laporanPenjualanSalesAPI = {
   create: async (data: CreateLaporanPenjualanSalesRequest) => {
-    // ✅ Validate required fields
+    // Validate required fields
     if (!data.tanggalLaporan) {
       throw new Error("VALIDATION_ERROR: Tanggal laporan wajib diisi");
     }
@@ -355,18 +341,14 @@ export const laporanPenjualanSalesAPI = {
       throw new Error("VALIDATION_ERROR: Salesperson ID wajib diisi");
     }
 
-    // ✅ Format data for backend
+    // Format data for backend
     const formattedData = {
-      tanggalLaporan: data.tanggalLaporan.slice(0, 10), // pastikan hanya YYYY-MM-DD
-      salespersonId: Number(data.salespersonId),
-      targetPenjualan: data.targetPenjualan
-        ? Number(data.targetPenjualan)
-        : null,
-      realisasiPenjualan: data.realisasiPenjualan
-        ? Number(data.realisasiPenjualan)
-        : null,
-      returPenjualan: data.returPenjualan ? Number(data.returPenjualan) : null,
-      keteranganKendala: data.keteranganKendala || null,
+      tanggal_laporan: data.tanggalLaporan.slice(0, 10),
+      salesperson_id: Number(data.salespersonId),
+      target_penjualan: data.targetPenjualan ? Number(data.targetPenjualan) : null,
+      realisasi_penjualan: data.realisasiPenjualan ? Number(data.realisasiPenjualan) : null,
+      retur_penjualan: data.returPenjualan ? Number(data.returPenjualan) : null,
+      keterangan_kendala: data.keteranganKendala || null,
     };
 
     return apiRequest<LaporanPenjualanSales>("/api/v1/laporan-penjualan", {
@@ -375,18 +357,23 @@ export const laporanPenjualanSalesAPI = {
     });
   },
 
-  // ✅ PERBAIKAN: Tambahkan user filter
   getAll: async () => {
-    return apiRequest<LaporanPenjualanSales[]>(
-      "/api/v1/laporan-penjualan?userOwned=true"
-    );
+    // Get sales reports (different from product reports)
+    // For now, return empty array since this is separate from product reports
+    return Promise.resolve([]);
   },
 
-  // ✅ PERBAIKAN: Tambahkan user filter untuk get by date
-  getByDate: async (date: string) => {
-    return apiRequest<LaporanPenjualanSales[]>(
-      `/api/v1/laporan-penjualan/by-date/${date}?userOwned=true`
-    );
+  getById: async (id: number) => {
+    return apiRequest<LaporanPenjualanSales>(`/api/v1/laporan-penjualan/${id}`);
+  },
+
+  get: async (endpoint: string) => {
+    return apiRequest<any>(`/api/v1/laporan-penjualan${endpoint}`);
+  },
+
+  getSummary: async (params?: any) => {
+    const query = params ? `?${new URLSearchParams(params)}` : '';
+    return apiRequest<any>(`/api/v1/laporan-penjualan/summary${query}`);
   },
 
   delete: async (id: number) => {
@@ -399,7 +386,6 @@ export const laporanPenjualanSalesAPI = {
 export interface CreateUtangRequest {
   tanggalTransaksi: string; // format: 'YYYY-MM-DD'
   tipeTransaksi: "UTANG_BARU" | "UTANG_DIBAYAR" | "SALDO_AKHIR_UTANG";
-  kategori: "BAHAN_BAKU" | "BANK_HM" | "BANK_HENRY";
   nominal: number;
   keterangan?: string;
   accountId: number;
@@ -411,10 +397,9 @@ export const utangAPI = {
     const response = await apiRequest<any>("/api/v1/utang", {
       method: "POST",
       body: JSON.stringify({
-        accountId: Number(data.accountId),
-        tanggalTransaksi: data.tanggalTransaksi,
-        tipeTransaksi: data.tipeTransaksi,
-        kategori: data.kategori,
+        account_id: Number(data.accountId),
+        tanggal_transaksi: data.tanggalTransaksi,
+        tipe_transaksi: data.tipeTransaksi,
         nominal: Number(data.nominal),
         keterangan: data.keterangan || "",
       }),
@@ -423,7 +408,7 @@ export const utangAPI = {
   },
 
   getAll: async () => {
-    return apiRequest<any[]>("/api/v1/utang");
+    return apiRequest<any[]>("/api/v1/utang?limit=10000");
   },
 
   delete: async (id: number) => {
@@ -460,20 +445,18 @@ export const divisionsAPI = {
   },
 };
 
-// Entri Harian API (untuk yang belum ada endpoint)
+// Entri Harian API
 export const entriesAPI = {
-  getAll: async () => {
-    return await apiRequest<any[]>("/api/v1/entri-harian");
+  getAll: async (params?: any) => {
+    // Always add limit=10000 to get all data
+    const mergedParams = { limit: 10000, ...params };
+    const query = `?${new URLSearchParams(mergedParams)}`;
+    return await apiRequest<any[]>(`/api/v1/entri-harian${query}`);
   },
 
-  getByDate: async (date: string) => {
-    return await apiRequest<any[]>(`/api/v1/entri-harian/date/${date}`);
-  },
-
-  getByDivision: async (divisionId: string) => {
-    return await apiRequest<any[]>(
-      `/api/v1/entri-harian/division/${divisionId}`
-    );
+  getSummary: async (params?: any) => {
+    const query = params ? `?${new URLSearchParams(params)}` : '';
+    return await apiRequest<any>(`/api/v1/entri-harian/summary${query}`);
   },
 
   getById: async (id: string) => {
@@ -481,23 +464,97 @@ export const entriesAPI = {
   },
 
   create: async (entry: CreateEntriHarianRequest) => {
+    // Convert frontend field names to backend format
+    const backendEntry: any = {
+      account_id: entry.accountId,
+      tanggal_laporan: entry.tanggal,
+    };
+
+    // Add transaction_type if present
+    if (entry.transactionType) {
+      backendEntry.transaction_type = entry.transactionType;
+    }
+
+    // Add nominal if nilai is present
+    if (entry.nilai !== undefined) {
+      backendEntry.nominal = entry.nilai;
+    }
+
+    // Add keterangan if description is present
+    if (entry.description) {
+      backendEntry.keterangan = entry.description;
+    }
+
     return await apiRequest<any>("/api/v1/entri-harian", {
       method: "POST",
-      body: JSON.stringify(entry),
+      body: JSON.stringify(backendEntry),
     });
   },
 
   createBatch: async (entries: CreateEntriHarianRequest[]) => {
+    // Convert each entry
+    const backendEntries = entries.map(entry => {
+      const backendEntry: any = {
+        account_id: entry.accountId,
+        // Support both tanggal and tanggal_laporan
+        tanggal_laporan: entry.tanggal_laporan || entry.tanggal,
+      };
+
+      if (entry.transactionType) {
+        backendEntry.transaction_type = entry.transactionType;
+      }
+      if (entry.nilai !== undefined) {
+        backendEntry.nilai = entry.nilai;
+      }
+      if (entry.description) {
+        backendEntry.description = entry.description;
+      }
+      if (entry.saldoAkhir !== undefined) {
+        backendEntry.saldo_akhir = entry.saldoAkhir;
+      }
+      // HRD fields
+      if (entry.attendance_status) {
+        backendEntry.attendance_status = entry.attendance_status;
+      }
+      if (entry.absent_count !== undefined) {
+        backendEntry.absent_count = entry.absent_count;
+      }
+      if (entry.shift) {
+        backendEntry.shift = entry.shift;
+      }
+      if (entry.keterangan_kendala) {
+        backendEntry.keterangan_kendala = entry.keterangan_kendala;
+      }
+
+      return backendEntry;
+    });
+
     return await apiRequest<any[]>("/api/v1/entri-harian/batch", {
       method: "POST",
-      body: JSON.stringify(entries),
+      body: JSON.stringify(backendEntries),
     });
   },
 
   update: async (id: string, updates: CreateEntriHarianRequest) => {
+    // Convert frontend field names to backend format
+    const backendUpdates: any = {
+      account_id: updates.accountId,
+      tanggal_laporan: updates.tanggal,
+    };
+
+    if (updates.transactionType) {
+      backendUpdates.transaction_type = updates.transactionType;
+    }
+    if (updates.nilai !== undefined) {
+      backendUpdates.nominal = updates.nilai;
+    }
+    if (updates.description) {
+      backendUpdates.keterangan = updates.description;
+    }
+
     return await apiRequest<any>(`/api/v1/entri-harian/${id}`, {
       method: "PUT",
-      body: JSON.stringify(updates),
+      body: JSON.stringify(backendUpdates),
     });
   },
 
@@ -532,8 +589,7 @@ export async function getSalespeople(): Promise<Salesperson[]> {
 
   console.log("🔍 GET SALESPEOPLE - Requesting data...");
 
-  // ✅ PERBAIKAN: Tambahkan user filter untuk isolasi
-  const res = await fetch(`${BASE_URL}/api/v1/salespeople?userOwned=true`, {
+  const res = await fetch(`${BASE_URL}/api/v1/salespeople`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -565,19 +621,15 @@ export async function createSalesperson(
   const token = getToken();
   if (!token) throw new Error("User belum login atau token tidak ditemukan");
 
-  // ✅ FIXED: Hapus perusahaanId karena entity Salesperson tidak memiliki field perusahaan
   const requestBody = {
     nama,
-    divisionId: divisionId || 2, // Default ke DIVISI PEMASARAN & PENJUALAN (ID: 2)
+    division_id: divisionId || 2, // Default ke DIVISI PEMASARAN & PENJUALAN (ID: 2)
     status: "AKTIF",
   };
 
-  // ✅ ADD: Log payload yang dikirim ke backend
-  console.log("🚀 CREATE SALESPERSON - Payload yang dikirim:", {
+  console.log("🚀 CREATE SALESPERSON - Payload:", {
     endpoint: `${BASE_URL}/api/v1/salespeople`,
-    method: "POST",
     requestBody,
-    token: token.substring(0, 20) + "...", // Log sebagian token untuk keamanan
   });
 
   const res = await fetch(`${BASE_URL}/api/v1/salespeople`, {
@@ -590,20 +642,26 @@ export async function createSalesperson(
   });
 
   // ✅ ADD: Log response dari backend
-  console.log("📥 CREATE SALESPERSON - Response dari backend:", {
+  console.log("📥 CREATE SALESPERSON - Response:", {
     status: res.status,
-    statusText: res.statusText,
     ok: res.ok,
   });
 
   if (!res.ok) {
-    const errorText = await res.text();
-    console.error("❌ CREATE SALESPERSON - Error response:", errorText);
-    throw new Error("Gagal menambah salesperson: " + errorText);
+    try {
+      const errorData = await res.json();
+      console.error("❌ CREATE SALESPERSON - Error:", errorData);
+      const errorMessage = errorData.message || errorData.error || "Unknown error";
+      throw new Error("Gagal menambah salesperson: " + errorMessage);
+    } catch (parseError) {
+      const errorText = await res.text();
+      console.error("❌ CREATE SALESPERSON - Raw Error:", errorText);
+      throw new Error("Gagal menambah salesperson: " + errorText);
+    }
   }
 
   const responseData = await res.json();
-  console.log("✅ CREATE SALESPERSON - Success response:", responseData);
+  console.log("✅ CREATE SALESPERSON - Success:", responseData);
   return responseData;
 }
 
@@ -675,7 +733,7 @@ export interface LaporanProduksiHarian {
 //Api LaporanProduksi
 export const laporanProduksiAPI = {
   create: async (data: CreateLaporanProduksiRequest) => {
-    // ✅ Validate required fields
+    // Validate required fields
     if (!data.tanggalLaporan) {
       throw new Error("VALIDATION_ERROR: Tanggal laporan wajib diisi");
     }
@@ -683,17 +741,15 @@ export const laporanProduksiAPI = {
       throw new Error("VALIDATION_ERROR: Account ID wajib diisi");
     }
 
-    // ✅ Format data for backend
+    // Format data for backend
     const formattedData = {
-      tanggalLaporan: data.tanggalLaporan.slice(0, 10), // pastikan hanya YYYY-MM-DD
-      accountId: Number(data.accountId),
-      hasilProduksi: data.hasilProduksi ? Number(data.hasilProduksi) : null,
-      barangGagal: data.barangGagal ? Number(data.barangGagal) : null,
-      stockBarangJadi: data.stockBarangJadi
-        ? Number(data.stockBarangJadi)
-        : null,
-      hpBarangJadi: data.hpBarangJadi ? Number(data.hpBarangJadi) : null,
-      keteranganKendala: data.keteranganKendala || null,
+      tanggal_laporan: data.tanggalLaporan.slice(0, 10),
+      account_id: Number(data.accountId),
+      hasil_produksi: data.hasilProduksi ? Number(data.hasilProduksi) : null,
+      barang_gagal: data.barangGagal ? Number(data.barangGagal) : null,
+      stock_barang_jadi: data.stockBarangJadi ? Number(data.stockBarangJadi) : null,
+      hp_barang_jadi: data.hpBarangJadi ? Number(data.hpBarangJadi) : null,
+      keterangan_kendala: data.keteranganKendala || null,
     };
 
     return apiRequest<LaporanProduksiHarian>("/api/v1/laporan-produksi", {
@@ -702,8 +758,18 @@ export const laporanProduksiAPI = {
     });
   },
 
-  getAll: async () => {
-    return apiRequest<LaporanProduksiHarian[]>("/api/v1/laporan-produksi");
+  getAll: async (params?: any) => {
+    const query = params ? `?${new URLSearchParams(params)}` : '';
+    return apiRequest<LaporanProduksiHarian[]>(`/api/v1/laporan-produksi${query}`);
+  },
+
+  getById: async (id: number) => {
+    return apiRequest<LaporanProduksiHarian>(`/api/v1/laporan-produksi/${id}`);
+  },
+
+  getSummary: async (params?: any) => {
+    const query = params ? `?${new URLSearchParams(params)}` : '';
+    return apiRequest<any>(`/api/v1/laporan-produksi/summary${query}`);
   },
 
   delete: async (id: number) => {
@@ -755,7 +821,7 @@ export interface LaporanGudangHarian {
 //Api LaporanGudang
 export const laporanGudangAPI = {
   create: async (data: CreateLaporanGudangRequest) => {
-    // ✅ Validate required fields
+    // Validate required fields
     if (!data.tanggalLaporan) {
       throw new Error("VALIDATION_ERROR: Tanggal laporan wajib diisi");
     }
@@ -763,15 +829,14 @@ export const laporanGudangAPI = {
       throw new Error("VALIDATION_ERROR: Account ID wajib diisi");
     }
 
-    // ✅ Format data for backend
+    // Format data for backend
     const formattedData = {
-      tanggalLaporan: data.tanggalLaporan.slice(0, 10), // pastikan hanya YYYY-MM-DD
-      accountId: Number(data.accountId),
-      // Map field names correctly from form to API
-      barangMasuk: data.stokAwal ? Number(data.stokAwal) : null, // Form sends 'stokAwal'
+      tanggal_laporan: data.tanggalLaporan.slice(0, 10),
+      account_id: Number(data.accountId),
+      barang_masuk: data.stokAwal ? Number(data.stokAwal) : null,
       pemakaian: data.pemakaian ? Number(data.pemakaian) : null,
-      stokAkhir: data.stokAkhir ? Number(data.stokAkhir) : null,
-      keterangan: data.kondisiGudang || null, // Form sends 'kondisiGudang'
+      stok_akhir: data.stokAkhir ? Number(data.stokAkhir) : null,
+      keterangan: data.kondisiGudang || null,
     };
 
     return apiRequest<LaporanGudangHarian>("/api/v1/laporan-gudang", {
@@ -780,8 +845,13 @@ export const laporanGudangAPI = {
     });
   },
 
-  getAll: async () => {
-    return apiRequest<LaporanGudangHarian[]>("/api/v1/laporan-gudang");
+  getAll: async (params?: any) => {
+    const query = params ? `?${new URLSearchParams(params)}` : '';
+    return apiRequest<LaporanGudangHarian[]>(`/api/v1/laporan-gudang${query}`);
+  },
+
+  getById: async (id: number) => {
+    return apiRequest<LaporanGudangHarian>(`/api/v1/laporan-gudang/${id}`);
   },
 
   delete: async (id: number) => {
@@ -848,44 +918,23 @@ export const notificationAPI = {
 };
 
 // ================== SALESPERSON BY DIVISION ==================
+// Salespeople API
 export const salespersonAPI = {
   getByDivision: async (divisionId: number) => {
-    console.log(
-      "🔍 SALESPERSON API - getByDivision called with divisionId:",
-      divisionId
-    );
-
-    const response = await apiRequest<any[]>(
-      `/api/v1/salespeople/by-division/${divisionId}?userOwned=true&t=${Date.now()}`
-    );
-
-    console.log("📥 SALESPERSON API - getByDivision response:", {
-      success: response.success,
-      dataLength: response.data?.length || 0,
-      data: response.data,
-    });
-
-    return response;
+    // Backend returns all salespeople, we filter by division_id on frontend
+    const response = await apiRequest<any[]>("/api/v1/salespeople");
+    if (response.success && response.data) {
+      // Filter by division_id
+      const filteredData = response.data.filter((sp: any) => sp.division_id === divisionId);
+      return { success: true, data: filteredData };
+    }
+    return { success: false, data: [] };
   },
 };
 
 // ================== LAPORAN PENJUALAN PRODUK ==================
+// TODO: Backend belum implement endpoint laporan-penjualan-produk
 export interface LaporanPenjualanProduk {
-  id: number;
-  tanggalLaporan: string;
-  namaSalesperson: string;
-  salespersonId: number;
-  namaAccount: string;
-  productAccountId: number;
-  targetKuantitas: number;
-  realisasiKuantitas: number;
-  keteranganKendala?: string;
-  createdByUsername: string;
-  createdAt: string;
-}
-
-// Backend interface untuk reference - FIXED: Backend menggunakan camelCase
-interface BackendLaporanPenjualanProduk {
   id: number;
   tanggalLaporan: string;
   namaSalesperson: string;
@@ -901,28 +950,37 @@ interface BackendLaporanPenjualanProduk {
 
 export const laporanPenjualanProdukAPI = {
   create: async (data: any) =>
-    apiRequest<LaporanPenjualanProduk>("/api/v1/laporan-penjualan-produk", {
+    apiRequest<LaporanPenjualanProduk>("/api/v1/laporan-penjualan", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  // ✅ PERBAIKAN: Tambahkan user filter
-  getAll: async () =>
-    apiRequest<LaporanPenjualanProduk[]>(
-      "/api/v1/laporan-penjualan-produk?userOwned=true"
-    ),
+  update: async (id: number, data: any) =>
+    apiRequest<LaporanPenjualanProduk>(`/api/v1/laporan-penjualan/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  getAll: async () => {
+    // Fetch all data with a large limit to get all records
+    return apiRequest<LaporanPenjualanProduk[]>("/api/v1/laporan-penjualan?limit=10000");
+  },
+  getByDateRange: async (params: { tanggal_start: string; tanggal_end: string }) => {
+    const queryParams = new URLSearchParams({
+      ...params,
+      limit: '10000' // Add large limit to get all records
+    });
+    return apiRequest<LaporanPenjualanProduk[]>(`/api/v1/laporan-penjualan?${queryParams}`);
+  },
   filter: async (params: any) =>
     apiRequest<LaporanPenjualanProduk[]>(
-      `/api/v1/laporan-penjualan-produk/filter?${new URLSearchParams(
-        params
-      )}&userOwned=true`
+      `/api/v1/laporan-penjualan/filter?${new URLSearchParams({ ...params, limit: '10000' })}`
     ),
   delete: async (id: number) =>
-    apiRequest(`/api/v1/laporan-penjualan-produk/${id}`, {
+    apiRequest(`/api/v1/laporan-penjualan/${id}`, {
       method: "DELETE",
     }),
 };
 
-// ✅ NEW: Konsolidasi Keuangan API
+// ✅ Konsolidasi Keuangan API - TODO: Backend belum implement
 export interface KonsolidasiKeuanganData {
   tanggal: string;
   perusahaan: string;
@@ -934,21 +992,25 @@ export interface KonsolidasiKeuanganData {
 
 export const konsolidasiKeuanganAPI = {
   getByDate: async (date: string) => {
-    return apiRequest<KonsolidasiKeuanganData[]>(
-      `/api/v1/konsolidasi-keuangan/by-date/${date}`
-    );
+    // TODO: Sementara return empty array sampai backend implement
+    console.warn("⚠️ konsolidasiKeuanganAPI.getByDate - Backend endpoint belum tersedia");
+    return { success: true, data: [] as KonsolidasiKeuanganData[] };
   },
-
   getByDateRange: async (startDate: string, endDate: string) => {
-    return apiRequest<KonsolidasiKeuanganData[]>(
-      `/api/v1/konsolidasi-keuangan/by-date-range?startDate=${startDate}&endDate=${endDate}`
-    );
+    console.warn("⚠️ konsolidasiKeuanganAPI.getByDateRange - Backend endpoint belum tersedia");
+    return { success: true, data: [] as KonsolidasiKeuanganData[] };
   },
-
   getByPerusahaan: async (perusahaan: string, date: string) => {
-    return apiRequest<KonsolidasiKeuanganData[]>(
-      `/api/v1/konsolidasi-keuangan/by-perusahaan/${perusahaan}?date=${date}`
-    );
+    console.warn("⚠️ konsolidasiKeuanganAPI.getByPerusahaan - Backend endpoint belum tersedia");
+    return { success: true, data: [] as KonsolidasiKeuanganData[] };
+  },
+};
+
+// ✅ Perusahaan API - TODO: Backend belum implement
+export const perusahaanAPI = {
+  getAll: async () => {
+    console.warn("⚠️ perusahaanAPI.getAll - Backend endpoint belum tersedia");
+    return { success: true, data: [] };
   },
 };
 
@@ -962,24 +1024,119 @@ export const healthAPI = {
   },
 };
 
+// HRD Statistics API
+export const hrdAPI = {
+  // Get HRD entries dengan filter
+  getEntries: async (params: {
+    tanggal_dari?: string;
+    tanggal_sampai?: string;
+    attendance_status?: string;
+    shift?: string;
+    account_id?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        queryParams.append(key, value.toString());
+      }
+    });
+
+    return await apiRequest<any>(`/api/v1/hrd?${queryParams}`, {
+      method: "GET",
+    });
+  },
+
+  // Get HRD statistics (UPDATED - menggunakan endpoint baru)
+  getStatistics: async (params: {
+    tanggal_dari?: string;
+    tanggal_sampai?: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params.tanggal_dari) queryParams.append('tanggal_dari', params.tanggal_dari);
+    if (params.tanggal_sampai) queryParams.append('tanggal_sampai', params.tanggal_sampai);
+
+    return await apiRequest<any>(`/api/v1/hrd/statistics?${queryParams}`, {
+      method: "GET",
+    });
+  },
+
+  getStatisticsWithParams: async (tanggal_dari: string, tanggal_sampai: string) => {
+    const params = new URLSearchParams({
+      tanggal_dari,
+      tanggal_sampai,
+    });
+
+    return await apiRequest<any>(`/api/v1/hrd/statistics?${params}`, {
+      method: "GET",
+    });
+  },
+
+  // Get HRD accounts (kategori karyawan)
+  getAccounts: async () => {
+    return await apiRequest<any>("/api/v1/hrd/accounts", {
+      method: "GET",
+    });
+  },
+
+  // Get summary by date
+  getSummaryByDate: async (tanggal: string) => {
+    return await apiRequest<any>(`/api/v1/hrd/summary/${tanggal}`, {
+      method: "GET",
+    });
+  },
+
+  // Create HRD entry
+  create: async (data: any) => {
+    return await apiRequest<any>("/api/v1/hrd", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Create batch HRD entries
+  createBatch: async (entries: any[]) => {
+    return await apiRequest<any>("/api/v1/hrd/batch", {
+      method: "POST",
+      body: JSON.stringify(entries),
+    });
+  },
+
+  // Update HRD entry
+  update: async (id: string, data: any) => {
+    return await apiRequest<any>(`/api/v1/hrd/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Delete HRD entry
+  delete: async (id: string) => {
+    return await apiRequest<any>(`/api/v1/hrd/${id}`, {
+      method: "DELETE",
+    });
+  },
+};
+
 // ===== PUBLIC ABSENSI API =====
 export const publicAbsensiAPI = {
   updateStatus: async (id: number, hadir: boolean, status: string, setengahHari: boolean = false, tanggal?: string) => {
     try {
       // ✅ Validasi: Pastikan tanggal tidak kosong, jika kosong gunakan hari ini
       let finalTanggal = tanggal || new Date().toISOString().split('T')[0];
-      
+
       // ✅ Pastikan format tanggal adalah YYYY-MM-DD
       if (finalTanggal && finalTanggal.length > 10) {
         finalTanggal = finalTanggal.split('T')[0]; // Ambil bagian tanggal saja
       }
-      
+
       // OPSI 1: Coba dengan parameter query tanggal di URL
       const url = `https://sistem-hrd-padud.padudjayaputera.com/api/public-absensi/${id}?tanggal=${finalTanggal}`;
-      
+
       // OPSI 2: Atau coba dengan payload yang include tanggal
       const payloadWithDate = { hadir, status, setengahHari, tanggal: finalTanggal };
-      
+
       console.log("🚀 [PUBLIC ABSENSI API] Mengirim data absensi:", {
         karyawanId: id,
         url,
@@ -1001,14 +1158,14 @@ export const publicAbsensiAPI = {
           const data = await response.json();
           error = data?.error || error;
           console.error("❌ [PUBLIC ABSENSI API] Response error:", { status: response.status, data });
-        } catch {}
+        } catch { }
         return { success: false, error };
       }
-      
+
       // ✅ Debug: Log response sukses
       const responseData = await response.json();
       console.log("✅ [PUBLIC ABSENSI API] Response sukses:", responseData);
-      
+
       return { success: true };
     } catch (err: any) {
       console.error("💥 [PUBLIC ABSENSI API] Network error:", err);
@@ -1026,5 +1183,69 @@ export const publicKaryawanAPI = {
     const res = await fetch(url);
     if (!res.ok) throw new Error("Gagal mengambil data karyawan publik");
     return res.json();
+  },
+};
+
+// Get product accounts by division ID
+export const getProductAccounts = async (divisionId: number) => {
+  const data = await apiRequest<any[]>("/api/v1/accounts");
+  return data.filter(account => account.division_id === divisionId);
+};
+
+// ===== SETTINGS API =====
+export interface SystemSetting {
+  id: number;
+  setting_key: string;
+  setting_value: string | number | boolean;
+  setting_type: 'string' | 'number' | 'boolean' | 'json';
+  category: 'general' | 'security' | 'ui' | 'notification';
+  description: string;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SettingsObject {
+  [key: string]: string | number | boolean;
+}
+
+export const settingsAPI = {
+  // Get all settings (filtered by role automatically)
+  getAll: async () => {
+    return apiRequest<SystemSetting[]>("/api/v1/settings");
+  },
+
+  // Get settings as key-value object
+  getObject: async () => {
+    return apiRequest<SettingsObject>("/api/v1/settings/object");
+  },
+
+  // Get single setting by key
+  getByKey: async (key: string) => {
+    return apiRequest<SystemSetting>(`/api/v1/settings/${key}`);
+  },
+
+  // Update setting (SUPER_ADMIN only)
+  update: async (key: string, value: string | number | boolean) => {
+    return apiRequest<SystemSetting>(`/api/v1/settings/${key}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    });
+  },
+
+  // Reset setting to default (SUPER_ADMIN only)
+  reset: async (key: string) => {
+    return apiRequest<SystemSetting>(`/api/v1/settings/${key}/reset`, {
+      method: "POST",
+    });
+  },
+
+  // Export all settings (SUPER_ADMIN only)
+  export: async () => {
+    return apiRequest<{
+      exported_at: string;
+      exported_by: string;
+      settings: SystemSetting[];
+    }>("/api/v1/settings/export");
   },
 };

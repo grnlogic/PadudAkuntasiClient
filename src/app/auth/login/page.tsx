@@ -172,36 +172,74 @@ Terima kasih.`;
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="w-full max-w-md">
-        {/* Login Form */}
-        <Card className="w-full">
-          <CardHeader className="text-center">
-            <div className="flex justify-center mb-4">
-              <Image
-                src={logo}
-                alt="Logo Perusahaan"
-                width={80}
-                height={80}
-                className="rounded-full"
-              />
-            </div>
-            <CardTitle className="text-2xl font-bold">
-              Sistem Akuntansi Perusahaan
-            </CardTitle>
-            <CardDescription>PT Padud Jayaputera</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
+    <div className="min-h-screen flex">
+      {/* Left Side - Gradient */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900 p-12 flex-col justify-center items-center text-white relative overflow-hidden">
+        {/* Subtle red accent overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-red-900/20 to-transparent"></div>
+
+        <div className="max-w-md space-y-6 relative z-10">
+          <div className="flex justify-center mb-8">
+            <Image
+              src={logo}
+              alt="Logo Perusahaan"
+              width={120}
+              height={120}
+              className="rounded-full shadow-2xl"
+            />
+          </div>
+          <h1 className="text-4xl font-bold text-center">
+            Sistem Akuntansi Perusahaan
+          </h1>
+          <p className="text-xl text-center text-gray-300">
+            PT Padud Jayaputera
+          </p>
+          <p className="text-center text-gray-400 text-base">
+            Sistem manajemen terintegrasi untuk semua divisi perusahaan
+          </p>
+        </div>
+      </div>
+
+      {/* Right Side - Login Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-gradient-to-br from-gray-50 to-white">
+        <div className="w-full max-w-md space-y-8">
+          {/* Mobile Logo */}
+          <div className="lg:hidden flex justify-center mb-6">
+            <Image
+              src={logo}
+              alt="Logo Perusahaan"
+              width={80}
+              height={80}
+              className="rounded-full"
+            />
+          </div>
+
+          {/* Login Header */}
+          <div className="text-center lg:text-left space-y-1">
+            <h2 className="text-3xl font-bold text-gray-900">Selamat Datang</h2>
+            <p className="text-gray-600">Silakan masuk ke akun Anda</p>
+          </div>
+
+          {/* Login Form Card */}
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+            <form onSubmit={handleLogin} className="space-y-5">
               {error && (
-                <Alert variant="destructive">
+                <Alert
+                  variant="destructive"
+                  className="animate-in fade-in slide-in-from-top-2"
+                >
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
+                <Label
+                  htmlFor="username"
+                  className="text-sm font-semibold text-gray-700"
+                >
+                  Username
+                </Label>
                 <Input
                   id="username"
                   type="text"
@@ -209,10 +247,17 @@ Terima kasih.`;
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
+                  className="h-12 border-gray-300 focus:border-slate-500 focus:ring-slate-500"
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label
+                  htmlFor="password"
+                  className="text-sm font-semibold text-gray-700"
+                >
+                  Password
+                </Label>
                 <Input
                   id="password"
                   type="password"
@@ -220,9 +265,15 @@ Terima kasih.`;
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  className="h-12 border-gray-300 focus:border-slate-500 focus:ring-slate-500"
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
+
+              <Button
+                type="submit"
+                className="w-full h-12 bg-slate-800 hover:bg-slate-900 transition-all duration-200 font-semibold"
+                disabled={isLoading}
+              >
                 {isLoading ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -236,81 +287,80 @@ Terima kasih.`;
                 )}
               </Button>
             </form>
+          </div>
 
-            {/* Registration Info */}
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex items-center gap-2 mb-2">
-                <MessageCircle className="h-4 w-4 text-blue-600" />
-                <p className="text-sm font-medium text-blue-800">
-                  Butuh Bantuan?
-                </p>
+          {/* Help Section */}
+          <div className="bg-white rounded-xl shadow-md border border-gray-100 p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="p-2 bg-blue-50 rounded-lg">
+                <MessageCircle className="h-5 w-5 text-blue-600" />
               </div>
-              <p className="text-sm text-blue-700 mb-3">
-                Hubungi developer untuk bantuan teknis, penambahan akun, atau
-                kendala lainnya.
+              <p className="text-sm font-semibold text-gray-900">
+                Butuh Bantuan?
               </p>
+            </div>
+            <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+              Hubungi developer untuk bantuan teknis, penambahan akun, atau
+              kendala lainnya.
+            </p>
 
-              {/* Contact Info */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between p-2 bg-white rounded border text-sm">
-                  <div>
-                    <p className="font-medium text-gray-900">Fajar</p>
-                    <p className="text-xs text-gray-600">Developer</p>
-                  </div>
-                  <div className="relative">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-blue-600 border-blue-200 hover:bg-blue-50 text-xs px-2 py-1"
-                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    >
-                      <MessageCircle className="h-3 w-3 mr-1" />
-                      Hubungi
-                      <ChevronDown className="h-3 w-3 ml-1" />
-                    </Button>
+            <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+              <div>
+                <p className="font-semibold text-gray-900">Fajar</p>
+                <p className="text-xs text-gray-600">Developer</p>
+              </div>
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-blue-600 border-blue-300 hover:bg-blue-50 font-medium shadow-sm"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                >
+                  <MessageCircle className="h-4 w-4 mr-1" />
+                  Hubungi
+                  <ChevronDown className="h-4 w-4 ml-1" />
+                </Button>
 
-                    {isDropdownOpen && (
-                      <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-10">
-                        <div className="py-1">
-                          <button
-                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                            onClick={() => handleIssueSelect("tambah-akun")}
-                          >
-                            Tambah Akun User
-                          </button>
-                          <button
-                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                            onClick={() => handleIssueSelect("kendala-login")}
-                          >
-                            Kendala Login
-                          </button>
-                          <button
-                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                            onClick={() => handleIssueSelect("kendala-sistem")}
-                          >
-                            Kendala Sistem
-                          </button>
-                          <button
-                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                            onClick={() => handleIssueSelect("fitur-baru")}
-                          >
-                            Tambah Fitur Baru
-                          </button>
-                          <button
-                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                            onClick={() => handleIssueSelect("lainnya")}
-                          >
-                            Lainnya
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                {isDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-52 bg-white border border-gray-200 rounded-lg shadow-xl z-10">
+                    <div className="py-1">
+                      <button
+                        className="block w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        onClick={() => handleIssueSelect("tambah-akun")}
+                      >
+                        Tambah Akun User
+                      </button>
+                      <button
+                        className="block w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        onClick={() => handleIssueSelect("kendala-login")}
+                      >
+                        Kendala Login
+                      </button>
+                      <button
+                        className="block w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        onClick={() => handleIssueSelect("kendala-sistem")}
+                      >
+                        Kendala Sistem
+                      </button>
+                      <button
+                        className="block w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        onClick={() => handleIssueSelect("fitur-baru")}
+                      >
+                        Tambah Fitur Baru
+                      </button>
+                      <button
+                        className="block w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        onClick={() => handleIssueSelect("lainnya")}
+                      >
+                        Lainnya
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* Modal Form */}

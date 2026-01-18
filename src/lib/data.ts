@@ -20,7 +20,7 @@ import {
 } from "./api";
 
 // ✅ ADD: Helper function to get token (same as in api.ts)
-function getToken() {
+export function getToken() {
   if (typeof window !== "undefined") {
     return localStorage.getItem("auth_token");
   }
@@ -50,6 +50,8 @@ export interface Account {
     id: string;
     name: string;
   };
+  perusahaan_id?: number; // ✅ NEW: Company ID from backend
+  perusahaanId?: number; // Alternative naming
   status: "active" | "inactive";
   createdBy: string;
   createdAt: string;
@@ -108,10 +110,14 @@ interface BackendAccount {
   account_code: string;
   account_name: string;
   value_type: "NOMINAL" | "KUANTITAS";
-  division: {
+  // ✅ Backend can return either nested division object OR flat division_id/division_name
+  division?: {
     id: number;
     name: string;
   };
+  division_id?: number;
+  division_name?: string;
+  perusahaan_id?: number;
   created_at?: string;
 }
 
@@ -135,9 +141,12 @@ const transformAccountFromBackend = (
     accountName: backendAccount.account_name || "",
     valueType: backendAccount.value_type || "NOMINAL",
     division: {
-      id: (backendAccount.division?.id || 0).toString(),
-      name: backendAccount.division?.name || "Unknown Division",
+      // ✅ FIX: Backend returns flat division_id and division_name, not nested division object
+      id: (backendAccount.division_id || backendAccount.division?.id || 0).toString(),
+      name: backendAccount.division_name || backendAccount.division?.name || "Unknown Division",
     },
+    perusahaanId: backendAccount.perusahaan_id || null,
+    perusahaan_id: backendAccount.perusahaan_id || null,
     status: "active",
     createdBy: "system",
     createdAt: backendAccount.created_at || new Date().toISOString(),
@@ -225,25 +234,12 @@ export const getAccountsByDivision = async (
     const response = await accountsAPI.getByDivision(divisionId);
 
     if (response.success && response.data && Array.isArray(response.data)) {
-      const accounts = response.data.map((account: any) => {
-        if (account.accountCode && account.accountName) {
-          return {
-            id: account.id?.toString() || "",
-            accountCode: account.accountCode || "",
-            accountName: account.accountName || "",
-            valueType: account.valueType as "NOMINAL" | "KUANTITAS",
-            division: {
-              id: account.division?.id?.toString() || "",
-              name: account.division?.name || "Unknown Division",
-            },
-            status: account.status || ("active" as const),
-            createdBy: account.createdBy || "system",
-            createdAt: account.createdAt || new Date().toISOString(),
-          };
-        }
+      // ✅ FIX: Langsung transform semua account dari backend format (snake_case) ke frontend format (camelCase)
+      const accounts = response.data
+        .filter((account: any) => account && account.id) // Filter null/undefined
+        .map((account: any) => transformAccountFromBackend(account));
 
-        return transformAccountFromBackend(account);
-      });
+
 
       return accounts;
     }
@@ -317,15 +313,15 @@ export const generateAccountCode = (type: string): string => {
 
 //piutang GET
 
-export async function getPiutangTransaksi() {
-  const response = await piutangAPI.getAll();
+export async function getPiutangTransaksi(params?: any) {
+  const response = await piutangAPI.getAll(params);
   if (!response.success) throw new Error("Failed to fetch piutang");
   return response.data;
 }
 
 // ✅ NEW: Utang GET
-export async function getUtangTransaksi() {
-  const response = await utangAPI.getAll();
+export async function getUtangTransaksi(params?: any) {
+  const response = await utangAPI.getAll(params);
   if (!response.success) throw new Error("Failed to fetch utang");
   return response.data;
 }
@@ -365,13 +361,14 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
         const mappedEntry = {
           id: entry.id?.toString() || "",
           accountId:
-            entry.account?.id?.toString() || entry.accountId?.toString() || "",
-          date: entry.tanggalLaporan || entry.date || "",
-          tanggal: entry.tanggalLaporan || entry.date || "",
+            entry.account?.id?.toString() || entry.account_id?.toString() || entry.accountId?.toString() || "",
+          date: entry.tanggalLaporan || entry.tanggal_laporan || entry.date || "",
+          tanggal: entry.tanggalLaporan || entry.tanggal_laporan || entry.date || "",
           nilai: nilai,
-          description: entry.description || "",
-          createdBy: entry.user?.username || entry.createdBy || "system",
-          createdAt: entry.createdAt || new Date().toISOString(),
+          description: entry.description || entry.keterangan || "",
+          keterangan: entry.keterangan || entry.description || "",
+          createdBy: entry.username || entry.user?.username || entry.createdBy || "system",
+          createdAt: entry.created_at || entry.createdAt || new Date().toISOString(),
           transactionType: transactionType,
 
           // ✅ FIXED: Map pemasaran fields with multiple fallbacks
@@ -423,6 +420,26 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
           ...(entry.shift && {
             shift: entry.shift,
           }),
+          ...(entry.keterangan_kendala && {
+            keteranganKendala: entry.keterangan_kendala,
+          }),
+          ...(entry.keteranganKendala && {
+            keteranganKendala: entry.keteranganKendala,
+          }),
+
+          // ✅ Map account details (untuk HRD dan divisi lain)
+          ...(entry.account_name && {
+            accountName: entry.account_name,
+          }),
+          ...(entry.accountName && {
+            accountName: entry.accountName,
+          }),
+          ...(entry.account_code && {
+            accountCode: entry.account_code,
+          }),
+          ...(entry.accountCode && {
+            accountCode: entry.accountCode,
+          }),
         };
 
         return mappedEntry;
@@ -437,11 +454,15 @@ export const getEntriHarian = async (): Promise<EntriHarian[]> => {
 };
 
 export const getEntriHarianByDate = async (
-  tanggal: string
+  tanggal: string,
+  perusahaanId?: number | null
 ): Promise<EntriHarian[]> => {
   try {
     // ✅ BETTER: Use the existing API pattern instead of direct fetch
-    const response = await entriesAPI.getByDate(tanggal);
+    const response = await entriesAPI.getAll({
+      date: tanggal,
+      perusahaan_id: perusahaanId
+    });
 
     if (!response.success || !response.data) {
       throw new Error("Failed to fetch entries by date");
@@ -652,7 +673,8 @@ export const deleteEntriHarian = async (id: string): Promise<boolean> => {
     const response = await entriesAPI.delete(id);
     return response.success;
   } catch (error) {
-    return true; // Fallback success untuk development
+    console.error("Delete entry error:", error);
+    throw error; // Throw error instead of returning true
   }
 };
 
@@ -675,7 +697,7 @@ export const getUsers = async (divisionId?: string): Promise<AppUser[]> => {
 };
 
 export const saveUser = async (
-  user: Omit<AppUser, "id" | "createdAt" | "division">
+  user: Omit<AppUser, "id" | "createdAt">
 ): Promise<AppUser> => {
   // Ensure divisionId is included in the payload
   const payload = {
@@ -720,40 +742,36 @@ export const deleteUser = async (id: string): Promise<boolean> => {
 };
 
 // ✅ NEW: LaporanPenjualanSales CRUD functions
-export const getLaporanPenjualanSales = async (): Promise<
-  LaporanPenjualanSales[]
-> => {
+export const getLaporanPenjualanSales = async (params?: {
+  tanggal_start?: string;
+  tanggal_end?: string;
+}): Promise<LaporanPenjualanSales[]> => {
   try {
-    // ✅ PERBAIKAN: Hanya ambil laporan milik user
-    const response = await laporanPenjualanSalesAPI.getAll();
-    if (response.success && response.data) {
-      // ✅ FIXED: Mapping snake_case ke camelCase dengan field yang konsisten
-      const mappedData = response.data.map((laporan: any) => ({
-        id: laporan.id,
-        tanggalLaporan: laporan.tanggal_laporan || laporan.tanggalLaporan,
-        salesperson: laporan.salesperson,
-        // ✅ FIXED: Map ke field yang diharapkan PDF
-        targetAmount:
-          laporan.target_penjualan ??
-          laporan.targetPenjualan ??
-          laporan.targetAmount,
-        realisasiAmount:
-          laporan.realisasi_penjualan ??
-          laporan.realisasiPenjualan ??
-          laporan.realisasiAmount,
-        returPenjualan: laporan.retur_penjualan ?? laporan.returPenjualan,
-        keteranganKendala:
-          laporan.keterangan_kendala ?? laporan.keteranganKendala,
-        // ✅ ADD: Map sales user ID
-        salesUserId: laporan.sales_user_id ?? laporan.salesUserId,
-        createdBy: laporan.created_by ?? laporan.createdBy,
-        createdAt: laporan.created_at ?? laporan.createdAt,
+    const queryParams = new URLSearchParams();
+    if (params?.tanggal_start) queryParams.append('tanggal_start', params.tanggal_start);
+    if (params?.tanggal_end) queryParams.append('tanggal_end', params.tanggal_end);
+
+    const response = await laporanPenjualanSalesAPI.get(`/summary?${queryParams}`);
+
+    if (response.data?.success && response.data.data) {
+      // Map summary data from backend to match frontend interface
+      const mappedData = response.data.data.map((summary: any) => ({
+        id: `summary-${summary.salesperson}`, // Generate unique ID for summary
+        tanggalLaporan: new Date().toISOString().split('T')[0], // Use current date for summary
+        salesperson: summary.salesperson,
+        targetAmount: summary.total_target || 0,
+        realisasiAmount: summary.total_realisasi || 0,
+        returPenjualan: 0, // Not available in summary
+        keteranganKendala: `${summary.total_laporan} laporan - Pencapaian: ${summary.pencapaian_persen || 0}%`,
+        salesUserId: null,
+        createdBy: "system",
+        createdAt: new Date().toISOString(),
       }));
       return mappedData;
     }
     return [];
   } catch (error) {
-    console.error("❌ Error fetching user laporan penjualan:", error);
+    console.error("❌ Error fetching laporan penjualan sales summary:", error);
     return [];
   }
 };
@@ -841,53 +859,66 @@ export const deleteLaporanProduksi = async (id: number): Promise<boolean> => {
 };
 
 // ✅ NEW: LaporanGudang CRUD functions
-export const getLaporanGudang = async (): Promise<LaporanGudangHarian[]> => {
+export const getLaporanGudang = async (options?: any): Promise<LaporanGudangHarian[]> => {
   try {
-    const response = await laporanGudangAPI.getAll();
+    // Default to larger limit if not specified
+    const params = { limit: 1000, ...options };
+    const response = await laporanGudangAPI.getAll(params);
+
     if (response.success && response.data) {
-      // ✅ FIXED: Proper mapping for backend data format
-      const mappedData = response.data.map((laporan: any) => ({
+      // ✅ FIXED: Handle both direct array and nested data (pagination) structure
+      const rawData = Array.isArray(response.data)
+        ? response.data
+        : (response.data as any).data && Array.isArray((response.data as any).data)
+          ? (response.data as any).data
+          : [];
+
+      // ✅ FIXED: Backend mengembalikan flat structure (account_id, account_code, dll)
+      const mappedData = rawData.map((laporan: any) => ({
         id: laporan.id,
         tanggalLaporan: laporan.tanggal_laporan || laporan.tanggalLaporan,
+        // ✅ FIXED: Construct account object from flat fields
         account: {
-          id: laporan.account?.id,
+          id: laporan.account_id || laporan.account?.id,
           division: {
-            id: laporan.account?.division?.id,
-            name: laporan.account?.division?.name,
+            id: laporan.division_id || laporan.account?.division?.id,
+            name: laporan.division_name || laporan.account?.division?.name,
           },
-          accountCode:
-            laporan.account?.accountCode || laporan.account?.account_code,
-          accountName:
-            laporan.account?.accountName || laporan.account?.account_name,
-          valueType: laporan.account?.valueType || laporan.account?.value_type,
+          accountCode: laporan.account_code || laporan.account?.accountCode,
+          accountName: laporan.account_name || laporan.account?.accountName,
+          valueType: laporan.value_type || laporan.account?.valueType || "NOMINAL",
+          perusahaanId: laporan.perusahaan_id || laporan.perusahaanId,
         },
         // ✅ FIXED: Support both camelCase and snake_case field names
-        barangMasuk: laporan.barangMasuk ?? laporan.barang_masuk,
+        barangMasuk: laporan.barang_masuk ?? laporan.barangMasuk,
         pemakaian: laporan.pemakaian,
-        stokAkhir: laporan.stokAkhir ?? laporan.stok_akhir,
-        keterangan: laporan.keterangan ?? laporan.kondisi_gudang,
+        stokAkhir: laporan.stok_akhir ?? laporan.stokAkhir,
+        keterangan: laporan.keterangan || laporan.keteranganGudang || laporan.kondisiGudang,
         // ✅ ADD: Map pemakaian amount untuk PDF
-        pemakaianAmount: laporan.pemakaian_amount ?? laporan.pemakaianAmount,
+        pemakaianAmount: laporan.pemakaian ?? laporan.pemakaianAmount,
+        // ✅ FIXED: createdBy from flat structure
         createdBy: {
-          id: laporan.createdBy?.id ?? laporan.created_by?.id,
-          username: laporan.createdBy?.username ?? laporan.created_by?.username,
-          role: laporan.createdBy?.role ?? laporan.created_by?.role,
+          id: laporan.created_by_user_id || laporan.createdBy?.id,
+          username: laporan.created_by || laporan.createdBy?.username || "system",
+          role: laporan.role || laporan.createdBy?.role || "ADMIN_DIVISI",
           division: {
-            id:
-              laporan.createdBy?.division?.id ??
-              laporan.created_by?.division?.id,
-            name:
-              laporan.createdBy?.division?.name ??
-              laporan.created_by?.division?.name,
+            id: laporan.division_id || laporan.createdBy?.division?.id,
+            name: laporan.division_name || laporan.createdBy?.division?.name || "",
           },
         },
-        createdAt: laporan.createdAt ?? laporan.created_at,
+        createdAt: laporan.created_at || laporan.createdAt,
       }));
+
+      // console.log("✅ LAPORAN GUDANG MAPPED:", {
+      //   count: mappedData.length,
+      //   sample: mappedData[0],
+      // });
 
       return mappedData;
     }
     return [];
   } catch (error) {
+    console.error("❌ GET LAPORAN GUDANG ERROR:", error);
     return [];
   }
 };
@@ -942,19 +973,19 @@ export const markNotificationAsRead = async (id: number): Promise<boolean> => {
 const transformLaporanPenjualanProdukFromBackend = (backendData: any) => {
   if (!backendData) return null;
 
-  // ✅ FIXED: Backend menggunakan camelCase, bukan snake_case
+  // ✅ FIXED: Backend menggunakan snake_case, perlu mapping ke camelCase
   const transformed = {
     id: backendData.id,
-    tanggalLaporan: backendData.tanggalLaporan,
-    namaSalesperson: backendData.namaSalesperson,
-    salespersonId: backendData.salespersonId,
-    namaAccount: backendData.namaAccount,
-    productAccountId: backendData.productAccountId,
-    targetKuantitas: backendData.targetKuantitas,
-    realisasiKuantitas: backendData.realisasiKuantitas,
-    keteranganKendala: backendData.keteranganKendala,
-    createdByUsername: backendData.createdByUsername,
-    createdAt: backendData.createdAt,
+    tanggalLaporan: backendData.tanggal_laporan || backendData.tanggalLaporan,
+    namaSalesperson: backendData.salesperson_nama || backendData.namaSalesperson,
+    salespersonId: backendData.salesperson_id || backendData.salespersonId,
+    namaAccount: backendData.product_name || backendData.namaAccount,
+    productAccountId: backendData.product_account_id || backendData.productAccountId,
+    targetKuantitas: backendData.target_kuantitas || backendData.targetKuantitas,
+    realisasiKuantitas: backendData.realisasi_kuantitas || backendData.realisasiKuantitas,
+    keteranganKendala: backendData.keterangan_kendala || backendData.keteranganKendala,
+    createdByUsername: backendData.created_by || backendData.createdByUsername,
+    createdAt: backendData.created_at || backendData.createdAt,
   };
 
   return transformed;
@@ -973,6 +1004,25 @@ export const getLaporanPenjualanProduk = async () => {
   return [];
 };
 
+export const getLaporanPenjualanProdukByDate = async (date: string) => {
+  const params = {
+    tanggal_start: date,
+    tanggal_end: date
+  };
+  const response = await laporanPenjualanProdukAPI.getByDateRange(params);
+
+  if (response.success && response.data && Array.isArray(response.data)) {
+    console.log(`🔍 [DEBUG] Raw backend data for ${date}:`, response.data.length, 'records');
+    // Transform setiap item dari backend format ke frontend format
+    const transformedData = response.data
+      .map(transformLaporanPenjualanProdukFromBackend)
+      .filter(Boolean);
+    console.log(`✅ [DEBUG] Transformed data for ${date}:`, transformedData.length, 'records');
+    return transformedData;
+  }
+  return [];
+};
+
 export const saveLaporanPenjualanProduk = async (data: any) => {
   const response = await laporanPenjualanProdukAPI.create(data);
   if (!response.success)
@@ -980,11 +1030,25 @@ export const saveLaporanPenjualanProduk = async (data: any) => {
   return response.data;
 };
 
+// ✅ ADD: Create laporan penjualan produk (alias for save)
+export const createLaporanPenjualanProduk = async (data: any) => {
+  return await saveLaporanPenjualanProduk(data);
+};
+
+// ✅ ADD: Update laporan penjualan produk
+export const updateLaporanPenjualanProduk = async (id: string, data: any) => {
+  const response = await laporanPenjualanProdukAPI.update(parseInt(id), data);
+  if (!response.success)
+    throw new Error(response.error || "Gagal update laporan penjualan produk");
+  return response.data;
+};
+
 export const deleteLaporanPenjualanProduk = async (
-  id: number
+  id: string | number
 ): Promise<boolean> => {
   try {
-    const response = await laporanPenjualanProdukAPI.delete(id);
+    const numId = typeof id === 'string' ? parseInt(id) : id;
+    const response = await laporanPenjualanProdukAPI.delete(numId);
     return response.success;
   } catch (error) {
     console.error("❌ Error deleting laporan penjualan produk:", error);
@@ -994,17 +1058,11 @@ export const deleteLaporanPenjualanProduk = async (
 
 export const getSalespeopleByDivision = async (divisionId: number) => {
   console.log(
-    "🔍 GET SALESPEOPLE BY DIVISION - Requesting for divisionId:",
     divisionId
   );
 
   const response = await salespersonAPI.getByDivision(divisionId);
 
-  console.log("📥 GET SALESPEOPLE BY DIVISION - Response:", {
-    success: response.success,
-    dataLength: response.data?.length || 0,
-    data: response.data,
-  });
 
   if (response.success && response.data) return response.data;
   return [];
@@ -1013,7 +1071,7 @@ export const getSalespeopleByDivision = async (divisionId: number) => {
 export const getProductAccounts = async (divisionId?: number) => {
   // Always use division-specific endpoint if divisionId is provided
   if (divisionId) {
-    const response = await accountsAPI.getProductsByDivision(divisionId);
+    const response = await accountsAPI.getByDivision(divisionId.toString());
     if (response.success && response.data) {
       return response.data;
     }

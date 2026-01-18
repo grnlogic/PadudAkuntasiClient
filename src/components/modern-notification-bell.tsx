@@ -22,7 +22,6 @@ export default function ModernNotificationBell() {
     setIsLoading(true);
     try {
       const data = await getNotifications();
-      console.log("🔔 RAW NOTIFICATIONS DATA:", data);
 
       let safeData: any[] = [];
       if (Array.isArray(data)) {
@@ -76,7 +75,6 @@ export default function ModernNotificationBell() {
   // Tampilkan popup selama masih ada unread
   useEffect(() => {
     const unread = notifications.filter((n) => !n.isRead);
-    console.log("[POPUP DEBUG] Unread notifications:", unread);
     if (unread.length > 0) {
       const messages = unread
         .slice(0, 3)
@@ -86,12 +84,9 @@ export default function ModernNotificationBell() {
       setPopupMessages(messages);
       setShowPopup(true);
       setFadeClass("fade-in");
-      console.log("[POPUP DEBUG] Popup messages:", messages);
-      console.log("[POPUP DEBUG] showPopup set to true");
     } else {
       setShowPopup(false);
       setFadeClass("");
-      console.log("[POPUP DEBUG] showPopup set to false");
     }
   }, [notifications]);
 

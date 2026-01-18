@@ -170,7 +170,6 @@ export default function GudangReports() {
   };
 
   const exportToPDF = () => {
-    console.log("Exporting Gudang report to PDF...");
   };
 
   const refreshData = () => {

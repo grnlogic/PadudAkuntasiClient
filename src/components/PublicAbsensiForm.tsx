@@ -128,7 +128,6 @@ export default function PublicAbsensiForm() {
     setError(null);
     
     // ✅ Debug: Log tanggal yang dipilih
-    console.log("📅 [ABSENSI FORM] Memproses absensi untuk tanggal:", {
       selectedDate,
       formattedDate: formatDate(selectedDate),
       selectedDept,
@@ -147,13 +146,7 @@ export default function PublicAbsensiForm() {
       const absen = absensi[k.id];
       if (!absen) continue;
       
-      // ✅ Debug: Log setiap request absensi
-      console.log(`👤 [ABSENSI] Memproses ${k.namaLengkap} (ID: ${k.id}):`, {
-        tanggal: selectedDate,
-        hadir: absen.hadir,
-        status: absen.status,
-        setengahHari: absen.setengahHari
-      });
+  
       
       try {
         const res = await publicAbsensiAPI.updateStatus(

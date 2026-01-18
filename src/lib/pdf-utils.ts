@@ -545,7 +545,7 @@ export const generateSimplePDF = (data: SimplePDFReportData) => {
               <td>${formatCurrency(
                 data.entries
                   .filter(
-                    (entry) => (entry as any).transactionType === "PIUTANG_BARU"
+                    (entry) => (entry as any).transactionType === "PIUTANG_BARU" || (entry as any).transactionType === "SALDO_AKHIR_PIUTANG"
                   )
                   .reduce((sum, entry) => sum + Number(entry.nilai), 0)
               )}</td>

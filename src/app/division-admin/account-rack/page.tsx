@@ -59,6 +59,10 @@ export default function AccountRackPage() {
   const [error, setError] = useState("");
   const user = getCurrentUser();
 
+  // ✅ Helper: Get division name from either flat or nested structure
+  const getDivisionName = () =>
+    user?.division_name || user?.division?.name || "";
+
   const [newAccount, setNewAccount] = useState({
     accountCode: "", // Format: 5-001, 3-002, dll
     accountName: "",
@@ -79,14 +83,24 @@ export default function AccountRackPage() {
   }, []);
 
   const loadAccounts = async () => {
-    if (user?.division?.id) {
+    // ✅ FIXED: Handle both flat (division_id, division_name) and nested (division.id, division.name) structure
+    const divisionId = user?.division_id || user?.division?.id;
+    const divisionName = user?.division_name || user?.division?.name;
+
+    if (divisionId) {
       try {
-        const divisionAccounts = await getAccountsByDivision(user.division.id);
+        const divisionAccounts = await getAccountsByDivision(
+          divisionId.toString()
+        );
+       
         setAccounts(divisionAccounts);
       } catch (err: any) {
+        console.error("❌ [ACCOUNT RACK] Error loading accounts:", err);
         setError(err.message || "Gagal memuat data akun");
         setTimeout(() => setError(""), 5000);
       }
+    } else {
+      console.warn("⚠️ [ACCOUNT RACK] No division ID found for user:", user);
     }
   };
 
@@ -100,7 +114,7 @@ export default function AccountRackPage() {
     allowedPrefixes = ["1-5", "1-6", "2-3", "5-3"];
   else if (username.includes("blending"))
     allowedPrefixes = ["1-7", "1-8", "2-3", "5-4"];
-  else if (username.includes("holding")) allowedPrefixes = ["1-9", "2-5"] ;
+  else if (username.includes("holding")) allowedPrefixes = ["1-9", "2-5"];
 
   const filteredAccounts =
     allowedPrefixes.length > 0
@@ -126,17 +140,21 @@ export default function AccountRackPage() {
   };
 
   const generateSuggestedCode = () => {
+    // ✅ FIXED: Handle both flat and nested division structure
+    const divisionName = user?.division_name || user?.division?.name || "";
+    const divisionId = user?.division_id || user?.division?.id || "1";
+
     // ✅ Mapping division name ke ID yang benar
     const divisionCodeMap: { [key: string]: string } = {
       "KEUANGAN & ADMINISTRASI": "1",
+      "DIVISI KEUANGAN & ADMINISTRASI": "1",
       "PEMASARAN & PENJUALAN": "2",
       PRODUKSI: "3",
       PERSEDIAAN_BAHAN_BAKU: "10",
       HRD: "5",
     };
 
-    const divisionCode =
-      divisionCodeMap[user?.division?.name || ""] || user?.division?.id || "1";
+    const divisionCode = divisionCodeMap[divisionName] || divisionId.toString();
 
     const existingCodes = accounts
       .map((acc) => acc.accountCode)
@@ -165,7 +183,11 @@ export default function AccountRackPage() {
       return;
     }
 
-    if (!user?.division) {
+    // ✅ FIXED: Handle both flat and nested division structure
+    const divisionId = user?.division_id || user?.division?.id;
+    const divisionName = user?.division_name || user?.division?.name;
+
+    if (!divisionId) {
       setError("Divisi tidak ditemukan");
       return;
     }
@@ -175,7 +197,10 @@ export default function AccountRackPage() {
         accountCode: newAccount.accountCode,
         accountName: newAccount.accountName,
         valueType: newAccount.valueType,
-        division: user.division,
+        division: {
+          id: divisionId.toString(),
+          name: divisionName || "Unknown Division",
+        },
         status: "active",
         createdBy: user.username,
       });
@@ -307,7 +332,7 @@ export default function AccountRackPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
             <Archive className="h-8 w-8 text-blue-600" />
-            Manajemen Akun COA - {user?.division?.name}
+            Manajemen Akun COA - {getDivisionName()}
           </h1>
           <p className="text-gray-600 mt-2">
             Kelola "rak" akun untuk laporan harian divisi Anda. Setiap akun yang
@@ -355,7 +380,7 @@ export default function AccountRackPage() {
               {/* ✅ NEW: Panduan Kode Akun berdasarkan Divisi & Perusahaan */}
               {(() => {
                 const username = user?.username?.toLowerCase() || "";
-                const divisionName = user?.division?.name || "";
+                const divisionName = getDivisionName();
 
                 // Mapping perusahaan
                 let companyName = "UNKNOWN";
@@ -369,7 +394,7 @@ export default function AccountRackPage() {
                 return (
                   <div className="mt-4 p-3 bg-white rounded-lg border border-blue-200">
                     <h4 className="font-semibold text-blue-900 mb-2">
-                      📋 Panduan Kode Akun untuk {user?.division?.name}
+                      📋 Panduan Kode Akun untuk {getDivisionName()}
                     </h4>
 
                     {/* Panduan berdasarkan divisi */}
@@ -539,7 +564,6 @@ export default function AccountRackPage() {
                                 </span>
                               </div>
                             </div>
-                          
                           </div>
                         );
                       } else if (divisionName.includes("PRODUKSI")) {
@@ -881,7 +905,6 @@ export default function AccountRackPage() {
                                 </span>
                               </div>
                             </div>
-                            
                           </div>
                         );
                       } else {
@@ -1027,7 +1050,7 @@ export default function AccountRackPage() {
           <CardTitle>Daftar Akun di Rak Divisi</CardTitle>
           <CardDescription>
             {filteredAccounts.length} akun tersedia untuk laporan harian divisi{" "}
-            {user?.division?.name}
+            {getDivisionName()}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1108,8 +1131,8 @@ export default function AccountRackPage() {
 
           {filteredAccounts.length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              Belum ada entri {user?.division?.name}. Tambahkan entri pertama
-              untuk memulai!
+              Belum ada entri {getDivisionName()}. Tambahkan entri pertama untuk
+              memulai!
             </div>
           )}
         </CardContent>
@@ -1128,7 +1151,7 @@ export default function AccountRackPage() {
               <CardDescription>
                 {editingAccount
                   ? "Perbarui informasi akun"
-                  : `Buat akun baru untuk laporan harian divisi ${user?.division?.name}`}
+                  : `Buat akun baru untuk laporan harian divisi ${getDivisionName()}`}
               </CardDescription>
             </CardHeader>
             <CardContent>
