@@ -84,6 +84,52 @@ export default function HrdJournal({
   const user = getCurrentUser();
   const divisionId = user?.division_id || user?.division?.id;
 
+  // Opsi urutan: kategori, status, shift
+  type SortOption = "kategori" | "status" | "shift";
+  const [sortBy, setSortBy] = useState<SortOption>("kategori");
+
+  const getSortedEntries = (entries: EntriHarian[]): EntriHarian[] => {
+    const sorted = [...entries];
+    const getAccountName = (accId: string) => {
+      const acc = accounts.find((a) => a.id === accId);
+      return acc ? `${acc.accountCode} - ${acc.accountName}` : "";
+    };
+
+    if (sortBy === "kategori") {
+      sorted.sort((a, b) => {
+        const nameA = getAccountName(a.accountId);
+        const nameB = getAccountName(b.accountId);
+        return nameA.localeCompare(nameB);
+      });
+    } else if (sortBy === "status") {
+      const statusOrder = { HADIR: 0, TIDAK_HADIR: 1, SAKIT: 2, IZIN: 3 };
+      sorted.sort((a, b) => {
+        const statusA = (a as any).attendanceStatus || "";
+        const statusB = (b as any).attendanceStatus || "";
+        const orderA = statusOrder[statusA as keyof typeof statusOrder] ?? 4;
+        const orderB = statusOrder[statusB as keyof typeof statusOrder] ?? 4;
+        if (orderA !== orderB) return orderA - orderB;
+        return getAccountName(a.accountId).localeCompare(
+          getAccountName(b.accountId)
+        );
+      });
+    } else if (sortBy === "shift") {
+      sorted.sort((a, b) => {
+        const shiftA = (a as any).shift || "";
+        const shiftB = (b as any).shift || "";
+        const orderA = shiftA === "REGULER" ? 0 : shiftA === "LEMBUR" ? 1 : 2;
+        const orderB = shiftB === "REGULER" ? 0 : shiftB === "LEMBUR" ? 1 : 2;
+        if (orderA !== orderB) return orderA - orderB;
+        return getAccountName(a.accountId).localeCompare(
+          getAccountName(b.accountId)
+        );
+      });
+    }
+    return sorted;
+  };
+
+  const sortedEntries = getSortedEntries(existingEntries);
+
   useEffect(() => {
     loadData();
   }, [selectedDate, divisionId]);
@@ -149,23 +195,23 @@ export default function HrdJournal({
     );
   };
 
-  // Handle Download PDF
+  // Handle Download PDF (gunakan urutan yang sama seperti tabel)
   const handleDownloadPDF = () => {
     const pdfData = {
       date: selectedDate,
       divisionName: "HRD",
-      entries: existingEntries,
+      entries: sortedEntries,
       accounts: accounts,
     };
     downloadEnhancedPDF(pdfData);
   };
 
-  // Handle Preview PDF
+  // Handle Preview PDF (gunakan urutan yang sama seperti tabel)
   const handlePreviewPDF = () => {
     const pdfData = {
       date: selectedDate,
       divisionName: "HRD",
-      entries: existingEntries,
+      entries: sortedEntries,
       accounts: accounts,
     };
     previewEnhancedPDF(pdfData);
@@ -527,11 +573,33 @@ export default function HrdJournal({
       {/* Data Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Data Kehadiran Tersimpan</CardTitle>
-          <CardDescription>
-            {existingEntries.length} entri kehadiran untuk tanggal{" "}
-            {selectedDate}
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle>Data Kehadiran Tersimpan</CardTitle>
+              <CardDescription>
+                {existingEntries.length} entri kehadiran untuk tanggal{" "}
+                {selectedDate}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="sort-hrd" className="text-sm whitespace-nowrap">
+                Urutkan berdasarkan:
+              </Label>
+              <Select
+                value={sortBy}
+                onValueChange={(v) => setSortBy(v as SortOption)}
+              >
+                <SelectTrigger id="sort-hrd" className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kategori">Kategori (A–Z)</SelectItem>
+                  <SelectItem value="status">Status Kehadiran</SelectItem>
+                  <SelectItem value="shift">Shift</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {existingEntries.length === 0 ? (
@@ -554,7 +622,7 @@ export default function HrdJournal({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {existingEntries.map((entry) => {
+                  {sortedEntries.map((entry) => {
                     const hrdEntry = entry as any;
                     return (
                       <TableRow key={entry.id}>
