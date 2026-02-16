@@ -3,7 +3,7 @@ import { create } from "domain";
 
 // Updated data.ts to use API calls instead of localStorage
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:3333";
 
 // Keep interfaces for type safety
 export interface Account {
@@ -160,6 +160,7 @@ export const accountsAPI = {
       division_id: account.division?.id ? parseInt(account.division.id) : null,
       account_code: account.accountCode?.trim() || null,
       account_name: account.accountName?.trim() || null,
+      value_type: account.valueType || null,
     };
 
     // Validation
@@ -171,6 +172,9 @@ export const accountsAPI = {
     }
     if (!backendAccount.division_id) {
       throw new Error("Division is required");
+    }
+    if (!backendAccount.value_type) {
+      throw new Error("Value type is required");
     }
 
     return apiRequest<any>("/api/v1/accounts", {
