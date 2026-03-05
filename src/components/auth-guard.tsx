@@ -25,10 +25,18 @@ export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
       return
     }
 
+    // Normalize role: handle legacy lowercase format dari DB lama
+    const normalizedRole =
+      currentUser.role === "division_admin"
+        ? "ADMIN_DIVISI"
+        : currentUser.role === "super_admin"
+        ? "SUPER_ADMIN"
+        : currentUser.role
+
     // Update logic redirect
-    if (requiredRole && currentUser.role !== requiredRole) {
+    if (requiredRole && normalizedRole !== requiredRole) {
       // Redirect to appropriate dashboard based on role
-      if (currentUser.role === "SUPER_ADMIN") {
+      if (normalizedRole === "SUPER_ADMIN") {
         router.push("/super-admin/dashboard")
       } else {
         router.push("/division-admin/journal")
@@ -36,7 +44,8 @@ export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
       return
     }
 
-    setUser(currentUser)
+    // Set user dengan role yang sudah dinormalize
+    setUser({ ...currentUser, role: normalizedRole as User["role"] })
     setLoading(false)
   }, [router, requiredRole])
 

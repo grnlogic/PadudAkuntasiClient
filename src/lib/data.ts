@@ -50,8 +50,8 @@ export interface Account {
     id: string;
     name: string;
   };
-  perusahaan_id?: number; // ✅ NEW: Company ID from backend
-  perusahaanId?: number; // Alternative naming
+  perusahaan_id?: number | null; // ✅ NEW: Company ID from backend
+  perusahaanId?: number | null; // Alternative naming
   status: "active" | "inactive";
   createdBy: string;
   createdAt: string;
@@ -91,6 +91,7 @@ export interface AppUser {
     id: string;
     name: string;
   };
+  perusahaan_id?: number | null;
   status: "active" | "inactive";
   lastLogin?: string;
   createdAt: string;
@@ -145,8 +146,8 @@ const transformAccountFromBackend = (
       id: (backendAccount.division_id || backendAccount.division?.id || 0).toString(),
       name: backendAccount.division_name || backendAccount.division?.name || "Unknown Division",
     },
-    perusahaanId: backendAccount.perusahaan_id || null,
-    perusahaan_id: backendAccount.perusahaan_id || null,
+    perusahaanId: backendAccount.perusahaan_id ?? null,
+    perusahaan_id: backendAccount.perusahaan_id ?? null,
     status: "active",
     createdBy: "system",
     createdAt: backendAccount.created_at || new Date().toISOString(),
@@ -228,19 +229,16 @@ export const getAccounts = async (): Promise<Account[]> => {
 };
 
 export const getAccountsByDivision = async (
-  divisionId: string
+  divisionId: string,
+  perusahaanId?: number | null
 ): Promise<Account[]> => {
   try {
-    const response = await accountsAPI.getByDivision(divisionId);
+    const response = await accountsAPI.getByDivision(divisionId, perusahaanId);
 
     if (response.success && response.data && Array.isArray(response.data)) {
-      // ✅ FIX: Langsung transform semua account dari backend format (snake_case) ke frontend format (camelCase)
       const accounts = response.data
-        .filter((account: any) => account && account.id) // Filter null/undefined
+        .filter((account: any) => account && account.id)
         .map((account: any) => transformAccountFromBackend(account));
-
-
-
       return accounts;
     }
     return [];
@@ -261,6 +259,7 @@ export const saveAccount = async (
         id: Number(account.division.id),
         name: account.division.name,
       },
+      perusahaan_id: account.perusahaan_id ?? null,
       status: account.status || "active",
       createdBy: account.createdBy,
     };
@@ -289,7 +288,18 @@ export const updateAccount = async (
 
 export const deleteAccount = async (id: string): Promise<boolean> => {
   const response = await accountsAPI.delete(id);
-  return response.success;
+  if (!response.success) {
+    throw new Error(response.message || response.error || "Gagal menghapus akun");
+  }
+  return true;
+};
+
+export const forceDeleteAccount = async (id: string): Promise<boolean> => {
+  const response = await accountsAPI.forceDelete(id);
+  if (!response.success) {
+    throw new Error(response.message || response.error || "Gagal menghapus akun secara paksa");
+  }
+  return true;
 };
 
 // Generate account code (can be moved to backend later)
@@ -682,11 +692,48 @@ export const getUsers = async (divisionId?: string): Promise<AppUser[]> => {
   try {
     const response = await usersAPI.getAll();
     if (response.success && response.data) {
-      let users = response.data;
+      // Transform raw backend response (flat snake_case) → AppUser (nested camelCase)
+      const transformUserFromBackend = (raw: any): AppUser => {
+        // Normalize role: backend DB stores 'super_admin' / 'division_admin'
+        const roleMap: Record<string, "SUPER_ADMIN" | "ADMIN_DIVISI"> = {
+          super_admin: "SUPER_ADMIN",
+          SUPER_ADMIN: "SUPER_ADMIN",
+          division_admin: "ADMIN_DIVISI",
+          ADMIN_DIVISI: "ADMIN_DIVISI",
+          division_admin_: "ADMIN_DIVISI",
+        };
+        const role: "SUPER_ADMIN" | "ADMIN_DIVISI" =
+          roleMap[raw.role] ?? "ADMIN_DIVISI";
+
+        // Build nested division from flat fields returned by SQL query
+        const division =
+          raw.division_id
+            ? {
+                id: raw.division_id.toString(),
+                name: raw.division_name || "Divisi Tidak Diketahui",
+              }
+            : raw.division && typeof raw.division === "object"
+            ? { id: raw.division.id?.toString() || "", name: raw.division.name || "" }
+            : undefined;
+
+        return {
+          id: raw.id?.toString() || "",
+          username: raw.username || "",
+          role,
+          division,
+          perusahaan_id: raw.perusahaan_id ?? null,
+          status: raw.status ?? "active",
+          lastLogin: raw.last_login || raw.lastLogin || undefined,
+          createdAt: raw.created_at || raw.createdAt || new Date().toISOString(),
+        };
+      };
+
+      let users: AppUser[] = (Array.isArray(response.data) ? response.data : [])
+        .filter((u: any) => u && u.id)
+        .map(transformUserFromBackend);
+
       if (divisionId) {
-        users = users.filter(
-          (user: AppUser) => user.division?.id === divisionId
-        );
+        users = users.filter((user) => user.division?.id === divisionId);
       }
       return users;
     }
@@ -716,14 +763,28 @@ export const saveUserWithDTO = async (createRequest: {
   password: string;
   role: string;
   divisionId: number | null;
+  perusahaan_id?: number | null;
 }): Promise<AppUser> => {
-  // Ensure divisionId is present and valid
-  if (!createRequest.divisionId) {
-    throw new Error("Division ID must be provided when creating a user");
-  }
   const response = await usersAPI.create(createRequest);
   if (!response.success) {
     throw new Error(response.error || "Failed to create user");
+  }
+  return response.data!;
+};
+
+export const updateUserWithDTO = async (
+  id: string,
+  updateRequest: {
+    username?: string;
+    role?: string;
+    divisionId?: number | null;
+    perusahaan_id?: number | null;
+    password?: string;
+  }
+): Promise<AppUser> => {
+  const response = await usersAPI.update(id, updateRequest);
+  if (!response.success) {
+    throw new Error(response.error || "Failed to update user");
   }
   return response.data!;
 };

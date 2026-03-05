@@ -29,6 +29,14 @@ import {
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Archive,
   Plus,
   Search,
@@ -38,12 +46,14 @@ import {
   Eye,
   Edit,
   Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import {
   getAccountsByDivision,
   saveAccount,
   updateAccount,
   deleteAccount,
+  forceDeleteAccount,
   getEntriHarian,
   type Account,
 } from "@/lib/data";
@@ -55,6 +65,10 @@ export default function AccountRackPage() {
   const [filterType, setFilterType] = useState("all");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Account | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isForceDeleting, setIsForceDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
   const user = getCurrentUser();
@@ -83,16 +97,15 @@ export default function AccountRackPage() {
   }, []);
 
   const loadAccounts = async () => {
-    // ✅ FIXED: Handle both flat (division_id, division_name) and nested (division.id, division.name) structure
     const divisionId = user?.division_id || user?.division?.id;
-    const divisionName = user?.division_name || user?.division?.name;
+    const perusahaanId = user?.perusahaan_id;
 
     if (divisionId) {
       try {
         const divisionAccounts = await getAccountsByDivision(
-          divisionId.toString()
+          divisionId.toString(),
+          perusahaanId ?? null
         );
-       
         setAccounts(divisionAccounts);
       } catch (err: any) {
         console.error("❌ [ACCOUNT RACK] Error loading accounts:", err);
@@ -104,26 +117,8 @@ export default function AccountRackPage() {
     }
   };
 
-  // Filtering COA berdasarkan perusahaan user (seperti di jurnal)
-  const username = user?.username?.toLowerCase() || "";
-  let allowedPrefixes: string[] = [];
-  if (username.includes("pjp")) allowedPrefixes = ["1-1", "1-2", "2-1", "5-1"];
-  else if (username.includes("sp"))
-    allowedPrefixes = ["1-3", "1-4", "2-2", "5-2"];
-  else if (username.includes("prima"))
-    allowedPrefixes = ["1-5", "1-6", "2-3", "5-3"];
-  else if (username.includes("blending"))
-    allowedPrefixes = ["1-7", "1-8", "2-3", "5-4"];
-  else if (username.includes("holding")) allowedPrefixes = ["1-9", "2-5"];
-
-  const filteredAccounts =
-    allowedPrefixes.length > 0
-      ? accounts.filter((account) =>
-          allowedPrefixes.some((prefix) =>
-            new RegExp(`^${prefix}\\d+`).test(account.accountCode)
-          )
-        )
-      : accounts;
+  // Tidak perlu filter prefix hardcode — data sudah difilter dari DB by division_id + perusahaan_id
+  const filteredAccounts = accounts;
 
   const getTypeColor = (type: string) => {
     const colors: { [key: string]: string } = {
@@ -201,6 +196,7 @@ export default function AccountRackPage() {
           id: divisionId.toString(),
           name: divisionName || "Unknown Division",
         },
+        perusahaan_id: user?.perusahaan_id ?? null,
         status: "active",
         createdBy: user.username,
       });
@@ -275,29 +271,47 @@ export default function AccountRackPage() {
     }
   };
 
-  const handleDelete = async (account: Account) => {
-    const usage = await getAccountUsage(account.id);
-    if (usage > 0) {
-      setError(
-        `❌ Akun "${account.accountName}" tidak dapat dihapus karena sudah digunakan dalam ${usage} entri laporan harian`
-      );
-      setTimeout(() => setError(""), 5000);
-      return;
-    }
+  const handleDelete = (account: Account) => {
+    setDeleteError(""); // reset error tiap kali buka dialog
+    setDeleteTarget(account);
+  };
 
-    if (
-      confirm(
-        `Apakah Anda yakin ingin menghapus akun "${account.accountName}" (${account.accountCode}) dari rak divisi?`
-      )
-    ) {
-      if (await deleteAccount(account.id)) {
-        loadAccounts();
-        setSuccess("🗑️ Akun berhasil dihapus dari rak");
-        setTimeout(() => setSuccess(""), 3000);
-      } else {
-        setError("Gagal menghapus akun");
-        setTimeout(() => setError(""), 3000);
-      }
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteAccount(deleteTarget.id);
+      // Berhasil — tutup dialog dan tampilkan sukses
+      const name = deleteTarget.accountName;
+      setDeleteTarget(null);
+      loadAccounts();
+      setSuccess(`🗑️ Akun "${name}" berhasil dihapus dari rak`);
+      setTimeout(() => setSuccess(""), 4000);
+    } catch (err: any) {
+      // Gagal — JANGAN tutup dialog, tampilkan alasan di dalam dialog
+      const msg = err?.message || "Akun tidak bisa dihapus karena masih digunakan di data laporan.";
+      setDeleteError(msg);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleForceDelete = async () => {
+    if (!deleteTarget) return;
+    setIsForceDeleting(true);
+    try {
+      await forceDeleteAccount(deleteTarget.id);
+      const name = deleteTarget.accountName;
+      setDeleteTarget(null);
+      setDeleteError("");
+      loadAccounts();
+      setSuccess(`⚠️ Akun "${name}" beserta seluruh data terkait berhasil dihapus`);
+      setTimeout(() => setSuccess(""), 5000);
+    } catch (err: any) {
+      setDeleteError(err?.message || "Force delete gagal. Coba lagi.");
+    } finally {
+      setIsForceDeleting(false);
     }
   };
 
@@ -382,14 +396,20 @@ export default function AccountRackPage() {
                 const username = user?.username?.toLowerCase() || "";
                 const divisionName = getDivisionName();
 
-                // Mapping perusahaan
+                // Mapping perusahaan — utamakan perusahaan_id, fallback ke username
                 let companyName = "UNKNOWN";
-                if (username.includes("pjp")) companyName = "PJP";
-                else if (username.includes("sp")) companyName = "SP";
-                else if (username.includes("prima")) companyName = "PRIMA";
-                else if (username.includes("blending"))
-                  companyName = "BLENDING";
-                else if (username.includes("holding")) companyName = "HOLDING";
+                const perusahaanIdMap: Record<number, string> = {
+                  1: "PJP", 2: "SP", 3: "PRIMA", 4: "BLENDING", 5: "HOLDING",
+                };
+                if (user?.perusahaan_id && perusahaanIdMap[user.perusahaan_id]) {
+                  companyName = perusahaanIdMap[user.perusahaan_id];
+                } else {
+                  if (username.includes("pjp")) companyName = "PJP";
+                  else if (username.includes("sp")) companyName = "SP";
+                  else if (username.includes("prima")) companyName = "PRIMA";
+                  else if (username.includes("blending")) companyName = "BLENDING";
+                  else if (username.includes("holding")) companyName = "HOLDING";
+                }
 
                 return (
                   <div className="mt-4 p-3 bg-white rounded-lg border border-blue-200">
@@ -1240,6 +1260,120 @@ export default function AccountRackPage() {
           </Card>
         </div>
       )}
+
+      {/* ===== Dialog Konfirmasi Hapus Akun ===== */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteError(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              Hapus Akun COA
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-3 text-sm text-gray-700">
+                <p>Anda akan menghapus akun:</p>
+                <div className="bg-gray-100 rounded-md px-4 py-3 space-y-1">
+                  <p className="font-semibold text-gray-900">
+                    {deleteTarget?.accountCode} — {deleteTarget?.accountName}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Tipe: {deleteTarget?.valueType}
+                  </p>
+                </div>
+
+                {/* Error dari backend — muncul hanya jika gagal */}
+                {deleteError && (
+                  <div className="bg-red-50 border border-red-300 rounded-md px-4 py-3 space-y-2">
+                    <p className="font-semibold text-red-700 flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" />
+                      Tidak bisa dihapus:
+                    </p>
+                    <p className="text-red-600 text-xs">{deleteError}</p>
+                    <div className="mt-2 bg-red-100 border border-red-300 rounded-md px-3 py-2 space-y-1">
+                      <p className="font-bold text-red-800 text-xs flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        Opsi: Hapus Paksa (Force Delete)
+                      </p>
+                      <p className="text-red-700 text-xs">
+                        Klik <strong>Force Hapus</strong> untuk menghapus akun ini <strong>beserta seluruh data laporan yang terkait</strong> sekaligus. Tindakan ini <strong>tidak dapat dibatalkan</strong>.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Peringatan standar — muncul hanya sebelum error */}
+                {!deleteError && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-md px-4 py-3 space-y-2">
+                    <p className="font-semibold text-amber-800 flex items-center gap-1">
+                      <AlertTriangle className="h-4 w-4" />
+                      Perhatian sebelum menghapus:
+                    </p>
+                    <ul className="list-disc list-inside text-amber-700 space-y-1 text-xs">
+                      <li>Akun yang sudah dipakai di <strong>laporan harian</strong>, <strong>entri keuangan</strong>, atau <strong>transaksi tidak bisa dihapus</strong>.</li>
+                      <li>Hapus akun hanya jika akun ini <strong>salah dibuat</strong> atau <strong>belum pernah digunakan</strong> sama sekali.</li>
+                      <li>Jika ingin menonaktifkan akun tanpa menghapus data historis, hubungi Super Admin.</li>
+                    </ul>
+                  </div>
+                )}
+
+                {!deleteError && (
+                  <p className="text-gray-600">
+                    Apakah Anda yakin ingin melanjutkan penghapusan akun ini?
+                  </p>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => { setDeleteTarget(null); setDeleteError(""); }}
+              disabled={isDeleting || isForceDeleting}
+            >
+              Batal
+            </Button>
+            {!deleteError && (
+              <Button
+                variant="destructive"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <span className="flex items-center gap-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Menghapus...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Ya, Hapus Akun
+                  </span>
+                )}
+              </Button>
+            )}
+            {deleteError && (
+              <Button
+                variant="destructive"
+                onClick={handleForceDelete}
+                disabled={isForceDeleting}
+                className="bg-red-700 hover:bg-red-800"
+              >
+                {isForceDeleting ? (
+                  <span className="flex items-center gap-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Menghapus Paksa...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Force Hapus Semua
+                  </span>
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

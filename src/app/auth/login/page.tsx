@@ -54,7 +54,9 @@ export default function LoginPage() {
       }
 
       if (user && user.role) {
-        if (user.role === "SUPER_ADMIN") {
+        // Handle both new (SUPER_ADMIN/ADMIN_DIVISI) and legacy (super_admin/division_admin) role formats
+        const isSuperAdmin = user.role === "SUPER_ADMIN" || user.role === "super_admin";
+        if (isSuperAdmin) {
           router.push("/super-admin/dashboard");
         } else {
           router.push("/division-admin/journal");

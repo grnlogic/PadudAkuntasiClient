@@ -222,30 +222,13 @@ export default function PersediaanGudangJournal({
   const loadAccounts = async () => {
     try {
       setIsLoading(true);
-      const accountsData = await getAccountsByDivision(userDivision.id);
+      const perusahaanId = user?.perusahaan_id ?? null;
+      const accountsData = await getAccountsByDivision(userDivision.id, perusahaanId);
 
       // Filter only KUANTITAS accounts for warehouse/persediaan
-      let filteredAccounts = accountsData.filter(
+      const filteredAccounts = accountsData.filter(
         (account) => account.valueType === "KUANTITAS"
       );
-
-      // ✅ NEW: Filter by perusahaan_id (proper relational approach)
-      const perusahaanId = user?.perusahaan_id;
-
-      if (perusahaanId) {
-        filteredAccounts = filteredAccounts.filter((acc) => {
-          const accPerusahaanId = acc.perusahaan_id || acc.perusahaanId;
-          return accPerusahaanId === perusahaanId;
-        });
-
-        console.log("🏢 Persediaan accounts filtered by perusahaan_id:", {
-          perusahaanId,
-          totalAccounts: accountsData.length,
-          filteredAccounts: filteredAccounts.length,
-        });
-      } else {
-        console.log("🔓 No perusahaan_id filter - SUPER_ADMIN mode");
-      }
 
       setAccounts(filteredAccounts);
 

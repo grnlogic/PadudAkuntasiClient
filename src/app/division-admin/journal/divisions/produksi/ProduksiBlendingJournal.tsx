@@ -125,43 +125,38 @@ export default function ProduksiBlendingJournal({
   const [laporanBlendingData, setLaporanBlendingData] = useState<any[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
-  // ✅ NEW: Helper function untuk filtering berdasarkan perusahaan_id
+  // ✅ Filter data laporan berdasarkan perusahaan_id, fallback ke username prefix
   const filterDataByCompany = (data: any[]) => {
     const perusahaanId = user?.perusahaan_id;
+    const username = user?.username?.toLowerCase() || "";
 
-    console.log("🔍 PRODUKSI/BLENDING Filter Debug:", {
-      userId: user?.id,
-      username: user?.username,
-      perusahaanId: perusahaanId,
-      totalDataCount: data.length,
-      firstItemSample: data[0],
-    });
+    const perusahaanPrefixMap: Record<number, string[]> = {
+      1: ["5-1"], 2: ["5-2"], 3: ["5-3"], 4: ["5-4"],
+    };
 
-    // No filtering for SUPER_ADMIN (no perusahaan_id)
-    if (!perusahaanId) {
-      console.log("🔓 No company filter - SUPER_ADMIN mode");
-      return data;
+    let allowedPrefixes: string[] = [];
+    if (perusahaanId && perusahaanPrefixMap[perusahaanId]) {
+      allowedPrefixes = perusahaanPrefixMap[perusahaanId];
+    } else {
+      if (username.includes("pjp")) allowedPrefixes = ["5-1"];
+      else if (username.includes("sp")) allowedPrefixes = ["5-2"];
+      else if (username.includes("prima")) allowedPrefixes = ["5-3"];
+      else if (username.includes("blending")) allowedPrefixes = ["5-4"];
     }
 
-    const filtered = data.filter((item) => {
-      // ✅ NEW: Check perusahaan_id from API response
-      const itemPerusahaanId = item.perusahaan_id || item.perusahaanId;
-      return itemPerusahaanId === perusahaanId;
-    });
+    if (allowedPrefixes.length === 0) return data;
 
-    console.log("🏢 Company Filter Applied:", {
-      perusahaanId: perusahaanId,
-      totalData: data.length,
-      filteredData: filtered.length,
-      sampleItems: filtered.slice(0, 5).map((item) => ({
-        id: item.id,
-        product_code: item.product_code,
-        account_code: item.account_code,
-        perusahaan_id: item.perusahaan_id,
-      })),
+    return data.filter((item) => {
+      // Filter by perusahaan_id if available on item
+      if (item.perusahaan_id && perusahaanId) {
+        return item.perusahaan_id === perusahaanId;
+      }
+      // Fallback: filter by account code prefix
+      const accountCode = item.account_code || item.product_code || "";
+      return allowedPrefixes.some((prefix) =>
+        new RegExp(`^${prefix}\\d+`).test(accountCode)
+      );
     });
-
-    return filtered;
   };
 
   // Helper function untuk filter data berdasarkan tanggal yang dipilih
@@ -360,30 +355,13 @@ export default function ProduksiBlendingJournal({
   const loadAccounts = async () => {
     try {
       setIsLoading(true);
-      const accountsData = await getAccountsByDivision(userDivision.id);
+      const perusahaanId = user?.perusahaan_id ?? null;
+      const accountsData = await getAccountsByDivision(userDivision.id, perusahaanId);
 
       // Filter only KUANTITAS accounts for production/blending
-      let filteredAccounts = accountsData.filter(
+      const filteredAccounts = accountsData.filter(
         (account) => account.valueType === "KUANTITAS"
       );
-
-      // ✅ NEW: Filter by perusahaan_id (proper relational approach)
-      const perusahaanId = user?.perusahaan_id;
-
-      if (perusahaanId) {
-        filteredAccounts = filteredAccounts.filter((acc) => {
-          const accPerusahaanId = acc.perusahaan_id || acc.perusahaanId;
-          return accPerusahaanId === perusahaanId;
-        });
-
-        console.log("🏢 Accounts filtered by perusahaan_id:", {
-          perusahaanId,
-          totalAccounts: accountsData.length,
-          filteredAccounts: filteredAccounts.length,
-        });
-      } else {
-        console.log("🔓 No perusahaan_id filter - SUPER_ADMIN mode");
-      }
 
       setAccounts(filteredAccounts);
 

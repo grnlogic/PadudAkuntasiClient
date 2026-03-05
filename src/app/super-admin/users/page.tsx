@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Search, Edit, Trash2, UserPlus } from "lucide-react";
+import { Search, Edit, Trash2, UserPlus, Plus } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -33,11 +33,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   getUsers,
   saveUser,
-  saveUserWithDTO, // Import function yang benar
-  updateUser,
+  saveUserWithDTO,
+  updateUserWithDTO,
   deleteUser,
   type AppUser,
 } from "@/lib/data";
+import { perusahaanAPI } from "@/lib/api";
 
 //alert state
 
@@ -49,6 +50,8 @@ const DIVISIONS = [
   { id: "10", name: "DIVISI PERSEDIAAN_BAHAN_BAKU" },
   { id: "5", name: "DIVISI HRD" },
 ];
+
+
 
 export default function UsersPage() {
   const [users, setUsers] = useState<AppUser[]>([]);
@@ -62,14 +65,69 @@ export default function UsersPage() {
     username: "",
     role: "" as "super-admin" | "division-admin" | "",
     division: "",
+    perusahaan: "",
     password: "",
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [perusahaanList, setPerusahaanList] = useState<{ id: string; name: string }[]>([]);
+  const [showNewPerusahaan, setShowNewPerusahaan] = useState(false);
+  const [newPerusahaanName, setNewPerusahaanName] = useState("");
+  const [isSavingPerusahaan, setIsSavingPerusahaan] = useState(false);
 
   useEffect(() => {
     loadUsers();
+    loadPerusahaan();
   }, []);
+
+  const loadPerusahaan = async () => {
+    try {
+      const res = await perusahaanAPI.getAll();
+      if (res.success && res.data) {
+        const list = (Array.isArray(res.data) ? res.data : res.data.data || []).map((p: any) => ({
+          id: p.id.toString(),
+          name: p.nama || p.name,
+        }));
+        setPerusahaanList(list);
+      }
+    } catch {
+      // fallback ke daftar default jika API gagal
+      setPerusahaanList([
+        { id: "1", name: "PT Padud Jaya Putera (PJP)" },
+        { id: "2", name: "PT Sunarya Putera (SP)" },
+        { id: "3", name: "PT Prima (PRIMA)" },
+        { id: "4", name: "Divisi Blending (BLENDING)" },
+        { id: "5", name: "Holding Company (HOLDING)" },
+      ]);
+    }
+  };
+
+  const handleAddPerusahaan = async () => {
+    if (!newPerusahaanName.trim()) return;
+    setIsSavingPerusahaan(true);
+    try {
+      const res = await perusahaanAPI.create({ nama: newPerusahaanName.trim() });
+      if (res.success && res.data) {
+        const created = res.data;
+        const newEntry = { id: created.id.toString(), name: created.nama || created.name };
+        setPerusahaanList((prev) => [...prev, newEntry]);
+        setFormData((prev) => ({ ...prev, perusahaan: newEntry.id }));
+        setNewPerusahaanName("");
+        setShowNewPerusahaan(false);
+        setSuccess(`Perusahaan "${newEntry.name}" berhasil ditambahkan`);
+        setTimeout(() => setSuccess(""), 3000);
+      }
+    } catch (err: any) {
+      // Data mungkin sudah tersimpan di DB — reload list dan coba ambil yang terbaru
+      await loadPerusahaan();
+      setNewPerusahaanName("");
+      setShowNewPerusahaan(false);
+      setSuccess("Perusahaan berhasil ditambahkan");
+      setTimeout(() => setSuccess(""), 3000);
+    } finally {
+      setIsSavingPerusahaan(false);
+    }
+  };
 
   const loadUsers = async () => {
     try {
@@ -135,7 +193,7 @@ export default function UsersPage() {
       }
     }
 
-    if (user.role === "ADMIN_DIVISI") {
+    if (user.role === "ADMIN_DIVISI" || user.role === "division_admin") {
       return {
         id: "unknown",
         name: "Divisi Tidak Ditemukan",
@@ -169,7 +227,7 @@ export default function UsersPage() {
       return;
     }
 
-    // Fix role mapping
+    // Role mapping ke format DB (ADMIN_DIVISI / SUPER_ADMIN)
     const backendRole =
       formData.role === "division-admin" ? "ADMIN_DIVISI" : "SUPER_ADMIN";
 
@@ -179,22 +237,48 @@ export default function UsersPage() {
         ? parseInt(formData.division)
         : null;
 
+    // Validate perusahaan for division-admin
+    if (formData.role === "division-admin" && !formData.perusahaan) {
+      setError("Perusahaan wajib dipilih untuk Admin Divisi");
+      return;
+    }
 
-    // Use the correct DTO format untuk backend
-    const createRequest = {
+    const perusahaanId = formData.perusahaan ? parseInt(formData.perusahaan) : null;
+
+    const userDTO = {
       username: formData.username,
-      password: formData.password,
       role: backendRole,
-      divisionId: divisionId, // Backend expects divisionId as number or null
+      divisionId: divisionId,
+      perusahaan_id: perusahaanId,
     };
 
-
     if (editingUser) {
-      // Update logic later
+      // Build update payload — sertakan password hanya jika diisi
+      const updatePayload: {
+        username?: string;
+        role?: string;
+        divisionId?: number | null;
+        perusahaan_id?: number | null;
+        password?: string;
+      } = { ...userDTO };
+      if (formData.password) {
+        updatePayload.password = formData.password;
+      }
+
+      updateUserWithDTO(editingUser.id, updatePayload)
+        .then(() => {
+          setSuccess("User berhasil diperbarui");
+          resetForm();
+          loadUsers();
+        })
+        .catch((err) => {
+          console.error("Error updating user:", err);
+          setError("Gagal memperbarui user: " + err.message);
+        });
     } else {
-      // Create new user using the correct function
-      saveUserWithDTO(createRequest)
-        .then((savedUser) => {
+      // Create new user
+      saveUserWithDTO({ ...userDTO, password: formData.password })
+        .then(() => {
           setSuccess("User berhasil ditambahkan");
           resetForm();
           loadUsers();
@@ -208,9 +292,11 @@ export default function UsersPage() {
 
   const handleEdit = (user: AppUser) => {
     setEditingUser(user);
-    const roleMapping = {
-      SUPER_ADMIN: "super-admin" as const,
-      ADMIN_DIVISI: "division-admin" as const,
+    const roleMapping: Record<string, "super-admin" | "division-admin"> = {
+      SUPER_ADMIN: "super-admin",
+      super_admin: "super-admin",
+      ADMIN_DIVISI: "division-admin",
+      division_admin: "division-admin",
     };
 
     const userDivision = getUserDivisionDisplay(user);
@@ -220,6 +306,7 @@ export default function UsersPage() {
       username: user.username,
       role: roleMapping[user.role],
       division: userDivision ? userDivision.id : "",
+      perusahaan: user.perusahaan_id ? user.perusahaan_id.toString() : "",
       password: "",
     });
     setShowAddForm(true);
@@ -248,6 +335,7 @@ export default function UsersPage() {
       username: "",
       role: "" as "super-admin" | "division-admin" | "",
       division: "",
+      perusahaan: "",
       password: "",
     });
     setEditingUser(null);
@@ -405,7 +493,7 @@ export default function UsersPage() {
                       </TableCell>
                       <TableCell>{user.username}</TableCell>
                       <TableCell>
-                        {user.role === "SUPER_ADMIN"
+                        {user.role === "SUPER_ADMIN" || user.role === "super_admin"
                           ? "Super Admin"
                           : "Admin Divisi"}
                       </TableCell>
@@ -445,7 +533,7 @@ export default function UsersPage() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          {user.role !== "SUPER_ADMIN" && (
+                          {user.role !== "SUPER_ADMIN" && user.role !== "super_admin" && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -560,22 +648,84 @@ export default function UsersPage() {
                   </div>
                 )}
 
-                {!editingUser && (
+                {formData.role === "division-admin" && (
                   <div>
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="Masukkan password"
-                      value={formData.password}
-                      onChange={(e) =>
-                        setFormData({ ...formData, password: e.target.value })
-                      }
-                      className="mt-1"
-                      required
-                    />
+                    <Label htmlFor="perusahaan">Perusahaan</Label>
+                    <Select
+                      value={formData.perusahaan}
+                      onValueChange={(value) => {
+                        if (value === "__new__") {
+                          setShowNewPerusahaan(true);
+                        } else {
+                          setShowNewPerusahaan(false);
+                          setFormData({ ...formData, perusahaan: value });
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue placeholder="Pilih Perusahaan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {perusahaanList.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__new__">
+                          <span className="flex items-center gap-1 text-blue-600 font-medium">
+                            <Plus className="h-3 w-3" /> Tambah Perusahaan Baru
+                          </span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {showNewPerusahaan && (
+                      <div className="mt-2 flex gap-2">
+                        <Input
+                          placeholder="Nama perusahaan baru"
+                          value={newPerusahaanName}
+                          onChange={(e) => setNewPerusahaanName(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleAddPerusahaan()}
+                          className="flex-1"
+                          autoFocus
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleAddPerusahaan}
+                          disabled={isSavingPerusahaan || !newPerusahaanName.trim()}
+                        >
+                          {isSavingPerusahaan ? "..." : "Simpan"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { setShowNewPerusahaan(false); setNewPerusahaanName(""); }}
+                        >
+                          Batal
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
+
+                <div>
+                  <Label htmlFor="password">
+                    Password{editingUser && <span className="text-gray-400 text-sm ml-1">(kosongkan jika tidak ingin diubah)</span>}
+                  </Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder={editingUser ? "Biarkan kosong jika tidak ingin diubah" : "Masukkan password"}
+                    value={formData.password}
+                    onChange={(e) =>
+                      setFormData({ ...formData, password: e.target.value })
+                    }
+                    className="mt-1"
+                    required={!editingUser}
+                  />
+                </div>
 
                 <div className="flex gap-2 pt-4">
                   <Button type="submit" className="flex-1">

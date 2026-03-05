@@ -149,10 +149,11 @@ export const accountsAPI = {
     return apiRequest<any[]>("/api/v1/accounts");
   },
 
-  getByDivision: async (divisionId: string | number) => {
+  getByDivision: async (divisionId: string | number, perusahaanId?: number | null) => {
     const numericId =
       typeof divisionId === "string" ? parseInt(divisionId) : divisionId;
-    return apiRequest<any[]>(`/api/v1/accounts/division/${numericId}`);
+    const query = perusahaanId ? `?perusahaan_id=${perusahaanId}` : "";
+    return apiRequest<any[]>(`/api/v1/accounts/division/${numericId}${query}`);
   },
 
   create: async (account: any) => {
@@ -161,6 +162,7 @@ export const accountsAPI = {
       account_code: account.accountCode?.trim() || null,
       account_name: account.accountName?.trim() || null,
       value_type: account.valueType || null,
+      perusahaan_id: account.perusahaan_id ?? null,
     };
 
     // Validation
@@ -230,6 +232,13 @@ export const accountsAPI = {
   delete: async (id: string) => {
     const numericId = parseInt(id);
     return apiRequest(`/api/v1/accounts/${numericId}`, {
+      method: "DELETE",
+    });
+  },
+
+  forceDelete: async (id: string) => {
+    const numericId = parseInt(id);
+    return apiRequest(`/api/v1/accounts/${numericId}/force`, {
       method: "DELETE",
     });
   },
@@ -1013,8 +1022,13 @@ export const konsolidasiKeuanganAPI = {
 // ✅ Perusahaan API - TODO: Backend belum implement
 export const perusahaanAPI = {
   getAll: async () => {
-    console.warn("⚠️ perusahaanAPI.getAll - Backend endpoint belum tersedia");
-    return { success: true, data: [] };
+    return await apiRequest<any>("/api/v1/perusahaan", { method: "GET" });
+  },
+  create: async (data: { nama: string }) => {
+    return await apiRequest<any>("/api/v1/perusahaan", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   },
 };
 
