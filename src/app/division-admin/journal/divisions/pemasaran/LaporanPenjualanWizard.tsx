@@ -39,6 +39,7 @@ import {
   getSalespeopleByDivision,
   createLaporanPenjualanProduk,
   getLaporanPenjualanProduk,
+  getLaporanPenjualanProdukByDate,
   updateLaporanPenjualanProduk,
   deleteLaporanPenjualanProduk,
   saveLaporanPenjualanProduk,
@@ -186,14 +187,12 @@ export default function LaporanPenjualanWizard() {
 
   const loadLaporanList = async () => {
     try {
-      const data = await getLaporanPenjualanProduk();
-      console.log("📊 Raw data from API:", data);
-
-      // Filter data untuk hari ini saja menggunakan helper function
-      const filteredData = filterDataForToday(data);
-      console.log("📅 Filtered data for today:", filteredData);
-
-      setLaporanList(filteredData);
+      // Gunakan local date agar tidak ada drift UTC vs timezone lokal
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const data = await getLaporanPenjualanProdukByDate(today);
+      console.log("📊 Data for today:", data);
+      setLaporanList(data);
     } catch (error) {
       console.error("Error loading laporan list:", error);
     }
