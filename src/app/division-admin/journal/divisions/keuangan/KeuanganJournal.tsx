@@ -46,6 +46,11 @@ import PiutangSummaryCard from "./components/PiutangSummaryCard";
 import UtangSummaryCard from "./components/UtangSummaryCard";
 import { PDFControls } from "../../shared/components/PDFControls";
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:3333";
+
 interface JournalRow {
   id: string;
   accountId: string;
@@ -194,13 +199,13 @@ export default function KeuanganJournal({
       // This ensures we get data with perusahaan_id = NULL (shared accounts)
       const [piutangResponse, utangResponse] = await Promise.all([
         fetch(
-          `http://localhost:7070/api/v1/piutang?tanggal_start=${selectedDate}&tanggal_end=${selectedDate}`,
+          `${API_BASE_URL}/api/v1/piutang?tanggal_start=${selectedDate}&tanggal_end=${selectedDate}`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
         ),
         fetch(
-          `http://localhost:7070/api/v1/utang?tanggal_start=${selectedDate}&tanggal_end=${selectedDate}`,
+          `${API_BASE_URL}/api/v1/utang?tanggal_start=${selectedDate}&tanggal_end=${selectedDate}`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
@@ -562,7 +567,7 @@ export default function KeuanganJournal({
           };
 
           console.log("💾 Saving PIUTANG entry:", piutangData);
-          const response = await fetch("http://localhost:7070/api/v1/piutang", {
+          const response = await fetch(`${API_BASE_URL}/api/v1/piutang`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -600,7 +605,7 @@ export default function KeuanganJournal({
           };
 
           console.log("💾 Saving UTANG entry:", utangData);
-          const response = await fetch("http://localhost:7070/api/v1/utang", {
+          const response = await fetch(`${API_BASE_URL}/api/v1/utang`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -660,7 +665,7 @@ export default function KeuanganJournal({
       if (selectedTransactionType === "PIUTANG") {
         // Delete piutang via piutang API
         const response = await fetch(
-          `http://localhost:7070/api/v1/piutang/${id}`,
+          `${API_BASE_URL}/api/v1/piutang/${id}`,
           {
             method: "DELETE",
             headers: {
@@ -676,7 +681,7 @@ export default function KeuanganJournal({
       } else if (selectedTransactionType === "UTANG") {
         // Delete utang via utang API
         const response = await fetch(
-          `http://localhost:7070/api/v1/utang/${id}`,
+          `${API_BASE_URL}/api/v1/utang/${id}`,
           {
             method: "DELETE",
             headers: {
