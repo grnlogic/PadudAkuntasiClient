@@ -2,30 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getCurrentUser, logout } from "@/lib/auth";
+import { setCurrentUser } from "@/lib/auth";
 
 export default function HomePage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        // Auto logout untuk development
-        await logout();
-
-        setIsLoading(false);
-        router.replace("/auth/login");
-      } catch (error) {
-        console.error("Auth check error:", error);
-        setIsLoading(false);
-        router.replace("/auth/login");
-      }
-    };
-
-    checkAuth();
+    // Langsung clear localStorage tanpa menunggu API call,
+    // agar redirect ke login tidak tertahan oleh network timeout
+    setCurrentUser(null);
+    setIsLoading(false);
+    router.replace("/auth/login");
   }, []);
 
   if (isLoading) {

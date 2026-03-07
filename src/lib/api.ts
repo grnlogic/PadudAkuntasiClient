@@ -44,14 +44,23 @@ async function apiRequest<T>(
     // ✅ ADD: Log request details
 
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      headers: {
-        "Content-Type": "application/json",
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...options.headers,
-      },
-      ...options,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 detik timeout
+
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+          ...options.headers,
+        },
+        signal: controller.signal,
+        ...options,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     let data;
     try {
@@ -1206,8 +1215,11 @@ export const publicKaryawanAPI = {
 
 // Get product accounts by division ID
 export const getProductAccounts = async (divisionId: number) => {
-  const data = await apiRequest<any[]>("/api/v1/accounts");
-  return data.filter(account => account.division_id === divisionId);
+  const response = await apiRequest<any[]>("/api/v1/accounts");
+  if (response.success && response.data) {
+    return response.data.filter(account => account.division_id === divisionId);
+  }
+  return [];
 };
 
 // ===== SETTINGS API =====
