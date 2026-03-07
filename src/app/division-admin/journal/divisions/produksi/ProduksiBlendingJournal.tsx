@@ -66,6 +66,12 @@ interface ProduksiBlendingJournalProps {
   onDateChange: (date: string) => void;
 }
 
+const formatNumber = (value: any): string => {
+  const num = parseFloat(value);
+  if (value === null || value === undefined || value === "" || isNaN(num)) return "-";
+  return num.toLocaleString("id-ID");
+};
+
 export default function ProduksiBlendingJournal({
   selectedDate,
   onDateChange,
@@ -1353,15 +1359,16 @@ export default function ProduksiBlendingJournal({
                               </TableCell>
                               <TableCell>{getAccountName(item)}</TableCell>
                               <TableCell>
-                                {item.stokAwal ||
-                                  item.stok_awal ||
-                                  item.barangMasuk ||
-                                  item.barang_masuk ||
-                                  "-"}
+                                {formatNumber(
+                                  item.stokAwal ??
+                                  item.stok_awal ??
+                                  item.barangMasuk ??
+                                  item.barang_masuk
+                                )}
                               </TableCell>
-                              <TableCell>{item.pemakaian || "-"}</TableCell>
+                              <TableCell>{formatNumber(item.pemakaian)}</TableCell>
                               <TableCell>
-                                {item.stokAkhir || item.stok_akhir || "-"}
+                                {formatNumber(item.stokAkhir ?? item.stok_akhir)}
                               </TableCell>
                               <TableCell className="max-w-32 truncate">
                                 {item.keterangan ||
