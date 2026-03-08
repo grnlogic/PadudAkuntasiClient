@@ -258,7 +258,10 @@ export default function PemasaranJournal({
               {laporanProdukData.length} laporan
             </Badge>
           </div>
-          <LaporanPenjualanWizard />
+          <LaporanPenjualanWizard
+            selectedDate={selectedDate}
+            onLaporanDataChange={(data) => setLaporanProdukData(data)}
+          />
         </CardContent>
       </Card>
     </div>

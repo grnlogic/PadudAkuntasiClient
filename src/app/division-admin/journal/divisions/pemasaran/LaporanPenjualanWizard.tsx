@@ -77,7 +77,15 @@ interface LaporanEntry {
   status: "draft" | "submitted";
 }
 
-export default function LaporanPenjualanWizard() {
+interface LaporanPenjualanWizardProps {
+  selectedDate?: string;
+  onLaporanDataChange?: (data: any[]) => void;
+}
+
+export default function LaporanPenjualanWizard({
+  selectedDate,
+  onLaporanDataChange,
+}: LaporanPenjualanWizardProps = {}) {
   // ✅ Helper functions dari backup
   const filterDataForToday = (data: any[]) => {
     const today = new Date().toISOString().split("T")[0];
@@ -161,6 +169,13 @@ export default function LaporanPenjualanWizard() {
     loadProductList();
   }, []);
 
+  // ✅ Re-load laporan ketika selectedDate berubah dari parent
+  useEffect(() => {
+    if (selectedDate) {
+      loadLaporanList();
+    }
+  }, [selectedDate]);
+
   const loadSalespeople = async () => {
     try {
       setLoading(true);
@@ -187,12 +202,19 @@ export default function LaporanPenjualanWizard() {
 
   const loadLaporanList = async () => {
     try {
-      // Gunakan local date agar tidak ada drift UTC vs timezone lokal
-      const now = new Date();
-      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-      const data = await getLaporanPenjualanProdukByDate(today);
-      console.log("📊 Data for today:", data);
+      // Gunakan selectedDate dari parent jika ada, fallback ke local date hari ini
+      let dateToLoad: string;
+      if (selectedDate) {
+        dateToLoad = selectedDate;
+      } else {
+        const now = new Date();
+        dateToLoad = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      }
+      const data = await getLaporanPenjualanProdukByDate(dateToLoad);
+      console.log("📊 Data for date:", dateToLoad, data);
       setLaporanList(data);
+      // ✅ Beritahu parent agar datanya bisa dipakai untuk PDF
+      onLaporanDataChange?.(data);
     } catch (error) {
       console.error("Error loading laporan list:", error);
     }

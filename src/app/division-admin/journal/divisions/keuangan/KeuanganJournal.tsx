@@ -730,7 +730,13 @@ export default function KeuanganJournal({
         const entryDate = new Date(entry.tanggal_transaksi)
           .toISOString()
           .split("T")[0];
-        return entryDate === selectedDate;
+        const isDateMatch = entryDate === selectedDate;
+        // ✅ FIX: filter by company to prevent cross-company data leak
+        const isCompanyMatch =
+          companyFilter.perusahaanId === null ||
+          entry.perusahaan_id === companyFilter.perusahaanId ||
+          entry.perusahaan_id == null;
+        return isDateMatch && isCompanyMatch;
       })
       .map((entry) => ({
         id: entry.id,
@@ -748,7 +754,13 @@ export default function KeuanganJournal({
         const entryDate = new Date(entry.tanggal_transaksi)
           .toISOString()
           .split("T")[0];
-        return entryDate === selectedDate;
+        const isDateMatch = entryDate === selectedDate;
+        // ✅ FIX: filter by company to prevent cross-company data leak
+        const isCompanyMatch =
+          companyFilter.perusahaanId === null ||
+          entry.perusahaan_id === companyFilter.perusahaanId ||
+          entry.perusahaan_id == null;
+        return isDateMatch && isCompanyMatch;
       })
       .map((entry) => ({
         id: entry.id,
@@ -795,7 +807,13 @@ export default function KeuanganJournal({
         const entryDate = new Date(entry.tanggal_transaksi)
           .toISOString()
           .split("T")[0];
-        return entryDate === selectedDate;
+        const isDateMatch = entryDate === selectedDate;
+        // ✅ FIX: filter by company to prevent cross-company data leak
+        const isCompanyMatch =
+          companyFilter.perusahaanId === null ||
+          entry.perusahaan_id === companyFilter.perusahaanId ||
+          entry.perusahaan_id == null;
+        return isDateMatch && isCompanyMatch;
       })
       .map((entry) => ({
         id: entry.id,
@@ -813,7 +831,13 @@ export default function KeuanganJournal({
         const entryDate = new Date(entry.tanggal_transaksi)
           .toISOString()
           .split("T")[0];
-        return entryDate === selectedDate;
+        const isDateMatch = entryDate === selectedDate;
+        // ✅ FIX: filter by company to prevent cross-company data leak
+        const isCompanyMatch =
+          companyFilter.perusahaanId === null ||
+          entry.perusahaan_id === companyFilter.perusahaanId ||
+          entry.perusahaan_id == null;
+        return isDateMatch && isCompanyMatch;
       })
       .map((entry) => ({
         id: entry.id,
