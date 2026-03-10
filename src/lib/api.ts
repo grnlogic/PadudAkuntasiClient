@@ -45,7 +45,11 @@ async function apiRequest<T>(
 
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 detik timeout
+    const timeoutMs = parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || "30000");
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    // Destructure to prevent options.signal from overriding our controller signal
+    const { signal: _ignored, headers: optHeaders, ...restOptions } = options;
 
     let response: Response;
     try {
@@ -53,10 +57,10 @@ async function apiRequest<T>(
         headers: {
           "Content-Type": "application/json",
           ...(token && { Authorization: `Bearer ${token}` }),
-          ...options.headers,
+          ...optHeaders,
         },
+        ...restOptions,
         signal: controller.signal,
-        ...options,
       });
     } finally {
       clearTimeout(timeoutId);
