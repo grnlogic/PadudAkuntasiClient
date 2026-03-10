@@ -379,13 +379,9 @@ export default function KeuanganJournal({
       } else if (entry.tipe_transaksi === "UTANG_DIBAYAR") {
         utangSummary.dibayar += nominal;
       } else if (entry.tipe_transaksi === "SALDO_AKHIR_UTANG") {
-        // SALDO_AKHIR_UTANG adalah record saldo akhir periode sebelumnya
-        // Bisa ditampilkan terpisah atau diabaikan dalam perhitungan harian
+        utangSummary.saldoAkhir += nominal;
       }
     });
-
-    // Hitung saldo akhir utang
-    utangSummary.saldoAkhir = utangSummary.baru - utangSummary.dibayar;
 
     return { summary, piutangSummary, utangSummary };
   };
@@ -718,13 +714,30 @@ export default function KeuanganJournal({
   };
 
   // ✅ PDF Functions - FIXED: Use filtered data by date and company
+  // ✅ Helper: Ambil KAS entries langsung dari existingEntries (bukan dari tab aktif)
+  const getKasEntriesForPDF = () => {
+    return existingEntries.filter((entry: any) => {
+      const entryDate =
+        entry.date ||
+        entry.tanggal ||
+        entry.tanggalLaporan ||
+        entry.tanggal_laporan ||
+        entry.createdAt;
+      if (!entryDate) return false;
+      const normalizedEntryDate = new Date(entryDate).toISOString().split("T")[0];
+      const isDateMatch = normalizedEntryDate === selectedDate;
+      const isKasAccount = kasAccounts
+        .map((acc) => acc.id)
+        .includes(String(entry.accountId));
+      return isDateMatch && isKasAccount;
+    });
+  };
+
   const handleDownloadPDF = async () => {
     const { downloadEnhancedPDF } = await import("@/lib/enhanced-pdf");
 
-    // Gabungkan semua data yang sudah difilter berdasarkan tanggal dan company
-    const kasEntries = getFilteredEntries().filter((entry) =>
-      kasAccounts.map((acc) => acc.id).includes(entry.accountId)
-    );
+    // ✅ FIX: Selalu ambil KAS entries dari existingEntries (tidak tergantung tab aktif)
+    const kasEntries = getKasEntriesForPDF();
     const piutangEntries = piutangData
       .filter((entry) => {
         const entryDate = new Date(entry.tanggal_transaksi)
@@ -798,10 +811,8 @@ export default function KeuanganJournal({
   const handlePreviewPDF = async () => {
     const { previewEnhancedPDF } = await import("@/lib/enhanced-pdf");
 
-    // Gabungkan semua data yang sudah difilter berdasarkan tanggal dan company
-    const kasEntries = getFilteredEntries().filter((entry) =>
-      kasAccounts.map((acc) => acc.id).includes(entry.accountId)
-    );
+    // ✅ FIX: Selalu ambil KAS entries dari existingEntries (tidak tergantung tab aktif)
+    const kasEntries = getKasEntriesForPDF();
     const piutangEntries = piutangData
       .filter((entry) => {
         const entryDate = new Date(entry.tanggal_transaksi)

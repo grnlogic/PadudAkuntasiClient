@@ -1313,6 +1313,11 @@ function generateDetailsSection(data: PDFReportData): string {
         } - ${account.accountName || "Unknown Account"} (${
           account.valueType === "NOMINAL" ? "💰 Nominal" : "📦 Kuantitas"
         })</div>`;
+      } else if (entry.accountName || entry.accountCode) {
+        // ✅ FIX: Fallback ke data akun yang sudah tersedia di entry (piutang/utang entries)
+        akunCell = `<div style="font-weight: bold; color: #3498db;">${
+          entry.accountCode || "-"
+        } - ${entry.accountName || "Unknown Account"} (💰 Nominal)</div>`;
       } else {
         akunCell = `<div style="color: red; font-weight: bold;">Akun tidak ditemukan (ID: ${entry.accountId})</div>`;
       }
