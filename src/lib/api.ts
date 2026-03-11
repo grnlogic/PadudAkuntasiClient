@@ -3,7 +3,11 @@ import { create } from "domain";
 
 // Updated data.ts to use API calls instead of localStorage
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:3333";
+// Use "" (relative paths via Next.js rewrite proxy) when NEXT_PUBLIC_API_BASE_URL is explicitly set to empty in production
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL !== undefined
+    ? process.env.NEXT_PUBLIC_API_BASE_URL
+    : process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
 
 // Keep interfaces for type safety
 export interface Account {
@@ -599,7 +603,9 @@ export interface Salesperson {
 }
 
 const BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+  process.env.NEXT_PUBLIC_API_BASE_URL !== undefined
+    ? process.env.NEXT_PUBLIC_API_BASE_URL
+    : "http://localhost:8080";
 
 function getToken() {
   if (typeof window !== "undefined") {

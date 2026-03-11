@@ -23,7 +23,9 @@ export default function SystemStatusCard() {
       setError(false);
       try {
         const BASE_URL =
-          process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+          process.env.NEXT_PUBLIC_API_BASE_URL !== undefined
+            ? process.env.NEXT_PUBLIC_API_BASE_URL
+            : "http://localhost:8080";
         const res = await fetch(`${BASE_URL}/api/health`);
         if (!res.ok) throw new Error("Failed to fetch");
         const data = await res.json();

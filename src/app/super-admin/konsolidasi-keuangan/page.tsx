@@ -85,7 +85,7 @@ export default function KonsolidasiKeuanganPage() {
       const token = getToken();
       if (!token) return [];
 
-      const response = await fetch("http://localhost:7070/api/v1/accounts", {
+      const response = await fetch("/api/v1/accounts", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -137,16 +137,16 @@ export default function KonsolidasiKeuanganPage() {
       // ✅ Build URL dengan atau tanpa filter tanggal
       // IMPORTANT: Tambahkan limit=999999 untuk mengambil semua data (bypass pagination)
       const entriesUrl = showAllData
-        ? `http://localhost:7070/api/v1/entri-harian?limit=999999`
-        : `http://localhost:7070/api/v1/entri-harian?tanggal=${selectedDate}&limit=999999`;
+        ? `/api/v1/entri-harian?limit=999999`
+        : `/api/v1/entri-harian?tanggal=${selectedDate}&limit=999999`;
 
       const piutangUrl = showAllData
-        ? `http://localhost:7070/api/v1/piutang?limit=999999`
-        : `http://localhost:7070/api/v1/piutang?tanggal_dari=${selectedDate}&tanggal_sampai=${selectedDate}&limit=999999`;
+        ? `/api/v1/piutang?limit=999999`
+        : `/api/v1/piutang?tanggal_dari=${selectedDate}&tanggal_sampai=${selectedDate}&limit=999999`;
 
       const utangUrl = showAllData
-        ? `http://localhost:7070/api/v1/utang?limit=999999`
-        : `http://localhost:7070/api/v1/utang?tanggal_dari=${selectedDate}&tanggal_sampai=${selectedDate}&limit=999999`;
+        ? `/api/v1/utang?limit=999999`
+        : `/api/v1/utang?tanggal_dari=${selectedDate}&tanggal_sampai=${selectedDate}&limit=999999`;
 
       // Parallel fetch dari 3 endpoint
       const [entriesResponse, piutangResponse, utangResponse] =

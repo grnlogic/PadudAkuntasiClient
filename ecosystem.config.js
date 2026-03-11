@@ -12,6 +12,10 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: 5173,
+        // Backend URL used by Next.js server-side rewrite proxy
+        BACKEND_URL: "http://localhost:3333",
+        // Empty string = use relative /api/... paths → goes through Next.js rewrite proxy
+        NEXT_PUBLIC_API_BASE_URL: "",
       },
     },
   ],

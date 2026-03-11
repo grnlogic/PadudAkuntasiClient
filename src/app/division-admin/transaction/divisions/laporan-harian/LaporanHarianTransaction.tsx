@@ -141,14 +141,14 @@ export default function LaporanHarianTransaction({
 
       // Fetch laporan produksi
       const produksiRes = await fetch(
-        "http://localhost:7070/api/v1/laporan-produksi?limit=1000",
+        "/api/v1/laporan-produksi?limit=1000",
         { headers }
       );
       const produksiData = await produksiRes.json();
 
       // Fetch laporan gudang
       const gudangRes = await fetch(
-        "http://localhost:7070/api/v1/laporan-gudang?limit=5000",
+        "/api/v1/laporan-gudang?limit=5000",
         { headers }
       );
       const gudangData = await gudangRes.json();

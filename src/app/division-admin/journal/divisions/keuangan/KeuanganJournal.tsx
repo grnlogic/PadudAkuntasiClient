@@ -47,9 +47,9 @@ import UtangSummaryCard from "./components/UtangSummaryCard";
 import { PDFControls } from "../../shared/components/PDFControls";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:3333";
+  process.env.NEXT_PUBLIC_API_BASE_URL !== undefined
+    ? process.env.NEXT_PUBLIC_API_BASE_URL
+    : process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
 
 interface JournalRow {
   id: string;
